@@ -1,0 +1,12 @@
+# IDEs and Editor configurations
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS specific files
+.DS_Store
+Thumbs.db
+
+# Project specific ignores (if you don't want to upload the template)
+# nestJS-modular-monolith-architecture-template/
