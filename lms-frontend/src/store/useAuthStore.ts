@@ -1,13 +1,5 @@
 import { create } from 'zustand'
-
-// Per our TypeScript Skill: define explicit state and action interfaces
-interface AuthUser {
-  id: string
-  email: string
-  fullName: string
-  role: 'STUDENT' | 'TEACHER' | 'ADMIN'
-  username: string
-}
+import type { AuthUser } from '@/types'
 
 interface AuthState {
   user: AuthUser | null

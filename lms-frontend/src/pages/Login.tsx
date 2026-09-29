@@ -1,10 +1,8 @@
 import { GoogleLogin, type CredentialResponse } from '@react-oauth/google'
 import { useNavigate } from 'react-router-dom'
 import campusBg from '@/assets/campus-bg.jpg'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { useAuthStore } from '@/store/useAuthStore'
+import type { AuthUser } from '@/types'
 
 const BACKEND_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:9595'
 
@@ -25,10 +23,10 @@ const Login = () => {
       const data = await res.json()
 
       if (data.success) {
-        login(data.user, data.token)
+        login(data.user as AuthUser, data.token as string)
         navigate('/')
       } else {
-        alert('Đăng nhập thất bại: ' + data.message)
+        alert('Đăng nhập thất bại: ' + (data.message as string))
       }
     } catch (err) {
       console.error('Lỗi khi gọi API đăng nhập', err)
@@ -52,9 +50,8 @@ const Login = () => {
       {/* Backdrop overlay */}
       <div className="absolute inset-0 bg-white/20 backdrop-blur-[2px]" />
 
-      {/* Login Card - Shadcn login-04 style, light mode */}
-      <div className="relative z-10 w-full max-w-md animate-fade-in rounded-2xl bg-white/90 shadow-2xl ring-1 ring-black/5 backdrop-blur-sm">
-        {/* Card split: left form / right illustration mirroring login-04 */}
+      {/* Login Card */}
+      <div className="relative z-10 w-full max-w-sm animate-fade-in rounded-2xl bg-white/90 shadow-2xl ring-1 ring-black/5 backdrop-blur-sm">
         <div className="p-10">
           {/* Header */}
           <div className="mb-8 text-center">
@@ -70,58 +67,9 @@ const Login = () => {
             </p>
           </div>
 
-          {/* Email / Password form (placeholder for future local auth) */}
-          <div className="space-y-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="email" className="text-slate-700">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="m@example.com"
-                className="bg-white border-slate-200 text-slate-900 placeholder:text-slate-400 focus-visible:ring-slate-400"
-                disabled
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="password" className="text-slate-700">Password</Label>
-                <button
-                  type="button"
-                  className="text-xs text-slate-500 underline-offset-4 hover:text-slate-800 hover:underline transition-colors"
-                >
-                  Forgot your password?
-                </button>
-              </div>
-              <Input
-                id="password"
-                type="password"
-                className="bg-white border-slate-200 text-slate-900"
-                disabled
-              />
-            </div>
-
-            <Button
-              type="button"
-              className="w-full bg-slate-900 text-white hover:bg-slate-700"
-              disabled
-            >
-              Login (Chưa khả dụng)
-            </Button>
-          </div>
-
-          {/* Divider */}
-          <div className="relative my-6">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t border-slate-200" />
-            </div>
-            <div className="relative flex justify-center text-xs">
-              <span className="bg-white px-3 text-slate-400">Or continue with</span>
-            </div>
-          </div>
-
-          {/* Google Login */}
-          <div className="flex justify-center">
+          {/* Google SSO — Only auth method */}
+          <div className="flex flex-col items-center gap-4">
+            <p className="text-xs text-slate-400">Sử dụng tài khoản trường để đăng nhập</p>
             <GoogleLogin
               onSuccess={handleGoogleSuccess}
               onError={handleGoogleError}
@@ -133,24 +81,14 @@ const Login = () => {
           </div>
 
           {/* Footer */}
-          <p className="mt-6 text-center text-sm text-slate-500">
-            Chưa có tài khoản?{' '}
-            <button
-              type="button"
-              className="font-medium text-slate-900 underline-offset-4 hover:underline transition-colors"
-            >
-              Đăng ký
-            </button>
+          <p className="mt-8 text-center text-xs text-slate-400">
+            Bằng cách tiếp tục, bạn đồng ý với{' '}
+            <span className="cursor-pointer underline-offset-4 hover:underline">Điều khoản dịch vụ</span>{' '}
+            và{' '}
+            <span className="cursor-pointer underline-offset-4 hover:underline">Chính sách bảo mật</span>.
           </p>
         </div>
       </div>
-
-      {/* Bottom credits */}
-      <p className="absolute bottom-4 text-center text-xs text-white/70">
-        Bằng cách tiếp tục, bạn đồng ý với{' '}
-        <span className="underline cursor-pointer">Điều khoản dịch vụ</span> và{' '}
-        <span className="underline cursor-pointer">Chính sách bảo mật</span>.
-      </p>
     </div>
   )
 }
