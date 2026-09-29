@@ -1,0 +1,7 @@
+export { UserModule } from './user.module.js'
+export { UserFacade } from './facades/user.facade.js'
+export { UserView } from './types/user-view.type.js'
+export { CreateUserDto } from './dto/create-user.dto.js'
+export { Student } from './entities/student.entity.js'
+export { Lecturer } from './entities/lecturer.entity.js'
+export { Admin } from './entities/admin.entity.js'

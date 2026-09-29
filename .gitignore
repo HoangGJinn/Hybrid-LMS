@@ -8,5 +8,12 @@
 .DS_Store
 Thumbs.db
 
-# Project specific ignores (if you don't want to upload the template)
+# Global node_modules (just in case)
+node_modules/
+
+# Custom Agent Files
+.agents/
+.gemini/
+
+# Project specific ignores
 # nestJS-modular-monolith-architecture-template/

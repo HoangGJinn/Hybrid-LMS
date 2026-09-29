@@ -1,0 +1,6 @@
+export enum QuizInstanceStatus {
+  CREATED = 'CREATED',
+  IN_PROGRESS = 'IN_PROGRESS',
+  SUBMITTED = 'SUBMITTED',
+  EVALUATED = 'EVALUATED',
+}

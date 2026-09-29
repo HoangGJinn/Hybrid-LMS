@@ -1,0 +1,6 @@
+export enum ExamSessionStatus {
+  IN_PROGRESS = 'IN_PROGRESS',
+  COMPLETED = 'COMPLETED',
+  CANCELLED = 'CANCELLED',
+  UNDER_REVIEW = 'UNDER_REVIEW',
+}

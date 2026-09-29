@@ -5,6 +5,11 @@
   "author": "",
   "private": true,
   "license": "UNLICENSED",
+  "packageManager": "pnpm@12.4.1",
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=12"
+  },
   "type": "module",
   "scripts": {
     "build": "nest build",

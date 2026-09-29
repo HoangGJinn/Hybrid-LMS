@@ -3,8 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import campusBg from '@/assets/campus-bg.jpg'
 import { useAuthStore } from '@/store/useAuthStore'
 import type { AuthUser } from '@/types'
-
-const BACKEND_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:9595'
+import { apiClient } from '@/lib/axios'
 
 const Login = () => {
   const login = useAuthStore((state) => state.login)
@@ -14,19 +13,17 @@ const Login = () => {
     if (!credentialResponse.credential) return
 
     try {
-      const res = await fetch(`${BACKEND_URL}/api/auth/google`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ idToken: credentialResponse.credential }),
+      const response = await apiClient.post('/api/auth/google', {
+        idToken: credentialResponse.credential,
       })
 
-      const data = await res.json()
+      const { accessToken, user } = response.data.data
 
-      if (data.success) {
-        login(data.user as AuthUser, data.token as string)
+      if (accessToken) {
+        login(user as AuthUser, accessToken)
         navigate('/')
       } else {
-        alert('Đăng nhập thất bại: ' + (data.message as string))
+        alert('Đăng nhập thất bại, không nhận được token.')
       }
     } catch (err) {
       console.error('Lỗi khi gọi API đăng nhập', err)

@@ -1,4 +1,4 @@
-import { Role } from '../../modules/user/entities/user.entity.js'
+import { Role } from '../../../common/enums/role.enum.js'
 
 export interface JwtPayload {
   readonly sub: string

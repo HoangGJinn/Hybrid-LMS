@@ -3,7 +3,7 @@ import { AuthService, AuthTokenResponse } from '../services/auth.service.js'
 import { GoogleAuthDto } from '../dto/google-auth.dto.js'
 import { JwtAuthGuard } from '../guards/jwt-auth.guard.js'
 import { CurrentUser } from '../../../common/decorators/current-user.decorator.js'
-import { User } from '../../user/entities/user.entity.js'
+import { AuthenticatedUser } from '../../../common/types/authenticated-user.type.js'
 
 @Controller('auth')
 export class AuthController {
@@ -20,16 +20,10 @@ export class AuthController {
     return this.authService.loginWithGoogle(dto.idToken)
   }
 
-  @Get('me')
-  @UseGuards(JwtAuthGuard)
-  getProfile(@CurrentUser() user: User): User {
-    return user
-  }
-
   @Post('logout')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
-  logout(@CurrentUser() user: User): { message: string } {
+  logout(@CurrentUser() user: AuthenticatedUser): { message: string } {
     this.authService.logout(user)
     return { message: 'Logged out successfully' }
   }

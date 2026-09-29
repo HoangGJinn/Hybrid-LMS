@@ -1,30 +1,24 @@
-import { IsEmail, IsEnum, IsOptional, IsString, MinLength } from 'class-validator'
-import { AuthProvider, Role } from '../entities/user.entity.js'
+import { IsEmail, IsEnum, IsOptional, IsString } from 'class-validator'
+import { Role } from '../../../common/enums/role.enum.js'
 
 export class CreateUserDto {
-  @IsString()
-  readonly username: string
-
-  @IsString()
-  readonly fullName: string
-
   @IsEmail()
   readonly email: string
 
   @IsString()
-  @MinLength(8)
-  @IsOptional()
-  readonly password?: string
+  readonly fullName: string
+
+  @IsString()
+  readonly ssoId: string
+
+  @IsString()
+  readonly ssoProvider: string
 
   @IsString()
   @IsOptional()
-  readonly googleId?: string
+  readonly avatarUrl?: string
 
   @IsEnum(Role)
   @IsOptional()
   readonly role?: Role
-
-  @IsEnum(AuthProvider)
-  @IsOptional()
-  readonly authProvider?: AuthProvider
 }

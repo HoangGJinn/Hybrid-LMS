@@ -6,16 +6,7 @@ import {
   UpdateDateColumn,
 } from 'typeorm'
 
-export enum Role {
-  STUDENT = 'STUDENT',
-  TEACHER = 'TEACHER',
-  ADMIN = 'ADMIN',
-}
-
-export enum AuthProvider {
-  LOCAL = 'LOCAL',
-  GOOGLE = 'GOOGLE',
-}
+import { Role } from '../../../common/enums/role.enum.js'
 
 @Entity('users')
 export class User {
@@ -23,32 +14,29 @@ export class User {
   readonly id: string
 
   @Column({ unique: true })
-  username: string
+  email: string
 
   @Column({ name: 'full_name' })
   fullName: string
 
-  @Column({ unique: true })
-  email: string
+  @Column({ name: 'sso_id', unique: true })
+  ssoId: string
 
-  @Column({ type: 'text', nullable: true, select: false })
-  password: string | null
+  @Column({ name: 'sso_provider', type: 'varchar', length: 50 })
+  ssoProvider: string
 
-  @Column({ type: 'text', name: 'google_id', nullable: true, unique: true })
-  googleId: string | null
+  @Column({ name: 'avatar_url', type: 'text', nullable: true })
+  avatarUrl: string | null
 
   @Column({ type: 'enum', enum: Role, default: Role.STUDENT })
   role: Role
 
-  @Column({ type: 'enum', enum: AuthProvider, default: AuthProvider.LOCAL, name: 'auth_provider' })
-  authProvider: AuthProvider
-
   @Column({ name: 'is_active', default: true })
   isActive: boolean
 
-  @CreateDateColumn({ name: 'created_at' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   readonly createdAt: Date
 
-  @UpdateDateColumn({ name: 'updated_at' })
+  @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
   readonly updatedAt: Date
 }

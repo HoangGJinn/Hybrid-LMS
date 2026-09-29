@@ -5,6 +5,8 @@ import { ConfigModule, ConfigService } from '@nestjs/config'
 import jwtConfig from './config/jwt.config.js'
 import { UserModule } from '../user/user.module.js'
 import { AuthService } from './services/auth.service.js'
+import { TokenService } from './services/token.service.js'
+import { GoogleAuthService } from './services/google-auth.service.js'
 import { AuthController } from './controllers/auth.controller.js'
 import { JwtStrategy } from './strategies/jwt.strategy.js'
 
@@ -22,7 +24,7 @@ import { JwtStrategy } from './strategies/jwt.strategy.js'
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy],
+  providers: [AuthService, TokenService, GoogleAuthService, JwtStrategy],
   exports: [JwtModule, PassportModule],
 })
 export class AuthModule {}

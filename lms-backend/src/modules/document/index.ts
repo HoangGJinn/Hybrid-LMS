@@ -1,0 +1,5 @@
+export { Document } from './entities/document.entity.js'
+export { DocumentTextSegment } from './entities/document-text-segment.entity.js'
+export { SegmentKeyphrase } from './entities/segment-keyphrase.entity.js'
+export { KnowledgeComponent } from './entities/knowledge-component.entity.js'
+export { SegmentKnowledgeComponent } from './entities/segment-knowledge-component.entity.js'
