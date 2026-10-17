@@ -7,10 +7,17 @@ A modern, enterprise-grade Learning Management System (LMS) built with a strict 
 ### Frontend
 - **Framework**: React 19 + Vite
 - **Language**: TypeScript
-- **State Management**: Zustand
-- **Styling**: Tailwind CSS + Shadcn UI
-- **Routing**: React Router DOM v6
-- **Authentication**: `@react-oauth/google`
+- **Architecture**: Feature-Driven Architecture (`src/features/<domain>`)
+- **Routing**: React Router v7 (Data Router, Nested Routes, Dynamic Breadcrumbs)
+- **Data Fetching & Server State**: TanStack Query (React Query) v5
+- **Client State**: Zustand v5 (Auth, Theme, UI)
+- **Styling & Design System**: Tailwind CSS v3 + CSS Variables + Radix UI Primitives (Shadcn-style)
+- **Forms & Validation**: React Hook Form + Zod
+- **Visualizations & Charts**: Recharts
+- **Document Viewing**: PDF.js (`pdfjs-dist`)
+- **Real-Time Communication**: Socket.IO Client
+- **Authentication**: `@react-oauth/google` + JWT
+- **Icons & Feedback**: Lucide React + Sonner (Themed Toaster)
 
 ### Backend
 - **Framework**: NestJS
@@ -75,31 +82,42 @@ pnpm run dev
 ### 2. Setup Frontend
 ```bash
 cd lms-frontend
-npm install
+pnpm install
 ```
 
-Create a `.env` file in `lms-frontend/`:
+Create a `.env` file in `lms-frontend/` (refer to `.env.example`):
 ```env
 VITE_API_URL=http://localhost:9595
 VITE_GOOGLE_CLIENT_ID=your_google_oauth_client_id
+VITE_USE_MOCK=true # Set to true for mock data mode, false to connect to backend
 ```
 
 Start the frontend development server:
 ```bash
-npm run dev
+pnpm dev
 ```
 
 ---
 
 ## ✨ Features (Current Status)
-- [x] **Core Architecture Setup**
-- [x] **PostgreSQL Integration** (with SSL/CA Support)
+- [x] **Backend Modular Monolith Architecture** (NestJS + TypeORM)
+- [x] **PostgreSQL Integration** (with SSL/CA Support & Database Factory)
 - [x] **Global Logging System** (Winston Daily Rotate)
-- [x] **API Standardization** (Global Interceptors & Filters)
-- [x] **Google OAuth2 Authentication**
-- [x] **JWT Session Management & Logout**
-- [ ] **Course Management Module** (WIP)
-- [ ] **Enrollment System** (WIP)
+- [x] **API Standardization** (Global Interceptors & AllExceptionsFilter)
+- [x] **Google OAuth2 Authentication & JWT Session**
+- [x] **Frontend Feature-Driven Architecture** (React 19 + TanStack Query + Zustand)
+- [x] **React Router v7 Data Router** (Nested course layouts, lazy-loaded routes, dynamic breadcrumbs)
+- [x] **Role-Based Views** (Student & Lecturer dashboards, courses, grading desk)
+- [x] **In-Browser Document & PDF Viewer** (PDF.js integration)
+- [x] **Light / Dark / System Theme Mode** (CSS Variables design tokens)
+- [x] **Interactive Course Sub-features** (Quizzes, Assignments, Exams, Mastery Radar, Roadmaps)
+- [ ] **Course Management & Enrollment Backend Modules** (WIP)
+
+---
+
+## 📚 Development & Collaboration Guidelines
+- [Testing Strategy & Rules](testing-strategy.md) — 4-layer testing pyramid, coverage requirements (≥ 70%), E2E, Vitest & Playwright setups.
+- [Git Strategy & Rules](GIT_STRATEGY.md) — Branching models, Conventional Commits, PR review workflow, and Quality Gates.
 
 ---
 
