@@ -1,4 +1,5 @@
 import { NestFactory } from '@nestjs/core'
+import cookieParser from 'cookie-parser'
 import { AppModule } from './app.module.js'
 import { LoggerService } from './common/logger/logger.service.js'
 
@@ -13,9 +14,18 @@ const bootstrap = async (): Promise<void> => {
   // Global prefix for all routes
   app.setGlobalPrefix('api')
 
+  // Parse cookies from incoming requests for httpOnly auth cookies
+  app.use(cookieParser())
+
   // Enable CORS for frontend
+  const allowedOrigins = [
+    process.env.FRONTEND_URL,
+    'http://localhost:3000',
+    'http://localhost:5173',
+  ].filter(Boolean) as string[]
+
   app.enableCors({
-    origin: process.env.FRONTEND_URL ?? 'http://localhost:3000',
+    origin: allowedOrigins,
     credentials: true,
   })
 

@@ -13,6 +13,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     private readonly userFacade: UserFacade, // Use Facade, not Service!
   ) {
     super({
+      // The access token lives in the frontend's memory and arrives only as a Bearer header (never as a cookie).
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
       secretOrKey: configService.get<string>('jwt.secret') ?? '',

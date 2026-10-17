@@ -13,6 +13,10 @@ export class UserService {
     return this.userRepository.createUserWithStudentProfile(dto)
   }
 
+  async getProfileCode(userId: string): Promise<string | null> {
+    return this.userRepository.findProfileCode(userId)
+  }
+
   async findByEmail(email: string): Promise<User | null> {
     return this.userRepository.findByEmail(email)
   }

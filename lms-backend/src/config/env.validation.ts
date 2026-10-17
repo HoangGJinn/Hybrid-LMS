@@ -7,6 +7,12 @@ enum Environment {
   Test = 'test',
 }
 
+enum CookieSameSite {
+  Strict = 'strict',
+  Lax = 'lax',
+  None = 'none',
+}
+
 class EnvironmentVariables {
   @IsEnum(Environment)
   @IsOptional()
@@ -42,9 +48,18 @@ class EnvironmentVariables {
   @IsString()
   JWT_SECRET: string
 
-  @IsString()
+  @IsNumber()
   @IsOptional()
-  JWT_EXPIRES_IN: string = '7d'
+  ACCESS_TOKEN_TTL: number = 1800
+
+  @IsNumber()
+  @IsOptional()
+  REFRESH_TOKEN_TTL: number = 1209600000
+
+  /** Default: strict in production, lax otherwise. Use `none` only when the frontend and the API are on different sites. */
+  @IsEnum(CookieSameSite)
+  @IsOptional()
+  REFRESH_COOKIE_SAME_SITE?: CookieSameSite
 
   @IsString()
   GOOGLE_CLIENT_ID: string

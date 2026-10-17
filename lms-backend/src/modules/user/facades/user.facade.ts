@@ -17,6 +17,11 @@ export class UserFacade {
     return UserView.fromEntity(user)
   }
 
+  /** Student/lecturer code of a user, or null when the user has no such profile. */
+  async getProfileCode(userId: string): Promise<string | null> {
+    return this.userService.getProfileCode(userId)
+  }
+
   async findByEmail(email: string): Promise<UserView | null> {
     const user = await this.userService.findByEmail(email)
     return user ? UserView.fromEntity(user) : null

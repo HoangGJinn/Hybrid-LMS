@@ -1,14 +1,11 @@
-import { Injectable, Logger } from '@nestjs/common'
+import { Injectable, Logger, UnauthorizedException } from '@nestjs/common'
 import { UserFacade } from '../../user/facades/user.facade.js'
 import { UserView } from '../../user/types/user-view.type.js'
-import { AuthenticatedUser } from '../../../common/types/authenticated-user.type.js'
+import { AuthSession } from '../types/auth-session.type.js'
+import { SessionUser } from '../types/session-user.type.js'
 import { TokenService } from './token.service.js'
+import { RefreshTokenService } from './refresh-token.service.js'
 import { GoogleAuthService, GoogleUserProfile } from './google-auth.service.js'
-
-export interface AuthTokenResponse {
-  readonly accessToken: string
-  readonly user: UserView
-}
 
 @Injectable()
 export class AuthService {
@@ -17,20 +14,41 @@ export class AuthService {
   constructor(
     private readonly userFacade: UserFacade,
     private readonly tokenService: TokenService,
+    private readonly refreshTokenService: RefreshTokenService,
     private readonly googleAuthService: GoogleAuthService,
   ) {}
 
-  async loginWithGoogle(idToken: string): Promise<AuthTokenResponse> {
+  /** Lifetime of the refresh cookie in milliseconds. */
+  getRefreshTtlMs(): number {
+    return this.refreshTokenService.getTtlMs()
+  }
+
+  async loginWithGoogle(idToken: string): Promise<AuthSession> {
     this.logger.log(`Attempting Google login...`)
     const googleUser = await this.googleAuthService.verifyToken(idToken)
     const user = await this.findOrCreateGoogleUser(googleUser)
-    return this.buildTokenResponse(user)
+    return this.startSession(user, await this.refreshTokenService.issue(user.id))
   }
 
-  logout(user: AuthenticatedUser): void {
-    // Stateless JWT: real invalidation happens client-side (remove token from storage)
-    // Future: add token blacklist via Redis for extra security
-    this.logger.log(`User ${user.email} (ID: ${user.id}) logged out.`)
+  /** Swaps a valid refresh token for a new access token and a rotated refresh token. */
+  async refresh(rawRefreshToken: string): Promise<AuthSession> {
+    const { userId, refreshToken } = await this.refreshTokenService.rotate(rawRefreshToken)
+    const user = await this.userFacade.getUserById(userId)
+    if (!user.isActive) {
+      await this.refreshTokenService.revokeFamilyOf(refreshToken)
+      throw new UnauthorizedException('Account is disabled')
+    }
+    return this.startSession(user, refreshToken)
+  }
+
+  /** Revokes the device's refresh-token family. Safe to call without a token or with an expired access token. */
+  async logout(rawRefreshToken: string | undefined): Promise<void> {
+    if (rawRefreshToken) await this.refreshTokenService.revokeFamilyOf(rawRefreshToken)
+    this.logger.log('A user logged out.')
+  }
+
+  async getMe(userId: string): Promise<SessionUser> {
+    return this.toSessionUser(await this.userFacade.getUserById(userId))
   }
 
   /**
@@ -40,14 +58,11 @@ export class AuthService {
    * 3. Not found → First time login → create new User (default role STUDENT)
    */
   private async findOrCreateGoogleUser(profile: GoogleUserProfile): Promise<UserView> {
-    // Step 1: Lookup by ssoId (most common path for returning users)
     const existingBySsoId = await this.userFacade.findBySsoId(profile.googleId)
     if (existingBySsoId) {
       this.logger.log(`Returning user found by ssoId: ${profile.email}`)
       return existingBySsoId
     }
-
-    // Step 2: Lookup by email (e.g., account pre-created by admin)
     const existingByEmail = await this.userFacade.findByEmail(profile.email)
     if (existingByEmail) {
       this.logger.log(`Existing account found by email, linking Google SSO: ${profile.email}`)
@@ -57,8 +72,6 @@ export class AuthService {
         avatarUrl: profile.avatarUrl,
       })
     }
-
-    // Step 3: Brand new user — create User + Student profile in one transaction
     this.logger.log(`New user — creating account for: ${profile.email}`)
     return this.userFacade.createUser({
       email: profile.email,
@@ -69,11 +82,16 @@ export class AuthService {
     })
   }
 
-  private buildTokenResponse(user: UserView): AuthTokenResponse {
+  private async startSession(user: UserView, refreshToken: string): Promise<AuthSession> {
     this.logger.log(`User ${user.email} authenticated successfully. Role: ${user.role}`)
     return {
       accessToken: this.tokenService.generateAccessToken(user),
-      user,
+      refreshToken,
+      user: await this.toSessionUser(user),
     }
+  }
+
+  private async toSessionUser(user: UserView): Promise<SessionUser> {
+    return { ...user, code: await this.userFacade.getProfileCode(user.id) }
   }
 }

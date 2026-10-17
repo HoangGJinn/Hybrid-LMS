@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm'
 import { Repository } from 'typeorm'
 import { User } from '../entities/user.entity.js'
 import { Student } from '../entities/student.entity.js'
+import { Lecturer } from '../entities/lecturer.entity.js'
 import { CreateUserDto } from '../dto/create-user.dto.js'
 
 /** Encapsulates database operations for the User aggregate (User + Student/Lecturer/Admin profiles). */
@@ -13,6 +14,8 @@ export class UserRepository {
     private readonly userRepo: Repository<User>,
     @InjectRepository(Student)
     private readonly studentRepo: Repository<Student>,
+    @InjectRepository(Lecturer)
+    private readonly lecturerRepo: Repository<Lecturer>,
   ) {}
 
   async createUserWithStudentProfile(dto: CreateUserDto): Promise<User> {
@@ -34,6 +37,14 @@ export class UserRepository {
 
       return savedUser
     })
+  }
+
+  /** Student code or lecturer code of the user; null for users without such a profile (e.g. admins). */
+  async findProfileCode(userId: string): Promise<string | null> {
+    const student = await this.studentRepo.findOneBy({ userId })
+    if (student) return student.studentCode
+    const lecturer = await this.lecturerRepo.findOneBy({ userId })
+    return lecturer?.lecturerCode ?? null
   }
 
   async findByEmail(email: string): Promise<User | null> {
