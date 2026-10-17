@@ -9,7 +9,7 @@
 2. [Quy Chuẩn Đặt Tên (Naming Conventions)](#2-quy-chuẩn-đặt-tên-naming-conventions)
 3. [Luồng Làm Việc Trực Tiếp (Step-by-Step Workflow)](#3-luồng-làm-việc-trực-tiếp-step-by-step-workflow)
 4. [Quy Tắc Kỷ Luật Nhóm (Team Discipline Rules)](#4-quy-tắc-kỷ-luật-nhóm-team-discipline-rules)
-5. [Cổng Chất Lượng Trước Khi Merge (Quality Gates)](#5-cổng-chất-lượng-trước-khi-merge-quality-gates)
+5. [Cổng Chất Lượng Trước Khi Merge & CI (Quality Gates)](#5-cổng-chất-lượng-trước-khi-merge--ci-quality-gates)
 
 ---
 
@@ -18,7 +18,7 @@
 Hệ thống Git của dự án bao gồm **2 nhánh cố định** và **các nhánh tạm thời**. Tuyệt đối **không ai được quyền push (đẩy code) trực tiếp lên 2 nhánh cố định**.
 
 ```
-master  (v1.0.0) ─────────────────────────────────────────────────────────────●─── (Release tag v1.0.0)
+master  (Production) ─────────────────────────────────────────────────────────●─── (Deploy / Demo Ready)
                                                                              /
 develop (Active) ─────────●───────────────────────●─────────────────────────●─────
                            \                     /                         /
@@ -165,23 +165,18 @@ git push -u origin feature/bkt-model
 
 ### Bước 6: Tạo Pull Request (PR) và Code Review
 1. Truy cập giao diện GitHub / GitLab, tạo Pull Request yêu cầu merge `feature/bkt-model` vào **`develop`**.
-2. **Luật cứng:** Người code **không được tự bấm Merge**. Phải tag ít nhất 1 (hoặc cả 2) thành viên còn lại vào xem code.
-3. Người review có trách nhiệm kiểm tra logic (ví dụ: biến môi trường path của Python trên Windows đã có `if __name__ == '__main__':` chưa, API có trả đúng format chuẩn chưa, UI có bị vỡ responsive không).
-4. Khi có **ít nhất 1 lượt "Approve"**, PR mới được gộp theo hình thức **Squash and Merge** vào `develop`.
-5. Xóa nhánh `feature/bkt-model` trên remote sau khi merge xong.
+2. **Kích hoạt CI tự động:** Hệ thống GitHub Actions (`.github/workflows/ci.yml`) sẽ tự động kích hoạt 2 luồng kiểm tra `Frontend Quality Gate` và `Backend Quality Gate`. Cả 2 job bắt buộc phải đạt tick xanh (Passed) ✅.
+3. **Luật cứng:** Người code **không được tự bấm Merge**. Phải tag ít nhất 1 (hoặc cả 2) thành viên còn lại vào xem code.
+4. Người review có trách nhiệm kiểm tra logic (ví dụ: biến môi trường path của Python trên Windows đã có `if __name__ == '__main__':` chưa, API có trả đúng format chuẩn chưa, UI có bị vỡ responsive không).
+5. Khi có **ít nhất 1 lượt "Approve"** và **CI đã Pass 100%**, PR mới được gộp theo hình thức **Squash and Merge** vào `develop`.
+6. Xóa nhánh `feature/bkt-model` trên remote sau khi merge xong (hệ thống GitHub sẽ tự động xóa).
 
 ### Bước 7: Release (Merge sang `master`)
 Khi nhánh `develop` đã tích lũy đủ các tính năng cho một cột mốc (ví dụ: Hoàn thành Sprint, chuẩn bị Demo giữa kỳ/cuối kỳ) và tất cả bài test (Frontend và Backend) đều chạy trơn tru:
 
-1. Tạo Pull Request từ **`develop`** sang **`master`**.
-2. Cả team cùng tham gia review và Approve.
-3. Gộp vào `master`. Đánh tag phiên bản phát hành:
-   ```bash
-   git checkout master
-   git pull origin master
-   git tag -a v1.0.0 -m "Release v1.0.0: Hoàn thành Sprint tích hợp NestJS + React + BKT"
-   git push origin v1.0.0
-   ```
+1. Tạo Pull Request từ **`develop`** sang **`master`** trên GitHub.
+2. Cả team cùng tham gia review, kiểm tra kết quả CI và Approve.
+3. Gộp (Merge) vào `master` để sẵn sàng mang đi demo cho giảng viên hoặc deploy lên máy chủ.
 
 ---
 
@@ -209,7 +204,7 @@ Khi nhánh `develop` đã tích lũy đủ các tính năng cho một cột mố
 
 ---
 
-## 5. Cổng Chất Lượng Trước Khi Merge (Quality Gates)
+## 5. Cổng Chất Lượng Trước Khi Merge & CI (Quality Gates)
 
 > [!IMPORTANT]
 > **NGUYÊN TẮC BẤT DI BẤT DỊCH (ZERO-TOLERANCE QUALITY GATE):**
@@ -283,7 +278,37 @@ pnpm test:e2e
 
 ---
 
-### 5.3 Quy chuẩn xử lý khi bị từ chối (Rejection & Resolution)
+### 5.3 Tự Động Hóa Qua GitHub Actions CI (`.github/workflows/ci.yml`)
+
+Để đảm bảo các quy chuẩn không bị phụ thuộc vào máy cá nhân, toàn bộ quy trình kiểm soát chất lượng đã được tự động hóa thông qua **GitHub Actions CI** chạy song song 2 luồng:
+
+```
+                          [ PULL REQUEST ]
+                                 │
+                 ┌───────────────┴───────────────┐
+                 ▼                               ▼
+       [ Frontend Quality Gate ]       [ Backend Quality Gate ]
+       ├─ 1. pnpm typecheck (TSC)      ├─ 1. pnpm lint (oxlint)
+       ├─ 2. pnpm lint (ESLint)        ├─ 2. pnpm build (NestJS)
+       ├─ 3. pnpm check:arch           └─ 3. pnpm test (Vitest)
+       ├─ 4. pnpm test (Vitest)
+       └─ 5. pnpm build (Vite bundle)
+                 │                               │
+                 └───────────────┬───────────────┘
+                                 ▼
+                     Status Checks: PASSED ✅
+                                 ▼
+                         Cho phép Review & Merge
+```
+
+* **Triggers tự động:** Kích hoạt ngay khi có commit push hoặc khi mở Pull Request vào `master` và `develop`.
+* **Khóa cứng qua Ruleset:** Trong GitHub Branch Ruleset, mục **"Require status checks to pass before merging"** bắt buộc 2 checks sau phải Pass thì nút Merge mới mở:
+  1. `Frontend Quality Gate`
+  2. `Backend Quality Gate`
+
+---
+
+### 5.4 Quy chuẩn xử lý khi bị từ chối (Rejection & Resolution)
 
 1. **Khi CI báo đỏ (Failed Checks):**
    * Người tạo PR chủ động xem log trên GitHub Actions / CI runner để xác định chính xác file và dòng code gây lỗi.
