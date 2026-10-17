@@ -15,10 +15,13 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
+    "types": ["vitest/globals", "@testing-library/jest-dom"],
     "paths": {
-      "@/*": ["./src/*"]
-    },
-    "baseUrl": "."
+      "@/*": ["./src/*"],
+      "@core/*": ["./src/core/*"],
+      "@shared/*": ["./src/shared/*"],
+      "@features/*": ["./src/features/*"]
+    }
   },
   "include": ["src"],
   "references": [{ "path": "./tsconfig.node.json" }]

@@ -1,15 +1,23 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { GoogleOAuthProvider } from '@react-oauth/google'
-import './index.css'
-import App from './App.tsx'
+import { RouterProvider } from 'react-router/dom'
+import { ThemedToaster, initTheme } from '@features/theme'
+import { setupAuthInterceptors } from '@features/auth'
+import { apiClient } from '@core/api/client'
+import { AppProviders } from '@core/providers/AppProviders'
+import '@core/styles/index.css'
+import { router } from './router'
 
-const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID as string
+setupAuthInterceptors(apiClient)
+
+// Keep <html class="dark"> in sync with the saved preference / OS setting for the lifetime of the page.
+initTheme()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <GoogleOAuthProvider clientId={clientId}>
-      <App />
-    </GoogleOAuthProvider>
+    <AppProviders>
+      <RouterProvider router={router} />
+      <ThemedToaster />
+    </AppProviders>
   </StrictMode>,
 )

@@ -5,9 +5,6 @@ export default {
     './index.html',
     './src/**/*.{js,ts,jsx,tsx}',
   ],
-  corePlugins: {
-    preflight: false,
-  },
   theme: {
     extend: {
       colors: {
@@ -39,6 +36,13 @@ export default {
         popover: {
           DEFAULT: 'hsl(var(--popover))',
           foreground: 'hsl(var(--popover-foreground))',
+        },
+        brand: 'hsl(var(--brand))',
+        success: 'hsl(var(--success))',
+        warning: 'hsl(var(--warning))',
+        sidebar: {
+          DEFAULT: 'hsl(var(--sidebar))',
+          foreground: 'hsl(var(--sidebar-foreground))',
         },
         card: {
           DEFAULT: 'hsl(var(--card))',

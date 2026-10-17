@@ -4,7 +4,18 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
     <title>Hybrid LMS</title>
+    <script>
+      // Apply the saved theme before first paint to avoid a light flash in dark mode.
+      // Keep the storage key in sync with THEME_STORAGE_KEY (src/core/store/useThemeStore.ts).
+      try {
+        var saved = JSON.parse(localStorage.getItem('lms-theme') || '{}');
+        var mode = saved && saved.state && saved.state.mode ? saved.state.mode : 'system';
+        var dark = mode === 'dark' || (mode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        if (dark) { document.documentElement.classList.add('dark'); document.documentElement.style.colorScheme = 'dark'; }
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -7,6 +7,9 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': `${import.meta.dirname}/src`,
+      '@core': `${import.meta.dirname}/src/core`,
+      '@shared': `${import.meta.dirname}/src/shared`,
+      '@features': `${import.meta.dirname}/src/features`,
     },
   },
   server: {
