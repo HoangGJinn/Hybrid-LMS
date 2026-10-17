@@ -17,3 +17,5 @@ node_modules/
 
 # Project specific ignores
 # nestJS-modular-monolith-architecture-template/
+
+*.tsbuildinfo
