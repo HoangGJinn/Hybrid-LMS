@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { User } from '../entities/user.entity.js';
 import { UserRepository } from '../repositories/user.repository.js';
 import { CreateUserDto } from '../dto/create-user.dto.js';
+import { Role } from '../../../common/enums/role.enum.js';
 
 /** Handles business logic for the User module. */
 @Injectable()
@@ -9,8 +10,11 @@ export class UserService {
   constructor(private readonly userRepository: UserRepository) {}
 
   async createUser(dto: CreateUserDto): Promise<User> {
-    // Always creates User + Student profile in one transaction (default role = STUDENT)
-    return this.userRepository.createUserWithStudentProfile(dto);
+    return this.userRepository.createUserWithProfile(dto);
+  }
+
+  async findUsers(role?: Role): Promise<User[]> {
+    return this.userRepository.findByRole(role);
   }
 
   async getProfileCode(userId: string): Promise<string | null> {

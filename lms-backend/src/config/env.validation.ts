@@ -73,6 +73,10 @@ class EnvironmentVariables {
 
   @IsString()
   GOOGLE_CLIENT_ID: string;
+
+  @IsString()
+  @IsOptional()
+  ADMIN_EMAILS?: string;
 }
 
 export function validate(config: Record<string, unknown>) {

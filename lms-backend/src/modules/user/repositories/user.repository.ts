@@ -4,7 +4,11 @@ import { Repository } from 'typeorm';
 import { User } from '../entities/user.entity.js';
 import { Student } from '../entities/student.entity.js';
 import { Lecturer } from '../entities/lecturer.entity.js';
+import { Admin } from '../entities/admin.entity.js';
 import { CreateUserDto } from '../dto/create-user.dto.js';
+import { Role } from '../../../common/enums/role.enum.js';
+import { StudentStatus } from '../enums/student-status.enum.js';
+import { LecturerStatus } from '../enums/lecturer-status.enum.js';
 
 /** Encapsulates database operations for the User aggregate (User + Student/Lecturer/Admin profiles). */
 @Injectable()
@@ -18,7 +22,9 @@ export class UserRepository {
     private readonly lecturerRepo: Repository<Lecturer>,
   ) {}
 
-  async createUserWithStudentProfile(dto: CreateUserDto): Promise<User> {
+  async createUserWithProfile(dto: CreateUserDto): Promise<User> {
+    const role = dto.role ?? Role.STUDENT;
+
     return this.userRepo.manager.transaction(async (manager) => {
       // 1. Create User record
       const user = manager.create(User, {
@@ -27,16 +33,39 @@ export class UserRepository {
         ssoId: dto.ssoId,
         ssoProvider: dto.ssoProvider,
         avatarUrl: dto.avatarUrl ?? null,
-        role: dto.role ?? undefined,
+        role,
       });
       const savedUser = await manager.save(user);
 
-      // 2. Auto-create Student profile (default role)
-      const student = manager.create(Student, { userId: savedUser.id });
-      await manager.save(student);
+      // 2. Auto-create corresponding role profile
+      if (role === Role.ADMIN) {
+        const admin = manager.create(Admin, { userId: savedUser.id });
+        await manager.save(admin);
+      } else if (role === Role.LECTURER) {
+        const lecturerCode = `GV${Date.now().toString().slice(-6)}${Math.floor(100 + Math.random() * 900)}`;
+        const lecturer = manager.create(Lecturer, {
+          userId: savedUser.id,
+          lecturerCode,
+          status: LecturerStatus.WORKING,
+        });
+        await manager.save(lecturer);
+      } else {
+        const studentCode = `SV${Date.now().toString().slice(-6)}${Math.floor(100 + Math.random() * 900)}`;
+        const student = manager.create(Student, {
+          userId: savedUser.id,
+          studentCode,
+          status: StudentStatus.STUDYING,
+        });
+        await manager.save(student);
+      }
 
       return savedUser;
     });
+  }
+
+  /** Backwards compatibility alias */
+  async createUserWithStudentProfile(dto: CreateUserDto): Promise<User> {
+    return this.createUserWithProfile(dto);
   }
 
   /** Student code or lecturer code of the user; null for users without such a profile (e.g. admins). */
@@ -69,5 +98,10 @@ export class UserRepository {
       avatarUrl: data.avatarUrl ?? undefined,
     });
     return this.userRepo.findOneOrFail({ where: { id } });
+  }
+
+  async findByRole(role?: Role): Promise<User[]> {
+    const where = role ? { role, isActive: true } : { isActive: true };
+    return this.userRepo.find({ where, order: { fullName: 'ASC' } });
   }
 }

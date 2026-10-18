@@ -15,6 +15,8 @@ export class ClassView {
   lecturerId: string;
   lecturerName: string;
   studentCount?: number;
+  /** Completion percentage for the current user. Hardcoded 0 until the mastery/progress module is implemented. */
+  progress: number;
 
   static fromEntity(cls: Class, studentCount?: number): ClassView {
     return {
@@ -32,6 +34,7 @@ export class ClassView {
       lecturerId: cls.lecturerId,
       lecturerName: cls.lecturer?.user?.fullName ?? '',
       studentCount,
+      progress: 0,
     };
   }
 }
