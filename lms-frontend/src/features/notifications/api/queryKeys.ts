@@ -1,1 +1,1 @@
-export const notificationKeys = { all: ['notifications'] as const }
+export const notificationKeys = { all: ['notifications'] as const };

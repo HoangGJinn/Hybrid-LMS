@@ -1,21 +1,27 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from 'typeorm'
-import { Class } from '../../academic/entities/class.entity.js'
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  JoinColumn,
+} from 'typeorm';
+import { Class } from '../../academic/entities/class.entity.js';
 
 @Entity('sections')
 export class Section {
   @PrimaryGeneratedColumn('uuid')
-  readonly id: string
+  readonly id: string;
 
   @Column({ name: 'class_id' })
-  classId: string
+  classId: string;
 
   @ManyToOne(() => Class, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'class_id' })
-  class: Class
+  class: Class;
 
   @Column({ length: 255 })
-  title: string
+  title: string;
 
   @Column({ name: 'order_index', type: 'int' })
-  orderIndex: number
+  orderIndex: number;
 }

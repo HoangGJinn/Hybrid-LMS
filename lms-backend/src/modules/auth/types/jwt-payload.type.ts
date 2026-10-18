@@ -1,7 +1,7 @@
-import { Role } from '../../../common/enums/role.enum.js'
+import { Role } from '../../../common/enums/role.enum.js';
 
 export interface JwtPayload {
-  readonly sub: string
-  readonly email: string
-  readonly role: Role
+  readonly sub: string;
+  readonly email: string;
+  readonly role: Role;
 }

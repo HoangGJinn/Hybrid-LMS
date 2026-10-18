@@ -1,1 +1,1 @@
-export { FileAttachment } from './entities/file-attachment.entity.js'
+export { FileAttachment } from './entities/file-attachment.entity.js';

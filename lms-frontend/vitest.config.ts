@@ -18,7 +18,8 @@ export default defineConfig({
     include: ['src/**/*.test.{ts,tsx}', 'src/**/*.spec.{ts,tsx}'],
     coverage: {
       provider: 'v8',
-      reporter: ['text', 'json', 'html'],
+      // 'lcov' là định dạng SonarQube đọc được để hiển thị % coverage trên dashboard
+      reporter: ['text', 'lcov', 'html'],
       include: ['src/**/*.{ts,tsx}'],
       exclude: [
         'src/main.tsx',
@@ -28,13 +29,13 @@ export default defineConfig({
         'src/**/*.d.ts',
         'src/**/*.types.ts',
       ],
-      // Target threshold ≥ 70% for core modules (uncomment for CI check):
-      // thresholds: {
-      //   lines: 70,
-      //   functions: 70,
-      //   branches: 70,
-      //   statements: 70,
-      // },
+      // Vitest sẽ báo lỗi (exit code 1) nếu coverage dưới 70% — đúng yêu cầu rubric
+      thresholds: {
+        lines: 70,
+        functions: 70,
+        branches: 70,
+        statements: 70,
+      },
     },
   },
 })

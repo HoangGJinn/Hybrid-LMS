@@ -1,12 +1,12 @@
-export type CalendarEventKind = 'ASSIGNMENT' | 'EXAM' | 'REVIEW'
+export type CalendarEventKind = 'ASSIGNMENT' | 'EXAM' | 'REVIEW';
 
 export interface CalendarEvent {
-  id: string
-  kind: CalendarEventKind
-  title: string
+  id: string;
+  kind: CalendarEventKind;
+  title: string;
   /** Course code, when the event belongs to a course. */
-  context: string | null
+  context: string | null;
   /** ISO date-time used to place the event on the grid. */
-  at: string
-  href: string
+  at: string;
+  href: string;
 }

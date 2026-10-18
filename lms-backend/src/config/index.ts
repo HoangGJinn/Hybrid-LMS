@@ -1,3 +1,3 @@
-import { DatabaseModule } from './database/database.module.js'
+import { DatabaseModule } from './database/database.module.js';
 
-export { DatabaseModule }
+export { DatabaseModule };

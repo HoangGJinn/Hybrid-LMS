@@ -83,8 +83,8 @@ for (const { file, target, spec, typeOnly } of edges) {
     const allowed = isIndex(target) || (file === 'src/router.tsx' && isRoutes(target))
     if (!allowed) fail('deep-import', `${file}: use '@features/${to.slice(8)}' (index.ts) instead of '${spec}'`)
   }
-  if (target.startsWith('src/core/mocks/') && !(file.startsWith('src/core/mocks/') || /^src\/features\/[^/]+\/api\//.test(file) || file === DEV_ONLY_MOCK_USER))
-    fail('mocks', `${file}: only features/*/api/** and DevRoleSwitcher may import mocks ('${spec}')`)
+  if (target.startsWith('src/core/mocks/') && !(file.startsWith('src/core/mocks/') || /^src\/features\/[^/]+\/api\//.test(file) || file === DEV_ONLY_MOCK_USER || /\.test\.[tj]sx?$/.test(file)))
+    fail('mocks', `${file}: only features/*/api/**, DevRoleSwitcher, and test files may import mocks ('${spec}')`)
   if (from === 'core' && /^src\/core\/(api|query|mocks)\//.test(file) && target.startsWith('src/core/store/')) fail('layers', `${file}: ${file.split('/')[2]} must not read global stores`)
   if (/^src\/(shared\/utils|core\/api|core\/query)\//.test(file) && target.startsWith('src/shared/components/')) fail('layers', `${file}: low-level modules must not import components ('${spec}')`)
   if (from.startsWith('feature:') && to.startsWith('feature:') && to === from && spec.startsWith('@features/')) fail('layers', `${file}: use a relative import inside the feature ('${spec}')`)
@@ -137,11 +137,12 @@ for (const file of files.filter(isCode)) {
 
 /* ---------- feature layout ---------- */
 const ALLOWED = new Set(['api', 'components', 'hooks', 'store', 'types', 'utils', 'views', 'routes.ts', 'index.ts'])
+const isTest = (f) => /\.test\.[tj]sx?$/.test(f)
 const features = [...new Set(files.filter((f) => f.startsWith('src/features/')).map((f) => f.split('/')[2]))]
 for (const feature of features) {
   const own = files.filter((f) => f.startsWith(`src/features/${feature}/`))
-  for (const entry of new Set(own.map((f) => f.split('/')[3]))) if (!ALLOWED.has(entry)) fail('layout', `features/${feature}/${entry}: not part of the feature layout (${[...ALLOWED].join(', ')})`)
-  for (const f of own.filter((x) => x.includes('/types/') && isCode(x) && !x.endsWith('.types.ts'))) fail('layout', `${f}: files in types/ are named <name>.types.ts`)
+  for (const entry of new Set(own.filter((f) => !isTest(f)).map((f) => f.split('/')[3]))) if (!ALLOWED.has(entry)) fail('layout', `features/${feature}/${entry}: not part of the feature layout (${[...ALLOWED].join(', ')})`)
+  for (const f of own.filter((x) => x.includes('/types/') && isCode(x) && !isTest(x) && !x.endsWith('.types.ts'))) fail('layout', `${f}: files in types/ are named <name>.types.ts`)
   if (own.some((f) => f.includes('/views/')) && !fileSet.has(`src/features/${feature}/routes.ts`)) fail('layout', `features/${feature} has views/ but no routes.ts`)
 }
 for (const file of files.filter(isRoutes))

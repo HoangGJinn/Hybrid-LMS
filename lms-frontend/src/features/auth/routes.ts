@@ -1,4 +1,7 @@
-import type { RouteObject } from 'react-router'
-import { lazyPage } from '@core/router/lazyPage'
+import type { RouteObject } from 'react-router';
+import { lazyPage } from '@core/router/lazyPage';
 
-export const loginRoute: RouteObject = { path: '/login', ...lazyPage(() => import('./views/Login')) }
+export const loginRoute: RouteObject = {
+  path: '/login',
+  ...lazyPage(() => import('./views/Login')),
+};

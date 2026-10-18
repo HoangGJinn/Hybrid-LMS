@@ -107,4 +107,9 @@ export const boundaryConfigs = [
     files: ['src/router.tsx'],
     rules: restrict(removedPaths, routerDeepImports, mocks),
   },
+  {
+    // Test files may import @core/mocks for fixtures and mock data.
+    files: ['src/**/*.{test,spec}.{ts,tsx}'],
+    rules: restrict(removedPaths, deepFeature, entryPoints),
+  },
 ]
