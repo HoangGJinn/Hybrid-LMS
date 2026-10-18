@@ -40,4 +40,11 @@ export class Class {
   @ManyToOne(() => Lecturer)
   @JoinColumn({ name: 'lecturer_id' })
   lecturer: Lecturer;
+
+  // column for hiding class
+  @Column({ name: 'is_active', default: true })
+  isActive: boolean;
+
+  @Column({ name: 'ended_at', type: 'timestamptz', nullable: true })
+  endedAt?: Date | null;
 }

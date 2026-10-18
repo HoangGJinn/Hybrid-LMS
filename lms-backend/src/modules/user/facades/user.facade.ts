@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { UserService } from '../services/user.service.js';
 import { UserView } from '../types/user-view.type.js';
 import { CreateUserDto } from '../dto/create-user.dto.js';
+import { Role } from '../../../common/enums/role.enum.js';
 
 /**
  * Facade pattern for inter-module communication.
@@ -15,6 +16,11 @@ export class UserFacade {
   async createUser(dto: CreateUserDto): Promise<UserView> {
     const user = await this.userService.createUser(dto);
     return UserView.fromEntity(user);
+  }
+
+  async findUsers(role?: Role): Promise<UserView[]> {
+    const users = await this.userService.findUsers(role);
+    return users.map((u) => UserView.fromEntity(u));
   }
 
   /** Student/lecturer code of a user, or null when the user has no such profile. */

@@ -1,4 +1,5 @@
 import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { UserFacade } from '../../user/facades/user.facade.js';
 import { UserView } from '../../user/types/user-view.type.js';
 import { AuthSession } from '../types/auth-session.type.js';
@@ -6,6 +7,7 @@ import { SessionUser } from '../types/session-user.type.js';
 import { TokenService } from './token.service.js';
 import { RefreshTokenService } from './refresh-token.service.js';
 import { GoogleAuthService, GoogleUserProfile } from './google-auth.service.js';
+import { Role } from '../../../common/enums/role.enum.js';
 
 @Injectable()
 export class AuthService {
@@ -16,6 +18,7 @@ export class AuthService {
     private readonly tokenService: TokenService,
     private readonly refreshTokenService: RefreshTokenService,
     private readonly googleAuthService: GoogleAuthService,
+    private readonly configService: ConfigService,
   ) {}
 
   /** Lifetime of the refresh cookie in milliseconds. */
@@ -81,13 +84,26 @@ export class AuthService {
         avatarUrl: profile.avatarUrl,
       });
     }
-    this.logger.log(`New user — creating account for: ${profile.email}`);
+
+    // First time login: determine role based on configured ADMIN_EMAILS
+    const email = profile.email.toLowerCase().trim();
+    const adminEmails = (this.configService.get<string>('ADMIN_EMAILS') ?? '')
+      .split(',')
+      .map((e) => e.trim().toLowerCase())
+      .filter(Boolean);
+
+    const role = adminEmails.includes(email) ? Role.ADMIN : Role.STUDENT;
+
+    this.logger.log(
+      `New user — creating account for: ${profile.email} with role: ${role}`,
+    );
     return this.userFacade.createUser({
       email: profile.email,
       fullName: profile.fullName,
       ssoId: profile.googleId,
       ssoProvider: 'GOOGLE',
       avatarUrl: profile.avatarUrl ?? undefined,
+      role,
     });
   }
 

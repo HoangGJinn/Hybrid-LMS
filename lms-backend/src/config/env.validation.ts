@@ -33,6 +33,10 @@ class EnvironmentVariables {
   FRONTEND_URL: string = 'http://localhost:3000';
 
   @IsString()
+  @IsOptional()
+  ADMIN_URL: string = 'http://localhost:3001';
+
+  @IsString()
   DATABASE_HOST: string;
 
   @IsNumber()
@@ -69,6 +73,10 @@ class EnvironmentVariables {
 
   @IsString()
   GOOGLE_CLIENT_ID: string;
+
+  @IsString()
+  @IsOptional()
+  ADMIN_EMAILS?: string;
 }
 
 export function validate(config: Record<string, unknown>) {

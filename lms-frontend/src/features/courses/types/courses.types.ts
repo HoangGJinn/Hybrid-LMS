@@ -17,8 +17,14 @@ export interface ClassRoom {
   id: string;
   classCode: string;
   name: string;
+  isActive?: boolean;
+  endedAt?: string | null;
   subjectId: string;
+  subjectCode?: string;
+  subjectName?: string;
   semesterId: string;
+  semesterCode?: string;
+  semesterName?: string;
   lecturerId: string;
   lecturerName: string;
   studentCount: number;

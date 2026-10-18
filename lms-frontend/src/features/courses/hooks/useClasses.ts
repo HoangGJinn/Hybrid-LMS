@@ -1,5 +1,4 @@
 import { useQuery } from '@tanstack/react-query';
-import { useCurrentUserId } from '@core/hooks/useCurrentUserId';
 import { classService } from '../api/class.service';
 import { courseKeys } from '../api/queryKeys';
 
@@ -10,12 +9,10 @@ export const useMyClasses = () =>
     queryFn: () => classService.getMyClasses(),
   });
 
-/** Classes taught by the signed-in lecturer. */
-export const useLecturerClasses = () => {
-  const lecturerId = useCurrentUserId();
-  return useQuery({
-    queryKey: courseKeys.lecturer(lecturerId ?? ''),
-    queryFn: () => classService.getLecturerClasses(lecturerId ?? ''),
-    enabled: Boolean(lecturerId),
+/** Classes taught by the signed-in lecturer. Uses the same /api/classes/my endpoint. */
+export const useLecturerClasses = () =>
+  useQuery({
+    queryKey: courseKeys.myLecturer,
+    queryFn: () => classService.getLecturerClasses(),
   });
-};
+
