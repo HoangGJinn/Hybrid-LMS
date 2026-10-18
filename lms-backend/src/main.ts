@@ -17,10 +17,12 @@ const bootstrap = async (): Promise<void> => {
   // Parse cookies from incoming requests for httpOnly auth cookies
   app.use(cookieParser());
 
-  // Enable CORS for frontend
+  // Enable CORS for frontend & admin
   const allowedOrigins = [
     process.env.FRONTEND_URL,
+    process.env.ADMIN_URL,
     'http://localhost:3000',
+    'http://localhost:3001',
     'http://localhost:5173',
   ].filter(Boolean) as string[];
 
