@@ -1,19 +1,19 @@
-import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm'
+import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
 
 @Entity('semesters')
 export class Semester {
   @PrimaryGeneratedColumn('uuid')
-  readonly id: string
+  readonly id: string;
 
   @Column({ name: 'semester_code', length: 50, unique: true })
-  semesterCode: string
+  semesterCode: string;
 
   @Column({ length: 255 })
-  name: string
+  name: string;
 
   @Column({ name: 'start_date', type: 'timestamptz' })
-  startDate: Date
+  startDate: Date;
 
   @Column({ name: 'end_date', type: 'timestamptz' })
-  endDate: Date
+  endDate: Date;
 }

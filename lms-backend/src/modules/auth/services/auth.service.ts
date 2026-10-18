@@ -1,54 +1,62 @@
-import { Injectable, Logger, UnauthorizedException } from '@nestjs/common'
-import { UserFacade } from '../../user/facades/user.facade.js'
-import { UserView } from '../../user/types/user-view.type.js'
-import { AuthSession } from '../types/auth-session.type.js'
-import { SessionUser } from '../types/session-user.type.js'
-import { TokenService } from './token.service.js'
-import { RefreshTokenService } from './refresh-token.service.js'
-import { GoogleAuthService, GoogleUserProfile } from './google-auth.service.js'
+import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { UserFacade } from '../../user/facades/user.facade.js';
+import { UserView } from '../../user/types/user-view.type.js';
+import { AuthSession } from '../types/auth-session.type.js';
+import { SessionUser } from '../types/session-user.type.js';
+import { TokenService } from './token.service.js';
+import { RefreshTokenService } from './refresh-token.service.js';
+import { GoogleAuthService, GoogleUserProfile } from './google-auth.service.js';
+import { Role } from '../../../common/enums/role.enum.js';
 
 @Injectable()
 export class AuthService {
-  private readonly logger = new Logger(AuthService.name)
+  private readonly logger = new Logger(AuthService.name);
 
   constructor(
     private readonly userFacade: UserFacade,
     private readonly tokenService: TokenService,
     private readonly refreshTokenService: RefreshTokenService,
     private readonly googleAuthService: GoogleAuthService,
+    private readonly configService: ConfigService,
   ) {}
 
   /** Lifetime of the refresh cookie in milliseconds. */
   getRefreshTtlMs(): number {
-    return this.refreshTokenService.getTtlMs()
+    return this.refreshTokenService.getTtlMs();
   }
 
   async loginWithGoogle(idToken: string): Promise<AuthSession> {
-    this.logger.log(`Attempting Google login...`)
-    const googleUser = await this.googleAuthService.verifyToken(idToken)
-    const user = await this.findOrCreateGoogleUser(googleUser)
-    return this.startSession(user, await this.refreshTokenService.issue(user.id))
+    this.logger.log(`Attempting Google login...`);
+    const googleUser = await this.googleAuthService.verifyToken(idToken);
+    const user = await this.findOrCreateGoogleUser(googleUser);
+    return this.startSession(
+      user,
+      await this.refreshTokenService.issue(user.id),
+    );
   }
 
   /** Swaps a valid refresh token for a new access token and a rotated refresh token. */
   async refresh(rawRefreshToken: string): Promise<AuthSession> {
-    const { userId, refreshToken } = await this.refreshTokenService.rotate(rawRefreshToken)
-    const user = await this.userFacade.getUserById(userId)
+    const { userId, refreshToken } =
+      await this.refreshTokenService.rotate(rawRefreshToken);
+    const user = await this.userFacade.getUserById(userId);
     if (!user.isActive) {
-      await this.refreshTokenService.revokeFamilyOf(refreshToken)
-      throw new UnauthorizedException('Account is disabled')
+      await this.refreshTokenService.revokeFamilyOf(refreshToken);
+      throw new UnauthorizedException('Account is disabled');
     }
-    return this.startSession(user, refreshToken)
+    return this.startSession(user, refreshToken);
   }
 
   /** Revokes the device's refresh-token family. Safe to call without a token or with an expired access token. */
   async logout(rawRefreshToken: string | undefined): Promise<void> {
-    if (rawRefreshToken) await this.refreshTokenService.revokeFamilyOf(rawRefreshToken)
-    this.logger.log('A user logged out.')
+    if (rawRefreshToken)
+      await this.refreshTokenService.revokeFamilyOf(rawRefreshToken);
+    this.logger.log('A user logged out.');
   }
 
   async getMe(userId: string): Promise<SessionUser> {
-    return this.toSessionUser(await this.userFacade.getUserById(userId))
+    return this.toSessionUser(await this.userFacade.getUserById(userId));
   }
 
   /**
@@ -57,41 +65,63 @@ export class AuthService {
    * 2. Find User by email → Existing account without Google SSO linked → link & return
    * 3. Not found → First time login → create new User (default role STUDENT)
    */
-  private async findOrCreateGoogleUser(profile: GoogleUserProfile): Promise<UserView> {
-    const existingBySsoId = await this.userFacade.findBySsoId(profile.googleId)
+  private async findOrCreateGoogleUser(
+    profile: GoogleUserProfile,
+  ): Promise<UserView> {
+    const existingBySsoId = await this.userFacade.findBySsoId(profile.googleId);
     if (existingBySsoId) {
-      this.logger.log(`Returning user found by ssoId: ${profile.email}`)
-      return existingBySsoId
+      this.logger.log(`Returning user found by ssoId: ${profile.email}`);
+      return existingBySsoId;
     }
-    const existingByEmail = await this.userFacade.findByEmail(profile.email)
+    const existingByEmail = await this.userFacade.findByEmail(profile.email);
     if (existingByEmail) {
-      this.logger.log(`Existing account found by email, linking Google SSO: ${profile.email}`)
+      this.logger.log(
+        `Existing account found by email, linking Google SSO: ${profile.email}`,
+      );
       return this.userFacade.linkSso(existingByEmail.id, {
         ssoId: profile.googleId,
         ssoProvider: 'GOOGLE',
         avatarUrl: profile.avatarUrl,
-      })
+      });
     }
-    this.logger.log(`New user — creating account for: ${profile.email}`)
+
+    // First time login: determine role based on configured ADMIN_EMAILS
+    const email = profile.email.toLowerCase().trim();
+    const adminEmails = (this.configService.get<string>('ADMIN_EMAILS') ?? '')
+      .split(',')
+      .map((e) => e.trim().toLowerCase())
+      .filter(Boolean);
+
+    const role = adminEmails.includes(email) ? Role.ADMIN : Role.STUDENT;
+
+    this.logger.log(
+      `New user — creating account for: ${profile.email} with role: ${role}`,
+    );
     return this.userFacade.createUser({
       email: profile.email,
       fullName: profile.fullName,
       ssoId: profile.googleId,
       ssoProvider: 'GOOGLE',
       avatarUrl: profile.avatarUrl ?? undefined,
-    })
+      role,
+    });
   }
 
-  private async startSession(user: UserView, refreshToken: string): Promise<AuthSession> {
-    this.logger.log(`User ${user.email} authenticated successfully. Role: ${user.role}`)
+  private async startSession(
+    user: UserView,
+    refreshToken: string,
+  ): Promise<AuthSession> {
+    this.logger.log(
+      `User ${user.email} authenticated successfully. Role: ${user.role}`,
+    );
     return {
       accessToken: this.tokenService.generateAccessToken(user),
       refreshToken,
       user: await this.toSessionUser(user),
-    }
+    };
   }
 
   private async toSessionUser(user: UserView): Promise<SessionUser> {
-    return { ...user, code: await this.userFacade.getProfileCode(user.id) }
+    return { ...user, code: await this.userFacade.getProfileCode(user.id) };
   }
 }

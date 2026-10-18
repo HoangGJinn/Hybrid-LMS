@@ -1,0 +1,141 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { UserFacade } from './user.facade.js';
+import { UserService } from '../services/user.service.js';
+import { User } from '../entities/user.entity.js';
+import { Role } from '../../../common/enums/role.enum.js';
+
+describe('UserFacade', () => {
+  let facade: UserFacade;
+  let mockUserService: Partial<Record<keyof UserService, ReturnType<typeof vi.fn>>>;
+
+  const sampleUser: User = {
+    id: 'usr-1',
+    email: 'facade@school.edu.vn',
+    fullName: 'Facade User',
+    ssoId: 'sso-facade-1',
+    ssoProvider: 'GOOGLE',
+    avatarUrl: null,
+    role: Role.STUDENT,
+    isActive: true,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+
+  beforeEach(() => {
+    mockUserService = {
+      createUser: vi.fn(),
+      findUsers: vi.fn(),
+      getProfileCode: vi.fn(),
+      findByEmail: vi.fn(),
+      findBySsoId: vi.fn(),
+      getUserById: vi.fn(),
+      linkSso: vi.fn(),
+    };
+    facade = new UserFacade(mockUserService as unknown as UserService);
+  });
+
+  describe('createUser', () => {
+    it('creates user and returns UserView projection', async () => {
+      mockUserService.createUser!.mockResolvedValue(sampleUser);
+      const dto = {
+        email: 'facade@school.edu.vn',
+        fullName: 'Facade User',
+        ssoId: 'sso-facade-1',
+        ssoProvider: 'GOOGLE',
+      };
+
+      const result = await facade.createUser(dto);
+
+      expect(mockUserService.createUser).toHaveBeenCalledWith(dto);
+      expect(result.id).toBe('usr-1');
+      expect(result.email).toBe('facade@school.edu.vn');
+    });
+  });
+
+  describe('findUsers', () => {
+    it('returns array of UserView projections', async () => {
+      mockUserService.findUsers!.mockResolvedValue([sampleUser]);
+
+      const result = await facade.findUsers(Role.STUDENT);
+
+      expect(mockUserService.findUsers).toHaveBeenCalledWith(Role.STUDENT);
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('usr-1');
+    });
+  });
+
+  describe('getProfileCode', () => {
+    it('delegates to UserService', async () => {
+      mockUserService.getProfileCode!.mockResolvedValue('SV2005001');
+
+      const result = await facade.getProfileCode('usr-1');
+
+      expect(mockUserService.getProfileCode).toHaveBeenCalledWith('usr-1');
+      expect(result).toBe('SV2005001');
+    });
+  });
+
+  describe('findByEmail', () => {
+    it('returns UserView if user exists', async () => {
+      mockUserService.findByEmail!.mockResolvedValue(sampleUser);
+
+      const result = await facade.findByEmail('facade@school.edu.vn');
+
+      expect(mockUserService.findByEmail).toHaveBeenCalledWith('facade@school.edu.vn');
+      expect(result?.email).toBe('facade@school.edu.vn');
+    });
+
+    it('returns null if user does not exist', async () => {
+      mockUserService.findByEmail!.mockResolvedValue(null);
+
+      const result = await facade.findByEmail('none@school.edu.vn');
+
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('findBySsoId', () => {
+    it('returns UserView if ssoId exists', async () => {
+      mockUserService.findBySsoId!.mockResolvedValue(sampleUser);
+
+      const result = await facade.findBySsoId('sso-facade-1');
+
+      expect(mockUserService.findBySsoId).toHaveBeenCalledWith('sso-facade-1');
+      expect(result?.ssoId).toBe('sso-facade-1');
+    });
+
+    it('returns null if ssoId does not exist', async () => {
+      mockUserService.findBySsoId!.mockResolvedValue(null);
+
+      const result = await facade.findBySsoId('unknown-sso');
+
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('getUserById', () => {
+    it('returns UserView projection', async () => {
+      mockUserService.getUserById!.mockResolvedValue(sampleUser);
+
+      const result = await facade.getUserById('usr-1');
+
+      expect(mockUserService.getUserById).toHaveBeenCalledWith('usr-1');
+      expect(result.id).toBe('usr-1');
+    });
+  });
+
+  describe('linkSso', () => {
+    it('updates sso and returns updated UserView', async () => {
+      const updated = { ...sampleUser, ssoId: 'new-sso' };
+      mockUserService.linkSso!.mockResolvedValue(updated);
+
+      const result = await facade.linkSso('usr-1', {
+        ssoId: 'new-sso',
+        ssoProvider: 'GOOGLE',
+        avatarUrl: null,
+      });
+
+      expect(result.ssoId).toBe('new-sso');
+    });
+  });
+});

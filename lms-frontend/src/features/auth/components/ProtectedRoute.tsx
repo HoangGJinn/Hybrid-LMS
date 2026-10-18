@@ -1,30 +1,30 @@
-import { useEffect } from 'react'
-import { Navigate } from 'react-router'
-import FullPageLoader from '@shared/components/FullPageLoader'
-import { useCurrentUser } from '../hooks/useCurrentUser'
-import { useAuthStore } from '@core/store/useAuthStore'
+import { useEffect } from 'react';
+import { Navigate } from 'react-router';
+import FullPageLoader from '@shared/components/FullPageLoader';
+import { useCurrentUser } from '../hooks/useCurrentUser';
+import { useAuthStore } from '@core/store/useAuthStore';
 
 interface ProtectedRouteProps {
-  children: React.ReactNode
+  children: React.ReactNode;
 }
 
 export const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
-  const { data: user, isLoading } = useCurrentUser()
-  const setUser = useAuthStore((state) => state.setUser)
+  const { data: user, isLoading } = useCurrentUser();
+  const setUser = useAuthStore((state) => state.setUser);
 
   useEffect(() => {
     if (user !== undefined) {
-      setUser(user)
+      setUser(user);
     }
-  }, [user, setUser])
+  }, [user, setUser]);
 
   if (isLoading) {
-    return <FullPageLoader />
+    return <FullPageLoader />;
   }
 
   if (!user) {
-    return <Navigate to="/login" replace />
+    return <Navigate to="/login" replace />;
   }
 
-  return <>{children}</>
-}
+  return <>{children}</>;
+};

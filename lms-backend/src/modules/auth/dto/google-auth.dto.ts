@@ -1,6 +1,6 @@
-import { IsString } from 'class-validator'
+import { IsString } from 'class-validator';
 
 export class GoogleAuthDto {
   @IsString()
-  readonly idToken: string
+  readonly idToken: string;
 }

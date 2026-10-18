@@ -1,24 +1,24 @@
-import { IsEmail, IsEnum, IsOptional, IsString } from 'class-validator'
-import { Role } from '../../../common/enums/role.enum.js'
+import { IsEmail, IsEnum, IsOptional, IsString } from 'class-validator';
+import { Role } from '../../../common/enums/role.enum.js';
 
 export class CreateUserDto {
   @IsEmail()
-  readonly email: string
+  readonly email: string;
 
   @IsString()
-  readonly fullName: string
+  readonly fullName: string;
 
   @IsString()
-  readonly ssoId: string
+  readonly ssoId: string;
 
   @IsString()
-  readonly ssoProvider: string
+  readonly ssoProvider: string;
 
   @IsString()
   @IsOptional()
-  readonly avatarUrl?: string
+  readonly avatarUrl?: string;
 
   @IsEnum(Role)
   @IsOptional()
-  readonly role?: Role
+  readonly role?: Role;
 }

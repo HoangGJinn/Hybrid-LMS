@@ -1,8 +1,23 @@
-import { BookOpen, CalendarDays, ClipboardList, GraduationCap, LayoutDashboard, PenSquare, Sparkles, Users, BarChart3, Map } from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
-import type { UserRole } from '@core/types/auth.types'
+import {
+  BookOpen,
+  CalendarDays,
+  ClipboardList,
+  GraduationCap,
+  LayoutDashboard,
+  PenSquare,
+  Sparkles,
+  Users,
+  BarChart3,
+  Map,
+} from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+import type { UserRole } from '@core/types/auth.types';
 
-export interface NavItem { label: string; to: string; icon: LucideIcon }
+export interface NavItem {
+  label: string;
+  to: string;
+  icon: LucideIcon;
+}
 
 export const navByRole: Record<UserRole, NavItem[]> = {
   STUDENT: [
@@ -23,6 +38,10 @@ export const navByRole: Record<UserRole, NavItem[]> = {
     { label: 'AI Assessment', to: '/lecturer/ai-generator', icon: Sparkles },
   ],
   ADMIN: [],
-}
+};
 
-export const homeByRole: Record<UserRole, string> = { STUDENT: '/student', LECTURER: '/lecturer', ADMIN: '/' }
+export const homeByRole: Record<UserRole, string> = {
+  STUDENT: '/student',
+  LECTURER: '/lecturer',
+  ADMIN: '/',
+};

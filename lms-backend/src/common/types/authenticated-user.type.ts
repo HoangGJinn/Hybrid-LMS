@@ -1,4 +1,4 @@
-import { Role } from '../enums/role.enum.js'
+import { Role } from '../enums/role.enum.js';
 
 /**
  * Represents the authenticated user attached to the request after JWT validation.
@@ -10,7 +10,7 @@ import { Role } from '../enums/role.enum.js'
  * error TS1272.
  */
 export class AuthenticatedUser {
-  readonly id: string
-  readonly email: string
-  readonly role: Role
+  readonly id: string;
+  readonly email: string;
+  readonly role: Role;
 }

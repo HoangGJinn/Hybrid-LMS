@@ -1,48 +1,59 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn } from 'typeorm'
-import { GenerationJob } from './generation-job.entity.js'
-import { Student } from '../../user/entities/student.entity.js'
-import { QuizInstanceStatus } from '../enums/quiz-instance-status.enum.js'
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  ManyToOne,
+  JoinColumn,
+} from 'typeorm';
+import { GenerationJob } from './generation-job.entity.js';
+import { Student } from '../../user/entities/student.entity.js';
+import { QuizInstanceStatus } from '../enums/quiz-instance-status.enum.js';
 
 @Entity('quiz_instances')
 export class QuizInstance {
   @PrimaryGeneratedColumn('uuid')
-  readonly id: string
+  readonly id: string;
 
   @Column({ name: 'generation_job_id' })
-  generationJobId: string
+  generationJobId: string;
 
   @ManyToOne(() => GenerationJob)
   @JoinColumn({ name: 'generation_job_id' })
-  generationJob: GenerationJob
+  generationJob: GenerationJob;
 
   @Column({ name: 'student_id' })
-  studentId: string
+  studentId: string;
 
   @ManyToOne(() => Student)
   @JoinColumn({ name: 'student_id' })
-  student: Student
+  student: Student;
 
   @Column({ name: 'generation_strategy', length: 50 })
-  generationStrategy: string
+  generationStrategy: string;
 
   @Column({ name: 'target_difficulty', length: 20 })
-  targetDifficulty: string
+  targetDifficulty: string;
 
   @Column({ name: 'num_questions', type: 'int' })
-  numQuestions: number
+  numQuestions: number;
 
   @Column({ name: 'random_seed', type: 'varchar', length: 100, nullable: true })
-  randomSeed: string | null
+  randomSeed: string | null;
 
-  @Column({ type: 'enum', enum: QuizInstanceStatus, default: QuizInstanceStatus.CREATED })
-  status: QuizInstanceStatus
+  @Column({
+    type: 'enum',
+    enum: QuizInstanceStatus,
+    default: QuizInstanceStatus.CREATED,
+  })
+  status: QuizInstanceStatus;
 
   @Column({ type: 'numeric', precision: 5, scale: 2, nullable: true })
-  score: number | null
+  score: number | null;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
-  readonly createdAt: Date
+  readonly createdAt: Date;
 
   @Column({ name: 'student_notified', default: false })
-  studentNotified: boolean
+  studentNotified: boolean;
 }

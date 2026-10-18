@@ -1,27 +1,27 @@
-import { useEffect, useRef, type MouseEvent, type ReactNode } from 'react'
+import { useEffect, useRef, type MouseEvent, type ReactNode } from 'react';
 
 interface ModalProps {
-  open: boolean
-  title: string
-  onClose: () => void
-  children: ReactNode
+  open: boolean;
+  title: string;
+  onClose: () => void;
+  children: ReactNode;
 }
 
 /** Accessible modal built on the native <dialog>: focus trap, Esc to close and backdrop come from the browser. */
 export const Modal = ({ open, title, onClose, children }: ModalProps) => {
-  const dialogRef = useRef<HTMLDialogElement>(null)
+  const dialogRef = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
-    const dialog = dialogRef.current
-    if (!dialog) return
-    if (open && !dialog.open) dialog.showModal()
-    if (!open && dialog.open) dialog.close()
-  }, [open])
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    if (open && !dialog.open) dialog.showModal();
+    if (!open && dialog.open) dialog.close();
+  }, [open]);
 
   // Clicks on the ::backdrop target the <dialog> itself, clicks on content target a descendant.
   const handleBackdropClick = (event: MouseEvent<HTMLDialogElement>) => {
-    if (event.target === event.currentTarget) onClose()
-  }
+    if (event.target === event.currentTarget) onClose();
+  };
 
   return (
     <dialog
@@ -36,5 +36,5 @@ export const Modal = ({ open, title, onClose, children }: ModalProps) => {
         {children}
       </div>
     </dialog>
-  )
-}
+  );
+};
