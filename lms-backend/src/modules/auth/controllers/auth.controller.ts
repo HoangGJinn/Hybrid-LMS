@@ -9,17 +9,16 @@ import {
   Req,
   Res,
   UnauthorizedException,
-  UseGuards,
 } from '@nestjs/common';
 import type { CookieOptions, Request, Response } from 'express';
 import { AuthService } from '../services/auth.service.js';
 import { GoogleAuthDto } from '../dto/google-auth.dto.js';
-import { JwtAuthGuard } from '../guards/jwt-auth.guard.js';
 import { REFRESH_COOKIE_NAME } from '../constants/refresh-cookie-name.constant.js';
 import { AuthTokenResponse } from '../types/auth-token-response.type.js';
 import { SessionUser } from '../types/session-user.type.js';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator.js';
 import { AuthenticatedUser } from '../../../common/types/authenticated-user.type.js';
+import { Auth } from '../../../common/decorators/auth.decorator.js';
 
 /** The refresh cookie is only sent to the auth routes, never to the rest of the API. */
 const REFRESH_COOKIE_PATH = '/api/auth';
@@ -66,7 +65,7 @@ export class AuthController {
   }
 
   @Get('me')
-  @UseGuards(JwtAuthGuard)
+  @Auth()
   async getMe(@CurrentUser() user: AuthenticatedUser): Promise<SessionUser> {
     return this.authService.getMe(user.id);
   }
@@ -127,8 +126,11 @@ export class AuthController {
   private assertTrustedOrigin(req: Request): void {
     if (this.getSameSite() !== 'none') return;
     const origin = req.headers.origin;
-    const allowedOrigin = process.env.FRONTEND_URL?.replace(/\/$/, '');
-    if (origin && origin !== allowedOrigin)
+    const allowed = [
+      process.env.FRONTEND_URL?.replace(/\/$/, ''),
+      process.env.ADMIN_URL?.replace(/\/$/, ''),
+    ].filter(Boolean);
+    if (origin && !allowed.includes(origin))
       throw new ForbiddenException('Untrusted origin');
   }
 }

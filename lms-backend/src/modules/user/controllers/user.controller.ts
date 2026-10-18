@@ -1,11 +1,11 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
-import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard.js';
+import { Controller, Get } from '@nestjs/common';
+import { Auth } from '../../../common/decorators/auth.decorator.js';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator.js';
 import { AuthenticatedUser } from '../../../common/types/authenticated-user.type.js';
 
 /** Handles user-related HTTP requests. */
 @Controller('users')
-@UseGuards(JwtAuthGuard)
+@Auth()
 export class UserController {
   /** Returns the profile of the currently authenticated user. */
   @Get('me')
