@@ -9,7 +9,7 @@ interface ProtectedRouteProps {
 }
 
 export const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
-  const { data: user, isLoading } = useCurrentUser();
+  const { data: user, isPending } = useCurrentUser();
   const setUser = useAuthStore((state) => state.setUser);
 
   useEffect(() => {
@@ -18,7 +18,7 @@ export const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
     }
   }, [user, setUser]);
 
-  if (isLoading) {
+  if (isPending) {
     return <FullPageLoader />;
   }
 

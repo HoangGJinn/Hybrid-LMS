@@ -6,9 +6,9 @@ import ForbiddenPage from '../views/ForbiddenPage';
 
 /** Lets only signed-in administrators through: guests go to /login, other roles see a 403 page. */
 export const ProtectedRoute = ({ children }: { children: ReactNode }) => {
-  const { data: user, isLoading } = useAdminSession();
+  const { data: user, isPending } = useAdminSession();
 
-  if (isLoading) return <FullPageLoader />;
+  if (isPending) return <FullPageLoader />;
   if (!user) return <Navigate to="/login" replace />;
   if (user.role !== 'ADMIN') return <ForbiddenPage />;
 
