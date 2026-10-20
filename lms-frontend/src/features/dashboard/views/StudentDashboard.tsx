@@ -5,7 +5,7 @@ import { HeroHeader } from '@shared/components/HeroHeader';
 import { StatusBadge } from '@shared/components/ui/badge';
 import { toAsyncState } from '@shared/utils/async-state';
 import { useStudentDashboard } from '../hooks/useStudentDashboard';
-import { useAuthStore } from '@core/store/useAuthStore';
+import { useCurrentUser } from '@features/auth';
 import { formatDate, formatPercentage } from '@shared/utils/format';
 
 const Stat = ({ label, value }: { label: string; value: string | number }) => (
@@ -16,7 +16,8 @@ const Stat = ({ label, value }: { label: string; value: string | number }) => (
 );
 
 const StudentDashboard = () => {
-  const name = useAuthStore((s) => s.profile?.fullName ?? 'Student');
+  const { data: user } = useCurrentUser();
+  const name = user?.fullName ?? 'Student';
   const state = toAsyncState(useStudentDashboard());
   return (
     <div>

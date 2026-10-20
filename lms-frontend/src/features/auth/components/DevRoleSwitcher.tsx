@@ -24,13 +24,13 @@ interface DevRoleSwitcherProps {
 /** Development-only helper to sign in as a mock student or lecturer. Renders nothing in production builds. */
 export const DevRoleSwitcher = ({ role, onSwitched }: DevRoleSwitcherProps) => {
   const queryClient = useQueryClient();
-  const login = useAuthStore((state) => state.login);
+  const setToken = useAuthStore((state) => state.setToken);
 
   if (!import.meta.env.DEV) return null;
 
   const handleSwitch = (next: SwitchableRole) => {
     const nextUser = mockUserByRole[next];
-    login(nextUser, DEV_MOCK_TOKEN);
+    setToken(DEV_MOCK_TOKEN);
     queryClient.setQueryData(authKeys.me(), nextUser);
     onSwitched?.(next);
   };

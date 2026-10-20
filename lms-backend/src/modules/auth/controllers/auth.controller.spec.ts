@@ -16,8 +16,6 @@ describe('AuthController', () => {
     id: 'usr-1',
     email: 'user@school.edu.vn',
     fullName: 'Test User',
-    ssoId: 'sso-1',
-    ssoProvider: 'GOOGLE',
     avatarUrl: null,
     role: Role.STUDENT,
     isActive: true,
@@ -99,7 +97,7 @@ describe('AuthController', () => {
         'new.refresh.token',
         expect.objectContaining({ httpOnly: true }),
       );
-      expect(result.accessToken).toBe('new.access.jwt');
+      expect(result).toEqual({ accessToken: 'new.access.jwt' });
     });
 
     it('throws UnauthorizedException if refresh cookie is missing', async () => {

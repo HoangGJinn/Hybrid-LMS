@@ -80,8 +80,7 @@ Xử lý đăng nhập Google OAuth2, cấp phát và refresh JWT token, quản 
 - **Response `200 OK`**:
   ```json
   {
-    "accessToken": "eyJhbGciOiJIUzI1Ni...",
-    "user": { ... }
+    "accessToken": "eyJhbGciOiJIUzI1Ni..."
   }
   ```
 

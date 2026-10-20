@@ -5,10 +5,12 @@ import { authService } from '../api/auth.service';
 import { authKeys } from '../api/queryKeys';
 import { refreshAccessToken } from '../api/refresh-session';
 
-const SESSION_STALE_TIME_MS = 5 * 60 * 1000;
+const SESSION_STALE_TIME_MS = 1000 * 60 * 60 * 12; // 12 hours
+const SESSION_GC_TIME_MS = 1000 * 60 * 60 * 24; // 24 hours
 
 /**
  * The current session: `SessionUser`, or `null` when signed out.
+ * All admin session data is owned strictly by TanStack Query.
  * After a page reload the access token (memory only) is gone, so the session is restored
  * from the httpOnly refresh cookie; without a valid cookie the result is `null`.
  */
@@ -19,7 +21,6 @@ export const useAdminSession = () =>
       try {
         if (!useAdminAuthStore.getState().accessToken) {
           await refreshAccessToken();
-          return useAdminAuthStore.getState().user;
         }
         return (await authService.getMe()) ?? null;
       } catch {
@@ -27,5 +28,6 @@ export const useAdminSession = () =>
       }
     },
     staleTime: SESSION_STALE_TIME_MS,
+    gcTime: SESSION_GC_TIME_MS,
     retry: false,
   });

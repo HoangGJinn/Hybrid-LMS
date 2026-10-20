@@ -1,10 +1,9 @@
 import axios from 'axios';
 import { API_BASE_URL } from '@/core/config/env';
 import { useAdminAuthStore } from '@/core/store/useAdminAuthStore';
-import type { SessionUser } from '@/core/types/auth.types';
 
 interface RefreshResponse {
-  data: { accessToken: string; user: SessionUser };
+  data: { accessToken: string };
 }
 
 // Plain client without interceptors: a failed refresh must never trigger another refresh.
@@ -18,8 +17,8 @@ let pendingRefresh: Promise<string> | null = null;
 const requestNewSession = async (): Promise<string> => {
   const { data } =
     await refreshClient.post<RefreshResponse>('/api/auth/refresh');
-  const { accessToken, user } = data.data;
-  useAdminAuthStore.getState().login(user, accessToken);
+  const { accessToken } = data.data;
+  useAdminAuthStore.getState().setAccessToken(accessToken);
   return accessToken;
 };
 

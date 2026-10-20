@@ -7,11 +7,11 @@ import { authKeys } from '../api/queryKeys';
 /** Exchanges a Google ID token for a session and stores it. */
 export const useLoginWithGoogle = () => {
   const queryClient = useQueryClient();
-  const login = useAuthStore((state) => state.login);
+  const setToken = useAuthStore((state) => state.setToken);
   return useMutation({
     mutationFn: (idToken: string) => authService.loginWithGoogle(idToken),
     onSuccess: ({ user, accessToken }) => {
-      login(user, accessToken);
+      setToken(accessToken);
       queryClient.setQueryData(authKeys.me(), user);
     },
   });
@@ -29,7 +29,7 @@ export const useLogout = () => {
       // 1. Navigate to /login
       navigate('/login', { replace: true });
 
-      // 2. Clear session in Zustand
+      // 2. Clear token in Zustand
       clearSession();
 
       setTimeout(() => {
