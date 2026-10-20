@@ -90,3 +90,42 @@ jobs:
 
       - name: 3. Vitest Unit Tests
         run: pnpm test
+
+  admin:
+    name: Admin Quality Gate
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: lms-admin
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 12.4.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+          cache-dependency-path: lms-admin/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: 1. TypeScript Typecheck
+        run: pnpm typecheck
+
+      - name: 2. Code Lint (oxlint)
+        run: pnpm lint
+
+      - name: 3. Vitest Unit Tests
+        run: pnpm test
+
+      - name: 4. Production Build
+        run: pnpm build
+

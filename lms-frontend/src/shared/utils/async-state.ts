@@ -1,7 +1,8 @@
 /** Minimal shape shared by a TanStack Query result and by several query results combined together. */
 export interface QuerySnapshot<TData> {
   readonly data: TData | undefined;
-  readonly isLoading: boolean;
+  readonly isPending?: boolean;
+  readonly isLoading?: boolean;
   readonly error: unknown;
   readonly refetch: () => unknown;
 }
@@ -33,7 +34,7 @@ export const toAsyncState = <TData>(
   query: QuerySnapshot<TData>,
 ): AsyncState<NonNullable<TData>> => ({
   data: query.data ?? undefined,
-  loading: query.isLoading,
+  loading: query.isPending ?? query.isLoading ?? false,
   error: toError(query.error),
   reload: () => {
     void query.refetch();
@@ -66,7 +67,8 @@ export const combineQueries = <
           },
         )
       : undefined,
-    isLoading: queries.some((query) => query.isLoading),
+    isLoading: queries.some((query) => query.isPending ?? query.isLoading),
+    isPending: queries.some((query) => query.isPending ?? query.isLoading),
     error: failedQuery?.error ?? null,
     refetch: () => Promise.all(queries.map((query) => query.refetch())),
   };

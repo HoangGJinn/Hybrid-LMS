@@ -1,6 +1,5 @@
 import { Navigate } from 'react-router';
 import { useCurrentUser } from '../hooks/useCurrentUser';
-import { useAuthStore } from '@core/store/useAuthStore';
 import type { UserRole } from '@core/types/auth.types';
 
 const DEFAULT_ROLE: UserRole = 'STUDENT';
@@ -13,7 +12,6 @@ interface RoleRedirectProps {
 /** Sends the signed-in user to the home route of their role. */
 export const RoleRedirect = ({ homeByRole }: RoleRedirectProps) => {
   const { data: user } = useCurrentUser();
-  const storeRole = useAuthStore((state) => state.user?.role);
-  const role = user?.role ?? storeRole ?? DEFAULT_ROLE;
+  const role = user?.role ?? DEFAULT_ROLE;
   return <Navigate to={homeByRole[role]} replace />;
 };

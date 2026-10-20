@@ -15,8 +15,6 @@ describe('JwtStrategy', () => {
     id: 'usr-1',
     email: 'user@school.edu.vn',
     fullName: 'Test User',
-    ssoId: 'sso-1',
-    ssoProvider: 'GOOGLE',
     avatarUrl: null,
     role: Role.STUDENT,
     isActive: true,

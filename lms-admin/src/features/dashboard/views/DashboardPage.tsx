@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { BookOpen, CalendarDays, GraduationCap, Users } from 'lucide-react';
 import { Link } from 'react-router';
-import { useAdminAuthStore } from '@/core/store/useAdminAuthStore';
+import { useAdminSession } from '@/features/auth';
 import { PageHeader } from '@/shared/components/PageHeader';
 import { StatCard } from '@/shared/components/StatCard';
 import { buttonClasses } from '@/shared/components/ui/button-classes';
@@ -18,7 +18,7 @@ const STAT_ICONS: Record<DashboardStatKey, ReactNode> = {
 };
 
 const DashboardPage = () => {
-  const user = useAdminAuthStore((state) => state.user);
+  const { data: user } = useAdminSession();
   const { stats, isPlaceholder } = useDashboardStats();
 
   return (

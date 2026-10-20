@@ -1,7 +1,6 @@
 import { NavLink, Outlet, useNavigate, useNavigation } from 'react-router';
 import { GraduationCap, LogOut, Menu, X } from 'lucide-react';
-import { DevRoleSwitcher, useLogout } from '@features/auth';
-import { useAuthStore } from '@core/store/useAuthStore';
+import { DevRoleSwitcher, useCurrentUser, useLogout } from '@features/auth';
 import type { UserRole } from '@core/types/auth.types';
 import { NotificationBell } from '@features/notifications';
 import { useUiStore } from '@core/store/useUiStore';
@@ -60,8 +59,7 @@ const SidebarBody = ({
 );
 
 const AppShell = () => {
-  const user = useAuthStore((s) => s.user);
-  const profile = useAuthStore((s) => s.profile);
+  const { data: user } = useCurrentUser();
   const { mutate: logout } = useLogout();
   const mobileNavOpen = useUiStore((s) => s.mobileNavOpen);
   const setMobileNavOpen = useUiStore((s) => s.setMobileNavOpen);
@@ -126,17 +124,17 @@ const AppShell = () => {
             <NotificationBell />
             <div className="ml-1 hidden text-right sm:block">
               <p className="m-0 text-sm font-medium">
-                {profile?.fullName ?? 'Guest'}
+                {user?.fullName ?? 'Guest'}
               </p>
               <p className="m-0 text-xs text-muted-foreground">
-                {profile?.email}
+                {user?.email}
               </p>
             </div>
             <div
               className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground"
               aria-hidden="true"
             >
-              {initials(profile?.fullName)}
+              {initials(user?.fullName)}
             </div>
             <button
               type="button"

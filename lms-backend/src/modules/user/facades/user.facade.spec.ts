@@ -101,7 +101,7 @@ describe('UserFacade', () => {
       const result = await facade.findBySsoId('sso-facade-1');
 
       expect(mockUserService.findBySsoId).toHaveBeenCalledWith('sso-facade-1');
-      expect(result?.ssoId).toBe('sso-facade-1');
+      expect(result?.id).toBe(sampleUser.id);
     });
 
     it('returns null if ssoId does not exist', async () => {
@@ -135,7 +135,7 @@ describe('UserFacade', () => {
         avatarUrl: null,
       });
 
-      expect(result.ssoId).toBe('new-sso');
+      expect(result.id).toBe(sampleUser.id);
     });
   });
 });

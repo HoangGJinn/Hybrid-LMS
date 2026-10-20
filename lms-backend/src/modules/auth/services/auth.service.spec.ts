@@ -21,8 +21,6 @@ describe('AuthService', () => {
     id: 'usr-1',
     email: 'user@school.edu.vn',
     fullName: 'Nguyen Van User',
-    ssoId: 'google-id-123',
-    ssoProvider: 'GOOGLE',
     avatarUrl: null,
     role: Role.STUDENT,
     isActive: true,

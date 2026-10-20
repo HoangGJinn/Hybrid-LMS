@@ -6,7 +6,7 @@ import { EmptyState } from '@shared/components/EmptyState';
 import { Input } from '@shared/components/ui/input';
 import { useClassmates } from '../hooks/useClassmates';
 import { toAsyncState } from '@shared/utils/async-state';
-import { useAuthStore } from '@core/store/useAuthStore';
+import { useCurrentUser } from '@features/auth';
 
 const getInitials = (name: string) =>
   name
@@ -20,7 +20,8 @@ const getInitials = (name: string) =>
 const ClassmatesPage = () => {
   const { courseId = '' } = useParams();
   const state = toAsyncState(useClassmates(courseId));
-  const myEmail = useAuthStore((s) => s.profile?.email);
+  const { data: user } = useCurrentUser();
+  const myEmail = user?.email;
   const [query, setQuery] = useState('');
 
   return (
