@@ -36,7 +36,7 @@ const anyCore = {
 }
 const mocks = {
   group: ['@core/mocks', '@core/mocks/**'],
-  message: 'Mocks may only be used by features/*/api/** services (and the dev-only DevRoleSwitcher).',
+  message: 'Mocks may only be used by features/*/api/** services.',
 }
 const stores = {
   group: ['@core/store', '@core/store/**'],
@@ -95,8 +95,8 @@ export const boundaryConfigs = [
     rules: restrict(removedPaths, deepFeature, entryPoints, mocks),
   },
   {
-    // Services switch between mocks and HTTP; DevRoleSwitcher is a dev-only helper.
-    files: ['src/features/*/api/**', 'src/features/auth/components/DevRoleSwitcher.tsx'],
+    // Services switch between mocks and HTTP.
+    files: ['src/features/*/api/**'],
     rules: restrict(removedPaths, deepFeature, entryPoints),
   },
   {

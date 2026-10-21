@@ -1,6 +1,6 @@
-import { NavLink, Outlet, useNavigate, useNavigation } from 'react-router';
+import { NavLink, Outlet, useNavigation } from 'react-router';
 import { GraduationCap, LogOut, Menu, X } from 'lucide-react';
-import { DevRoleSwitcher, useCurrentUser, useLogout } from '@features/auth';
+import { useCurrentUser, useLogout } from '@features/auth';
 import type { UserRole } from '@core/types/auth.types';
 import { NotificationBell } from '@features/notifications';
 import { useUiStore } from '@core/store/useUiStore';
@@ -21,11 +21,9 @@ const initials = (name?: string) =>
 const SidebarBody = ({
   role,
   onNavigate,
-  onRoleSwitched,
 }: {
   role: UserRole;
   onNavigate?: () => void;
-  onRoleSwitched: (nextRole: UserRole) => void;
 }) => (
   <>
     <div className="flex h-16 items-center gap-3 px-5">
@@ -54,7 +52,6 @@ const SidebarBody = ({
         </NavLink>
       ))}
     </nav>
-    <DevRoleSwitcher role={role} onSwitched={onRoleSwitched} />
   </>
 );
 
@@ -63,19 +60,13 @@ const AppShell = () => {
   const { mutate: logout } = useLogout();
   const mobileNavOpen = useUiStore((s) => s.mobileNavOpen);
   const setMobileNavOpen = useUiStore((s) => s.setMobileNavOpen);
-  const navigate = useNavigate();
   const isNavigating = useNavigation().state === 'loading';
   const role = user?.role ?? 'STUDENT';
-
-  const handleRoleSwitched = (next: UserRole) => {
-    setMobileNavOpen(false);
-    navigate(homeByRole[next]);
-  };
 
   return (
     <div className="flex min-h-screen bg-background">
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col bg-sidebar text-sidebar-foreground md:flex">
-        <SidebarBody role={role} onRoleSwitched={handleRoleSwitched} />
+        <SidebarBody role={role} />
       </aside>
 
       {mobileNavOpen && (
@@ -98,7 +89,6 @@ const AppShell = () => {
             <SidebarBody
               role={role}
               onNavigate={() => setMobileNavOpen(false)}
-              onRoleSwitched={handleRoleSwitched}
             />
           </aside>
         </div>
