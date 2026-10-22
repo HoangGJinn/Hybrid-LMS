@@ -28,12 +28,6 @@ describe('SemesterController', () => {
     );
   });
 
-  describe('test', () => {
-    it('returns OK string', () => {
-      expect(controller.test()).toBe('Semester module OK');
-    });
-  });
-
   describe('getAll', () => {
     it('returns list of SemesterViews', async () => {
       mockService.findAll!.mockResolvedValue([sampleSemester]);

@@ -25,12 +25,6 @@ describe('SubjectController', () => {
     controller = new SubjectController(mockService as unknown as SubjectService);
   });
 
-  describe('test', () => {
-    it('returns OK string', () => {
-      expect(controller.test()).toBe('Subject module OK');
-    });
-  });
-
   describe('getAll', () => {
     it('returns list of SubjectViews', async () => {
       mockService.findAll!.mockResolvedValue([sampleSubject]);

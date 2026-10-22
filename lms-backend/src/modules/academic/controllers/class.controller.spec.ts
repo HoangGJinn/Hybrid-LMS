@@ -91,12 +91,6 @@ describe('ClassController', () => {
     );
   });
 
-  describe('test', () => {
-    it('returns OK string', () => {
-      expect(controller.test()).toBe('Class module OK');
-    });
-  });
-
   describe('getMyClasses', () => {
     it('returns classes for STUDENT via academicFacade', async () => {
       mockAcademicFacade.getClassesByStudent!.mockResolvedValue([sampleClassView]);

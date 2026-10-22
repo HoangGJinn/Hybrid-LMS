@@ -21,11 +21,6 @@ import { Role } from '../../../common/enums/role.enum.js';
 export class SemesterController {
   constructor(private readonly semesterService: SemesterService) {}
 
-  @Get('test')
-  test(): string {
-    return 'Semester module OK';
-  }
-
   @Get()
   async getAll(): Promise<SemesterView[]> {
     const semesters = await this.semesterService.findAll();

@@ -1,4 +1,5 @@
 import { applyDecorators, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiUnauthorizedResponse } from '@nestjs/swagger';
 import { Role } from '../enums/role.enum.js';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard.js';
 import { RolesGuard } from '../guards/roles.guard.js';
@@ -11,11 +12,20 @@ import { Roles } from './roles.decorator.js';
  * - `@Auth(Role.ADMIN, Role.LECTURER)`: Requires valid JWT AND matching ADMIN or LECTURER role.
  */
 export const Auth = (...roles: Role[]) => {
+  const decorators = [
+    ApiBearerAuth('JWT-auth'),
+    ApiUnauthorizedResponse({ description: 'Unauthorized' }),
+  ];
+
   if (roles.length > 0) {
-    return applyDecorators(
+    decorators.push(
       Roles(...roles),
       UseGuards(JwtAuthGuard, RolesGuard),
     );
+  } else {
+    decorators.push(UseGuards(JwtAuthGuard));
   }
-  return applyDecorators(UseGuards(JwtAuthGuard));
+
+  return applyDecorators(...decorators);
 };
+

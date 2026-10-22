@@ -30,11 +30,6 @@ const REFRESH_COOKIE_PATH = '/api/auth';
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  @Get('test')
-  test(): string {
-    return 'Auth module OK';
-  }
-
   /** Google login: returns the access token in the body and sets the refresh token as an httpOnly cookie. */
   @Post('google')
   @HttpCode(HttpStatus.OK)
