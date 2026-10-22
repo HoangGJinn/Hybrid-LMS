@@ -21,11 +21,6 @@ import { Role } from '../../../common/enums/role.enum.js';
 export class SubjectController {
   constructor(private readonly subjectService: SubjectService) {}
 
-  @Get('test')
-  test(): string {
-    return 'Subject module OK';
-  }
-
   @Get()
   async getAll(): Promise<SubjectView[]> {
     const subjects = await this.subjectService.findAll();

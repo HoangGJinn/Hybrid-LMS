@@ -26,11 +26,6 @@ export class ClassController {
     private readonly academicFacade: AcademicFacade,
   ) {}
 
-  @Get('test')
-  test(): string {
-    return 'Class module OK';
-  }
-
   /**
    * Returns classes belonging to the current user:
    * - STUDENT → classes they are enrolled in

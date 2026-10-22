@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { UserController } from './user.controller.js';
 import { UserFacade } from '../facades/user.facade.js';
 import { Role } from '../../../common/enums/role.enum.js';
-import { AuthenticatedUser } from '../../../common/types/authenticated-user.type.js';
 import { UserView } from '../types/user-view.type.js';
 
 describe('UserController', () => {
@@ -27,19 +26,6 @@ describe('UserController', () => {
     controller = new UserController(mockUserFacade as unknown as UserFacade);
   });
 
-  describe('getMe', () => {
-    it('returns the current authenticated user profile', () => {
-      const currentUser: AuthenticatedUser = {
-        id: 'usr-1',
-        email: 'test@school.edu.vn',
-        role: Role.STUDENT,
-      };
-
-      const result = controller.getMe(currentUser);
-
-      expect(result).toEqual(currentUser);
-    });
-  });
 
   describe('getUsers', () => {
     it('returns all users when no role filter is provided', async () => {

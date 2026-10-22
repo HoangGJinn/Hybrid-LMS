@@ -39,12 +39,6 @@ describe('AuthController', () => {
     controller = new AuthController(mockAuthService as unknown as AuthService);
   });
 
-  describe('test', () => {
-    it('returns OK string', () => {
-      expect(controller.test()).toBe('Auth module OK');
-    });
-  });
-
   describe('loginWithGoogle', () => {
     it('authenticates user and sets httpOnly refresh cookie', async () => {
       mockAuthService.loginWithGoogle!.mockResolvedValue({
