@@ -276,7 +276,8 @@ src/
 - **Khóa chính:** Luôn dùng UUID v4 (`@PrimaryGeneratedColumn('uuid') readonly id: string;`).
 - **Thời gian:** Sử dụng kiểu `timestamptz` (Timestamp with Time Zone).
 - **Migration môi trường Production:**
-  - Môi trường Production: **Bắt buộc tắt `synchronize`**. Mọi thay đổi cấu trúc bảng viết bằng file script SQL trong thư mục `migrations/NNN-ten-migration.sql` (viết dạng idempotent: `IF NOT EXISTS`), hệ thống có sẵn cơ chế Flyway runner tự động quét và áp dụng vào DB khi server khởi động.
+  - Môi trường Local/Dev: Cho phép `synchronize: true` để tăng tốc độ phát triển.
+  - Môi trường Production: **Bắt buộc tắt `synchronize`**. Mọi thay đổi cấu trúc bảng phải viết bằng file script SQL thủ công trong thư mục `migrations-manual/NNN-ten-migration.sql` (viết dạng idempotent: `IF NOT EXISTS`).
 
 ### 5.4 Controller, DTO & Exception
 
