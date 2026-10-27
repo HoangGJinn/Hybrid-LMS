@@ -11,7 +11,7 @@ export class Student {
   @JoinColumn({ name: 'user_id' })
   user: User;
 
-  @Column({ name: 'student_code', length: 50, unique: true })
+  @Column({ name: 'student_code', length: 10, unique: true })
   studentCode: string;
 
   @Column({

@@ -6,7 +6,9 @@ import { Role } from '../../../common/enums/role.enum.js';
 
 describe('UserFacade', () => {
   let facade: UserFacade;
-  let mockUserService: Partial<Record<keyof UserService, ReturnType<typeof vi.fn>>>;
+  let mockUserService: Partial<
+    Record<keyof UserService, ReturnType<typeof vi.fn>>
+  >;
 
   const sampleUser: User = {
     id: 'usr-1',
@@ -29,7 +31,7 @@ describe('UserFacade', () => {
       findByEmail: vi.fn(),
       findBySsoId: vi.fn(),
       getUserById: vi.fn(),
-      linkSso: vi.fn(),
+      claimProvisionedAccount: vi.fn(),
     };
     facade = new UserFacade(mockUserService as unknown as UserService);
   });
@@ -81,7 +83,9 @@ describe('UserFacade', () => {
 
       const result = await facade.findByEmail('facade@school.edu.vn');
 
-      expect(mockUserService.findByEmail).toHaveBeenCalledWith('facade@school.edu.vn');
+      expect(mockUserService.findByEmail).toHaveBeenCalledWith(
+        'facade@school.edu.vn',
+      );
       expect(result?.email).toBe('facade@school.edu.vn');
     });
 
@@ -124,18 +128,33 @@ describe('UserFacade', () => {
     });
   });
 
-  describe('linkSso', () => {
-    it('updates sso and returns updated UserView', async () => {
-      const updated = { ...sampleUser, ssoId: 'new-sso' };
-      mockUserService.linkSso!.mockResolvedValue(updated);
+  describe('claimProvisionedAccount', () => {
+    const account = {
+      ssoId: 'new-sso',
+      ssoProvider: 'GOOGLE',
+      avatarUrl: null,
+      fullName: 'Facade User',
+    };
 
-      const result = await facade.linkSso('usr-1', {
-        ssoId: 'new-sso',
-        ssoProvider: 'GOOGLE',
-        avatarUrl: null,
-      });
+    it('returns the updated UserView after the Google identity is bound', async () => {
+      const claimed = { ...sampleUser, ssoId: 'new-sso' };
+      mockUserService.claimProvisionedAccount!.mockResolvedValue(claimed);
 
-      expect(result.id).toBe(sampleUser.id);
+      const result = await facade.claimProvisionedAccount('usr-1', account);
+
+      expect(mockUserService.claimProvisionedAccount).toHaveBeenCalledWith(
+        'usr-1',
+        account,
+      );
+      expect(result?.id).toBe(sampleUser.id);
+    });
+
+    it('returns null when the account is already linked to a Google account', async () => {
+      mockUserService.claimProvisionedAccount!.mockResolvedValue(null);
+
+      const result = await facade.claimProvisionedAccount('usr-1', account);
+
+      expect(result).toBeNull();
     });
   });
 });

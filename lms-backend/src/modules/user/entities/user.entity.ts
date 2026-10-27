@@ -19,11 +19,12 @@ export class User {
   @Column({ name: 'full_name' })
   fullName: string;
 
-  @Column({ name: 'sso_id', unique: true })
-  ssoId: string;
+  /** Google account id. Null while the account is pre-provisioned and nobody has signed in yet. */
+  @Column({ name: 'sso_id', type: 'varchar', unique: true, nullable: true })
+  ssoId: string | null;
 
-  @Column({ name: 'sso_provider', type: 'varchar', length: 50 })
-  ssoProvider: string;
+  @Column({ name: 'sso_provider', type: 'varchar', length: 50, nullable: true })
+  ssoProvider: string | null;
 
   @Column({ name: 'avatar_url', type: 'text', nullable: true })
   avatarUrl: string | null;

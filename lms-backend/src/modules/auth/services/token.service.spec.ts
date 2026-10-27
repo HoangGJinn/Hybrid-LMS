@@ -6,7 +6,9 @@ import { Role } from '../../../common/enums/role.enum.js';
 
 describe('TokenService', () => {
   let service: TokenService;
-  let mockJwtService: Partial<Record<keyof JwtService, ReturnType<typeof vi.fn>>>;
+  let mockJwtService: Partial<
+    Record<keyof JwtService, ReturnType<typeof vi.fn>>
+  >;
 
   beforeEach(() => {
     mockJwtService = {

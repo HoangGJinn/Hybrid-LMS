@@ -1,24 +1,25 @@
 import { IsEmail, IsEnum, IsOptional, IsString } from 'class-validator';
+import { ValidationMessage } from '../../../common/enums/validation-message.enum.js';
 import { Role } from '../../../common/enums/role.enum.js';
 
 export class CreateUserDto {
-  @IsEmail()
+  @IsEmail({}, { message: ValidationMessage.IS_EMAIL })
   readonly email: string;
 
-  @IsString()
+  @IsString({ message: ValidationMessage.IS_STRING })
   readonly fullName: string;
 
-  @IsString()
+  @IsString({ message: ValidationMessage.IS_STRING })
   readonly ssoId: string;
 
-  @IsString()
+  @IsString({ message: ValidationMessage.IS_STRING })
   readonly ssoProvider: string;
 
-  @IsString()
+  @IsString({ message: ValidationMessage.IS_STRING })
   @IsOptional()
   readonly avatarUrl?: string;
 
-  @IsEnum(Role)
+  @IsEnum(Role, { message: ValidationMessage.IS_ENUM })
   @IsOptional()
   readonly role?: Role;
 }

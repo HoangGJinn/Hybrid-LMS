@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { UserService } from '../services/user.service.js';
 import { UserView } from '../types/user-view.type.js';
 import { CreateUserDto } from '../dto/create-user.dto.js';
+import { GoogleAccountData } from '../types/google-account-data.type.js';
 import { Role } from '../../../common/enums/role.enum.js';
 
 /**
@@ -43,11 +44,15 @@ export class UserFacade {
     return UserView.fromEntity(user);
   }
 
-  async linkSso(
+  /**
+   * First Google login of an account an admin created in advance: binds the Google identity and keeps
+   * the role. Returns null when the account is already linked to a Google account.
+   */
+  async claimProvisionedAccount(
     id: string,
-    data: { ssoId: string; ssoProvider: string; avatarUrl: string | null },
-  ): Promise<UserView> {
-    const user = await this.userService.linkSso(id, data);
-    return UserView.fromEntity(user);
+    account: GoogleAccountData,
+  ): Promise<UserView | null> {
+    const user = await this.userService.claimProvisionedAccount(id, account);
+    return user ? UserView.fromEntity(user) : null;
   }
 }
