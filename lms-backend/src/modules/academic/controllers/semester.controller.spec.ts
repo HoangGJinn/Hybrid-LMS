@@ -5,7 +5,9 @@ import { Semester } from '../entities/semester.entity.js';
 
 describe('SemesterController', () => {
   let controller: SemesterController;
-  let mockService: Partial<Record<keyof SemesterService, ReturnType<typeof vi.fn>>>;
+  let mockService: Partial<
+    Record<keyof SemesterService, ReturnType<typeof vi.fn>>
+  >;
 
   const sampleSemester: Semester = {
     id: 'sem-uuid-1',

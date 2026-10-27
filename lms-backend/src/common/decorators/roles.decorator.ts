@@ -9,4 +9,4 @@ export const ROLES_KEY = 'roles';
  * this calls `SetMetadata('roles', [Role.ADMIN])`
  */
 export const Roles = (...roles: Role[]): CustomDecorator<string> =>
-    SetMetadata(ROLES_KEY, roles);
+  SetMetadata(ROLES_KEY, roles);

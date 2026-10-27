@@ -1,12 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { SemesterService } from './semester.service.js';
 import { SemesterRepository } from '../repositories/semester.repository.js';
 import { Semester } from '../entities/semester.entity.js';
 
 describe('SemesterService', () => {
   let service: SemesterService;
-  let mockRepo: Partial<Record<keyof SemesterRepository, ReturnType<typeof vi.fn>>>;
+  let mockRepo: Partial<
+    Record<keyof SemesterRepository, ReturnType<typeof vi.fn>>
+  >;
 
   const sampleSemester: Semester = {
     id: 'sem-uuid-1',
@@ -106,8 +112,8 @@ describe('SemesterService', () => {
   describe('update', () => {
     it('updates semester successfully', async () => {
       const updated = { ...sampleSemester, name: 'Updated Semester' };
-      mockRepo.findById!
-        .mockResolvedValueOnce(sampleSemester)
+      mockRepo
+        .findById!.mockResolvedValueOnce(sampleSemester)
         .mockResolvedValueOnce(updated);
       mockRepo.update!.mockResolvedValue(undefined);
 

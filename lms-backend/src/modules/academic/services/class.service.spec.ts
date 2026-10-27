@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { ClassService } from './class.service.js';
 import { ClassRepository } from '../repositories/class.repository.js';
 import { SubjectService } from './subject.service.js';
@@ -11,10 +15,18 @@ import { UserView } from '../../user/types/user-view.type.js';
 
 describe('ClassService', () => {
   let service: ClassService;
-  let mockClassRepo: Partial<Record<keyof ClassRepository, ReturnType<typeof vi.fn>>>;
-  let mockSubjectService: Partial<Record<keyof SubjectService, ReturnType<typeof vi.fn>>>;
-  let mockSemesterService: Partial<Record<keyof SemesterService, ReturnType<typeof vi.fn>>>;
-  let mockUserFacade: Partial<Record<keyof UserFacade, ReturnType<typeof vi.fn>>>;
+  let mockClassRepo: Partial<
+    Record<keyof ClassRepository, ReturnType<typeof vi.fn>>
+  >;
+  let mockSubjectService: Partial<
+    Record<keyof SubjectService, ReturnType<typeof vi.fn>>
+  >;
+  let mockSemesterService: Partial<
+    Record<keyof SemesterService, ReturnType<typeof vi.fn>>
+  >;
+  let mockUserFacade: Partial<
+    Record<keyof UserFacade, ReturnType<typeof vi.fn>>
+  >;
 
   const sampleClass: Class = {
     id: 'cls-uuid-1',
@@ -109,8 +121,12 @@ describe('ClassService', () => {
 
     it('creates class successfully when all foreign keys are valid', async () => {
       mockClassRepo.findByCode!.mockResolvedValue(null);
-      mockSubjectService.findById!.mockResolvedValue({ id: 'sub-uuid-1' } as any);
-      mockSemesterService.findById!.mockResolvedValue({ id: 'sem-uuid-1' } as any);
+      mockSubjectService.findById!.mockResolvedValue({
+        id: 'sub-uuid-1',
+      } as any);
+      mockSemesterService.findById!.mockResolvedValue({
+        id: 'sem-uuid-1',
+      } as any);
       mockUserFacade.getUserById!.mockResolvedValue(sampleLecturerUser);
       mockClassRepo.create!.mockResolvedValue(sampleClass);
       mockClassRepo.findById!.mockResolvedValue(sampleClass);
@@ -129,7 +145,9 @@ describe('ClassService', () => {
     it('throws ConflictException if classCode already exists', async () => {
       mockClassRepo.findByCode!.mockResolvedValue(sampleClass);
 
-      await expect(service.create(createDto)).rejects.toThrow(ConflictException);
+      await expect(service.create(createDto)).rejects.toThrow(
+        ConflictException,
+      );
     });
 
     it('throws BadRequestException if subject does not exist', async () => {
@@ -143,7 +161,9 @@ describe('ClassService', () => {
 
     it('throws BadRequestException if semester does not exist', async () => {
       mockClassRepo.findByCode!.mockResolvedValue(null);
-      mockSubjectService.findById!.mockResolvedValue({ id: 'sub-uuid-1' } as any);
+      mockSubjectService.findById!.mockResolvedValue({
+        id: 'sub-uuid-1',
+      } as any);
       mockSemesterService.findById!.mockRejectedValue(new Error('Not found'));
 
       await expect(service.create(createDto)).rejects.toThrow(
@@ -153,8 +173,12 @@ describe('ClassService', () => {
 
     it('throws BadRequestException if lecturer does not exist', async () => {
       mockClassRepo.findByCode!.mockResolvedValue(null);
-      mockSubjectService.findById!.mockResolvedValue({ id: 'sub-uuid-1' } as any);
-      mockSemesterService.findById!.mockResolvedValue({ id: 'sem-uuid-1' } as any);
+      mockSubjectService.findById!.mockResolvedValue({
+        id: 'sub-uuid-1',
+      } as any);
+      mockSemesterService.findById!.mockResolvedValue({
+        id: 'sem-uuid-1',
+      } as any);
       mockUserFacade.getUserById!.mockRejectedValue(new Error('Not found'));
 
       await expect(service.create(createDto)).rejects.toThrow(
@@ -164,8 +188,12 @@ describe('ClassService', () => {
 
     it('throws BadRequestException if user is not a lecturer', async () => {
       mockClassRepo.findByCode!.mockResolvedValue(null);
-      mockSubjectService.findById!.mockResolvedValue({ id: 'sub-uuid-1' } as any);
-      mockSemesterService.findById!.mockResolvedValue({ id: 'sem-uuid-1' } as any);
+      mockSubjectService.findById!.mockResolvedValue({
+        id: 'sub-uuid-1',
+      } as any);
+      mockSemesterService.findById!.mockResolvedValue({
+        id: 'sem-uuid-1',
+      } as any);
       mockUserFacade.getUserById!.mockResolvedValue({
         ...sampleLecturerUser,
         role: Role.STUDENT,
@@ -211,7 +239,9 @@ describe('ClassService', () => {
     it('calls repository findByLecturerId', async () => {
       mockClassRepo.findByLecturerId!.mockResolvedValue([sampleClass]);
       const result = await service.findByLecturer('lec-user-id');
-      expect(mockClassRepo.findByLecturerId).toHaveBeenCalledWith('lec-user-id');
+      expect(mockClassRepo.findByLecturerId).toHaveBeenCalledWith(
+        'lec-user-id',
+      );
       expect(result).toEqual([sampleClass]);
     });
   });
@@ -227,9 +257,13 @@ describe('ClassService', () => {
 
   describe('deactivate', () => {
     it('deactivates an active class', async () => {
-      mockClassRepo.findById!
-        .mockResolvedValueOnce(sampleClass)
-        .mockResolvedValueOnce({ ...sampleClass, isActive: false, endedAt: new Date() });
+      mockClassRepo
+        .findById!.mockResolvedValueOnce(sampleClass)
+        .mockResolvedValueOnce({
+          ...sampleClass,
+          isActive: false,
+          endedAt: new Date(),
+        });
       mockClassRepo.update!.mockResolvedValue(undefined);
       mockClassRepo.countStudents!.mockResolvedValue(10);
 
@@ -256,8 +290,8 @@ describe('ClassService', () => {
 
   describe('update', () => {
     it('updates class fields successfully', async () => {
-      mockClassRepo.findById!
-        .mockResolvedValueOnce(sampleClass)
+      mockClassRepo
+        .findById!.mockResolvedValueOnce(sampleClass)
         .mockResolvedValueOnce({ ...sampleClass, name: 'Updated Class Name' });
       mockClassRepo.update!.mockResolvedValue(undefined);
       mockClassRepo.countStudents!.mockResolvedValue(5);
@@ -288,8 +322,12 @@ describe('ClassService', () => {
   describe('aliases and auxiliary methods', () => {
     it('creates class using createClass alias', async () => {
       mockClassRepo.findByCode!.mockResolvedValue(null);
-      mockSubjectService.findById!.mockResolvedValue({ id: 'sub-uuid-1' } as any);
-      mockSemesterService.findById!.mockResolvedValue({ id: 'sem-uuid-1' } as any);
+      mockSubjectService.findById!.mockResolvedValue({
+        id: 'sub-uuid-1',
+      } as any);
+      mockSemesterService.findById!.mockResolvedValue({
+        id: 'sem-uuid-1',
+      } as any);
       mockUserFacade.getUserById!.mockResolvedValue(sampleLecturerUser);
       mockClassRepo.create!.mockResolvedValue(sampleClass);
       mockClassRepo.findById!.mockResolvedValue(sampleClass);
@@ -311,20 +349,26 @@ describe('ClassService', () => {
     });
 
     it('updates class using updateClass alias', async () => {
-      mockClassRepo.findById!
-        .mockResolvedValueOnce(sampleClass)
+      mockClassRepo
+        .findById!.mockResolvedValueOnce(sampleClass)
         .mockResolvedValueOnce(sampleClass);
       mockClassRepo.update!.mockResolvedValue(undefined);
       mockClassRepo.countStudents!.mockResolvedValue(5);
 
-      const res = await service.updateClass('cls-uuid-1', { name: 'Alias Update' });
+      const res = await service.updateClass('cls-uuid-1', {
+        name: 'Alias Update',
+      });
       expect(res.id).toBe('cls-uuid-1');
     });
 
     it('deactivates class using deactivateClass alias', async () => {
-      mockClassRepo.findById!
-        .mockResolvedValueOnce(sampleClass)
-        .mockResolvedValueOnce({ ...sampleClass, isActive: false, endedAt: new Date() });
+      mockClassRepo
+        .findById!.mockResolvedValueOnce(sampleClass)
+        .mockResolvedValueOnce({
+          ...sampleClass,
+          isActive: false,
+          endedAt: new Date(),
+        });
       mockClassRepo.update!.mockResolvedValue(undefined);
       mockClassRepo.countStudents!.mockResolvedValue(0);
 
@@ -342,7 +386,9 @@ describe('ClassService', () => {
 
     it('delegates countStudents and countStudentsBatch', async () => {
       mockClassRepo.countStudents!.mockResolvedValue(10);
-      mockClassRepo.countStudentsBatch!.mockResolvedValue(new Map([['cls-1', 10]]));
+      mockClassRepo.countStudentsBatch!.mockResolvedValue(
+        new Map([['cls-1', 10]]),
+      );
 
       expect(await service.countStudents('cls-1')).toBe(10);
       const batchRes = await service.countStudentsBatch(['cls-1']);

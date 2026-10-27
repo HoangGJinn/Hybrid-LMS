@@ -1,23 +1,26 @@
 import { IsDateString, IsNotEmpty, IsString, MaxLength } from 'class-validator';
+import { ValidationMessage } from '../../../common/enums/validation-message.enum.js';
 
 export class CreateSemesterDto {
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(50)
+  @IsString({ message: ValidationMessage.IS_STRING })
+  @IsNotEmpty({ message: ValidationMessage.REQUIRED })
+  @MaxLength(50, {
+    message: ValidationMessage.MAX_LENGTH,
+  })
   readonly semesterCode: string;
 
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(255)
+  @IsString({ message: ValidationMessage.IS_STRING })
+  @IsNotEmpty({ message: ValidationMessage.REQUIRED })
+  @MaxLength(255, {
+    message: ValidationMessage.MAX_LENGTH,
+  })
   readonly name: string;
 
-  @IsDateString()
-  @IsNotEmpty()
+  @IsDateString({}, { message: ValidationMessage.IS_DATE_STRING })
+  @IsNotEmpty({ message: ValidationMessage.REQUIRED })
   readonly startDate: string;
 
-  @IsDateString()
-  @IsNotEmpty()
+  @IsDateString({}, { message: ValidationMessage.IS_DATE_STRING })
+  @IsNotEmpty({ message: ValidationMessage.REQUIRED })
   readonly endDate: string;
-
-  // todo: Service check endDate > startDate
 }

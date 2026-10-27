@@ -34,7 +34,9 @@ export class ClassController {
    */
   @Get('my')
   @Auth(Role.STUDENT, Role.LECTURER, Role.ADMIN)
-  async getMyClasses(@CurrentUser() user: AuthenticatedUser): Promise<ClassView[]> {
+  async getMyClasses(
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<ClassView[]> {
     if (user.role === Role.STUDENT) {
       return this.academicFacade.getClassesByStudent(user.id);
     }
@@ -84,4 +86,3 @@ export class ClassController {
     return this.classService.deactivate(id);
   }
 }
-

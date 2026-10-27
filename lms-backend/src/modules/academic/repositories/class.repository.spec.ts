@@ -6,8 +6,12 @@ import { ClassStudent } from '../entities/class-student.entity.js';
 
 describe('ClassRepository', () => {
   let repository: ClassRepository;
-  let mockClassTypeormRepo: Partial<Record<keyof Repository<Class>, ReturnType<typeof vi.fn>>>;
-  let mockClassStudentTypeormRepo: Partial<Record<keyof Repository<ClassStudent>, ReturnType<typeof vi.fn>>>;
+  let mockClassTypeormRepo: Partial<
+    Record<keyof Repository<Class>, ReturnType<typeof vi.fn>>
+  >;
+  let mockClassStudentTypeormRepo: Partial<
+    Record<keyof Repository<ClassStudent>, ReturnType<typeof vi.fn>>
+  >;
 
   const sampleClass: Class = {
     id: 'cls-1',
@@ -72,10 +76,20 @@ describe('ClassRepository', () => {
       });
 
       expect(mockClassTypeormRepo.createQueryBuilder).toHaveBeenCalledWith('c');
-      expect(mockQb.andWhere).toHaveBeenCalledWith('c.isActive = :isActive', { isActive: true });
-      expect(mockQb.andWhere).toHaveBeenCalledWith('c.semesterId = :semesterId', { semesterId: 'sem-1' });
-      expect(mockQb.andWhere).toHaveBeenCalledWith('c.subjectId = :subjectId', { subjectId: 'sub-1' });
-      expect(mockQb.andWhere).toHaveBeenCalledWith('(c.name ILIKE :search OR c.classCode ILIKE :search)', { search: '%CS%' });
+      expect(mockQb.andWhere).toHaveBeenCalledWith('c.isActive = :isActive', {
+        isActive: true,
+      });
+      expect(mockQb.andWhere).toHaveBeenCalledWith(
+        'c.semesterId = :semesterId',
+        { semesterId: 'sem-1' },
+      );
+      expect(mockQb.andWhere).toHaveBeenCalledWith('c.subjectId = :subjectId', {
+        subjectId: 'sub-1',
+      });
+      expect(mockQb.andWhere).toHaveBeenCalledWith(
+        '(c.name ILIKE :search OR c.classCode ILIKE :search)',
+        { search: '%CS%' },
+      );
       expect(result).toEqual([sampleClass]);
     });
   });
@@ -129,7 +143,11 @@ describe('ClassRepository', () => {
     it('finds active classes student is enrolled in', async () => {
       mockClassStudentTypeormRepo.find!.mockResolvedValue([
         { classId: 'cls-1', studentId: 'stu-1', class: sampleClass },
-        { classId: 'cls-2', studentId: 'stu-1', class: { ...sampleClass, id: 'cls-2', isActive: false } },
+        {
+          classId: 'cls-2',
+          studentId: 'stu-1',
+          class: { ...sampleClass, id: 'cls-2', isActive: false },
+        },
       ]);
 
       const result = await repository.findByStudentId('stu-1');
@@ -176,9 +194,15 @@ describe('ClassRepository', () => {
           { classId: 'cls-2', count: '0' },
         ]),
       };
-      mockClassStudentTypeormRepo.createQueryBuilder!.mockReturnValue(mockQb as any);
+      mockClassStudentTypeormRepo.createQueryBuilder!.mockReturnValue(
+        mockQb as any,
+      );
 
-      const result = await repository.countStudentsBatch(['cls-1', 'cls-2', 'cls-3']);
+      const result = await repository.countStudentsBatch([
+        'cls-1',
+        'cls-2',
+        'cls-3',
+      ]);
 
       expect(result.get('cls-1')).toBe(10);
       expect(result.get('cls-2')).toBe(0);
