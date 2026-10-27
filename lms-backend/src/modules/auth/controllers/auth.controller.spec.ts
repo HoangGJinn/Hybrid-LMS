@@ -9,7 +9,9 @@ import { SessionUser } from '../types/session-user.type.js';
 
 describe('AuthController', () => {
   let controller: AuthController;
-  let mockAuthService: Partial<Record<keyof AuthService, ReturnType<typeof vi.fn>>>;
+  let mockAuthService: Partial<
+    Record<keyof AuthService, ReturnType<typeof vi.fn>>
+  >;
   let mockResponse: Partial<Record<keyof Response, ReturnType<typeof vi.fn>>>;
 
   const sampleSessionUser: SessionUser = {
@@ -52,7 +54,9 @@ describe('AuthController', () => {
         mockResponse as unknown as Response,
       );
 
-      expect(mockAuthService.loginWithGoogle).toHaveBeenCalledWith('google.id.token');
+      expect(mockAuthService.loginWithGoogle).toHaveBeenCalledWith(
+        'google.id.token',
+      );
       expect(mockResponse.cookie).toHaveBeenCalledWith(
         REFRESH_COOKIE_NAME,
         'refresh.uuid',

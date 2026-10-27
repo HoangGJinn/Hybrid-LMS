@@ -9,9 +9,15 @@ import { Semester } from '../entities/semester.entity.js';
 
 describe('AcademicFacade', () => {
   let facade: AcademicFacade;
-  let mockClassService: Partial<Record<keyof ClassService, ReturnType<typeof vi.fn>>>;
-  let mockSubjectService: Partial<Record<keyof SubjectService, ReturnType<typeof vi.fn>>>;
-  let mockSemesterService: Partial<Record<keyof SemesterService, ReturnType<typeof vi.fn>>>;
+  let mockClassService: Partial<
+    Record<keyof ClassService, ReturnType<typeof vi.fn>>
+  >;
+  let mockSubjectService: Partial<
+    Record<keyof SubjectService, ReturnType<typeof vi.fn>>
+  >;
+  let mockSemesterService: Partial<
+    Record<keyof SemesterService, ReturnType<typeof vi.fn>>
+  >;
 
   const sampleClass: Class = {
     id: 'cls-1',

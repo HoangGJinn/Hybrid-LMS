@@ -9,6 +9,8 @@ import { RefreshTokenService } from './refresh-token.service.js';
 import { GoogleAuthService, GoogleUserProfile } from './google-auth.service.js';
 import { Role } from '../../../common/enums/role.enum.js';
 
+const GOOGLE_PROVIDER = 'GOOGLE';
+
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
@@ -30,6 +32,11 @@ export class AuthService {
     this.logger.log(`Attempting Google login...`);
     const googleUser = await this.googleAuthService.verifyToken(idToken);
     const user = await this.findOrCreateGoogleUser(googleUser);
+    if (!user.isActive) {
+      // Checked before any token is issued; refresh() and JwtStrategy apply the same rule later on.
+      this.logger.warn(`Login refused, account is disabled: ${user.email}`);
+      throw new UnauthorizedException('Account is disabled');
+    }
     return this.startSession(
       user,
       await this.refreshTokenService.issue(user.id),
@@ -62,8 +69,10 @@ export class AuthService {
   /**
    * Find-or-Create flow:
    * 1. Find User by ssoId (googleId) → Returning user → return immediately
-   * 2. Find User by email → Existing account without Google SSO linked → link & return
-   * 3. Not found → First time login → create new User (default role STUDENT)
+   * 2. Find User by email → an account an admin pre-provisioned (e.g. role LECTURER, no Google identity yet)
+   *    → bind this Google account to that record and keep its role. If the record is already bound to a
+   *    different Google account, refuse: never overwrite another person's identity.
+   * 3. Not found → First time login of someone unknown → create new User (ADMIN if listed in ADMIN_EMAILS, else STUDENT)
    */
   private async findOrCreateGoogleUser(
     profile: GoogleUserProfile,
@@ -75,14 +84,34 @@ export class AuthService {
     }
     const existingByEmail = await this.userFacade.findByEmail(profile.email);
     if (existingByEmail) {
+      if (!existingByEmail.isActive) {
+        // Refuse before binding the Google identity: a disabled account must not be touched by a login.
+        this.logger.warn(
+          `Login refused, account is disabled: ${profile.email}`,
+        );
+        throw new UnauthorizedException('Account is disabled');
+      }
       this.logger.log(
-        `Existing account found by email, linking Google SSO: ${profile.email}`,
+        `Pre-provisioned account found by email, linking Google SSO (role ${existingByEmail.role}): ${profile.email}`,
       );
-      return this.userFacade.linkSso(existingByEmail.id, {
-        ssoId: profile.googleId,
-        ssoProvider: 'GOOGLE',
-        avatarUrl: profile.avatarUrl,
-      });
+      const claimed = await this.userFacade.claimProvisionedAccount(
+        existingByEmail.id,
+        {
+          ssoId: profile.googleId,
+          ssoProvider: GOOGLE_PROVIDER,
+          avatarUrl: profile.avatarUrl,
+          fullName: profile.fullName,
+        },
+      );
+      if (!claimed) {
+        this.logger.warn(
+          `Login refused, ${profile.email} is linked to another Google account`,
+        );
+        throw new UnauthorizedException(
+          'This email is linked to a different Google account',
+        );
+      }
+      return claimed;
     }
 
     // First time login: determine role based on configured ADMIN_EMAILS
@@ -101,7 +130,7 @@ export class AuthService {
       email: profile.email,
       fullName: profile.fullName,
       ssoId: profile.googleId,
-      ssoProvider: 'GOOGLE',
+      ssoProvider: GOOGLE_PROVIDER,
       avatarUrl: profile.avatarUrl ?? undefined,
       role,
     });

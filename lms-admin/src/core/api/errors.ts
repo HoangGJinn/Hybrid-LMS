@@ -18,3 +18,10 @@ export const getErrorMessage = (
   if (error instanceof Error && error.message) return error.message;
   return fallback;
 };
+
+/** The form field a backend error is about (`{ field }` of a 409 conflict), when it names one. */
+export const getErrorField = (error: unknown): string | undefined => {
+  if (!isAxiosError(error)) return undefined;
+  const field: unknown = error.response?.data?.field;
+  return typeof field === 'string' ? field : undefined;
+};

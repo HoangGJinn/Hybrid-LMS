@@ -18,14 +18,10 @@ export const Auth = (...roles: Role[]) => {
   ];
 
   if (roles.length > 0) {
-    decorators.push(
-      Roles(...roles),
-      UseGuards(JwtAuthGuard, RolesGuard),
-    );
+    decorators.push(Roles(...roles), UseGuards(JwtAuthGuard, RolesGuard));
   } else {
     decorators.push(UseGuards(JwtAuthGuard));
   }
 
   return applyDecorators(...decorators);
 };
-

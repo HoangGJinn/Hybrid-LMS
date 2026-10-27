@@ -6,7 +6,9 @@ import { Subject } from '../entities/subject.entity.js';
 
 describe('SubjectService', () => {
   let service: SubjectService;
-  let mockRepo: Partial<Record<keyof SubjectRepository, ReturnType<typeof vi.fn>>>;
+  let mockRepo: Partial<
+    Record<keyof SubjectRepository, ReturnType<typeof vi.fn>>
+  >;
 
   const sampleSubject: Subject = {
     id: 'sub-uuid-1',
@@ -90,8 +92,8 @@ describe('SubjectService', () => {
 
       const updated = { ...sampleSubject, name: 'Advanced CS' };
       // Second findById call returns updated
-      mockRepo.findById!
-        .mockResolvedValueOnce(sampleSubject)
+      mockRepo
+        .findById!.mockResolvedValueOnce(sampleSubject)
         .mockResolvedValueOnce(updated);
 
       const result = await service.update('sub-uuid-1', {

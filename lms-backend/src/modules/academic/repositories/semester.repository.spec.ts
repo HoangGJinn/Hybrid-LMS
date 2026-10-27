@@ -5,7 +5,9 @@ import { Semester } from '../entities/semester.entity.js';
 
 describe('SemesterRepository', () => {
   let repository: SemesterRepository;
-  let mockTypeormRepo: Partial<Record<keyof Repository<Semester>, ReturnType<typeof vi.fn>>>;
+  let mockTypeormRepo: Partial<
+    Record<keyof Repository<Semester>, ReturnType<typeof vi.fn>>
+  >;
 
   const sampleSemester: Semester = {
     id: 'sem-1',
@@ -87,7 +89,9 @@ describe('SemesterRepository', () => {
         orderBy: vi.fn().mockReturnThis(),
         getOne: vi.fn().mockResolvedValue(sampleSemester),
       };
-      mockTypeormRepo.createQueryBuilder!.mockReturnValue(mockQueryBuilder as any);
+      mockTypeormRepo.createQueryBuilder!.mockReturnValue(
+        mockQueryBuilder as any,
+      );
 
       const now = new Date('2026-10-01');
       const result = await repository.findActive(now);

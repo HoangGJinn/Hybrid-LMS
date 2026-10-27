@@ -23,18 +23,43 @@ export class AllExceptionsFilter implements ExceptionFilter {
         ? exception.getStatus()
         : HttpStatus.INTERNAL_SERVER_ERROR;
 
-    const message =
-      exception instanceof HttpException
-        ? exception.message
-        : 'Internal server error';
+    const body =
+      exception instanceof HttpException ? exception.getResponse() : null;
+
+    let message: string | string[] = 'Internal server error';
+    let field: string | undefined;
+
+    if (exception instanceof HttpException) {
+      if (typeof body === 'string') {
+        message = body;
+      } else if (typeof body === 'object' && body !== null) {
+        const bodyObj = body as Record<string, unknown>;
+        if (
+          typeof bodyObj.message === 'string' ||
+          Array.isArray(bodyObj.message)
+        ) {
+          message = bodyObj.message as string | string[];
+        } else {
+          message = exception.message;
+        }
+
+        if (typeof bodyObj.field === 'string') {
+          field = bodyObj.field;
+        }
+      } else {
+        message = exception.message;
+      }
+    }
+
+    const logMessage = Array.isArray(message) ? message.join('; ') : message;
 
     if (exception instanceof HttpException) {
       this.logger.warn(
-        `[${request.method}] ${request.url} → ${status}: ${message}`,
+        `[${request.method}] ${request.url} → ${status}: ${logMessage}`,
       );
     } else {
       this.logger.error(
-        `[${request.method}] ${request.url} → ${status}: ${message}`,
+        `[${request.method}] ${request.url} → ${status}: ${logMessage}`,
         exception instanceof Error ? exception.stack : String(exception),
       );
     }
@@ -43,6 +68,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       success: false,
       statusCode: status,
       message,
+      ...(field ? { field } : {}),
       timestamp: new Date().toISOString(),
       path: request.url,
     });
