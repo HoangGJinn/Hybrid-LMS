@@ -29,8 +29,8 @@ export class PostgresDatabase {
       ssl,
       extra: {
         max: 10,
-        idleTimeoutMillis: 120000, // Tăng thời gian giữ kết nối rảnh lên 2 phút
-        connectionTimeoutMillis: 10000, // Timeout kết nối 10s
+        idleTimeoutMillis: 120000,
+        connectionTimeoutMillis: 10000,
         keepAlive: true,
       },
       // Auto-sync entities in development — TURN OFF in production!
