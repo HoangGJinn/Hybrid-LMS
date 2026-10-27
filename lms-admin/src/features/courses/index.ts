@@ -4,3 +4,4 @@ export type {
   SemesterView,
   SubjectView,
 } from './types/courses.types';
+export { courseKeys } from './api/queryKeys';

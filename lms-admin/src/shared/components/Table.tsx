@@ -14,6 +14,7 @@ export interface TableProps<T> {
   keyExtractor: (item: T) => string;
   className?: string;
   emptyMessage?: string;
+  rowClassName?: (item: T, index: number) => string | undefined;
 }
 
 export function Table<T>({
@@ -22,6 +23,7 @@ export function Table<T>({
   keyExtractor,
   className,
   emptyMessage = 'No data',
+  rowClassName,
 }: TableProps<T>) {
   if (data.length === 0) {
     return (
@@ -56,7 +58,10 @@ export function Table<T>({
           {data.map((item, index) => (
             <tr
               key={keyExtractor(item)}
-              className="transition-colors hover:bg-accent/40"
+              className={cn(
+                'transition-colors hover:bg-accent/40',
+                rowClassName?.(item, index),
+              )}
             >
               {columns.map((col) => (
                 <td
