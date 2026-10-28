@@ -33,6 +33,7 @@ export const mockSections: Section[] = [
     id: 's1',
     classId: 'c1',
     title: 'Week 1 — Software Process',
+    description: 'Overview of the software development process and SDLC models.',
     orderIndex: 1,
     items: [
       {
@@ -52,6 +53,7 @@ export const mockSections: Section[] = [
     id: 's2',
     classId: 'c1',
     title: 'Week 2 — Requirements',
+    description: 'Gathering, analyzing and specifying software requirements.',
     orderIndex: 2,
     items: [
       {
@@ -82,6 +84,7 @@ export const mockSections: Section[] = [
     id: 's3',
     classId: 'c1',
     title: 'Week 3 — Design',
+    description: 'Software design principles and UML modeling.',
     orderIndex: 3,
     items: [
       {
