@@ -55,9 +55,6 @@ export interface CreateUserPayload {
 export interface UpdateUserPayload {
   fullName?: string;
   email?: string;
-  /** Moves the account between student and lecturer (new code, default status). */
-  role?: ManagedRole;
-  /** Ignored by the form when the role changes: the new profile starts from its default status. */
   status?: string;
 }
 

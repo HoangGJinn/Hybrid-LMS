@@ -15,6 +15,7 @@ export interface TableProps<T> {
   className?: string;
   emptyMessage?: string;
   rowClassName?: (item: T, index: number) => string | undefined;
+  onRowClick?: (item: T, event: React.MouseEvent<HTMLTableRowElement>) => void;
 }
 
 export function Table<T>({
@@ -24,6 +25,7 @@ export function Table<T>({
   className,
   emptyMessage = 'No data',
   rowClassName,
+  onRowClick,
 }: TableProps<T>) {
   if (data.length === 0) {
     return (
@@ -58,8 +60,21 @@ export function Table<T>({
           {data.map((item, index) => (
             <tr
               key={keyExtractor(item)}
+              onClick={(event) => {
+                if (!onRowClick) return;
+                const target = event.target as HTMLElement | null;
+                if (
+                  target?.closest(
+                    'button, a, input, select, textarea, [role="button"]',
+                  )
+                ) {
+                  return;
+                }
+                onRowClick(item, event);
+              }}
               className={cn(
                 'transition-colors hover:bg-accent/40',
+                onRowClick && 'cursor-pointer',
                 rowClassName?.(item, index),
               )}
             >
