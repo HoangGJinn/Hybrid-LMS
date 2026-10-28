@@ -214,8 +214,20 @@ describe('SectionRepository', () => {
       expect(txManager.upsert).toHaveBeenCalledWith(
         Section,
         [
-          { id: 'sec-1', classId: 'class-1', title: 'Week 1', orderIndex: 1 },
-          { id: 'sec-2', classId: 'class-1', title: 'Week 2', orderIndex: 2 },
+          {
+            id: 'sec-1',
+            classId: 'class-1',
+            title: 'Week 1',
+            description: null,
+            orderIndex: 1,
+          },
+          {
+            id: 'sec-2',
+            classId: 'class-1',
+            title: 'Week 2',
+            description: null,
+            orderIndex: 2,
+          },
         ],
         ['id'],
       )
@@ -253,6 +265,36 @@ describe('SectionRepository', () => {
       expect(deleteQuery.andWhere).not.toHaveBeenCalled()
       expect(deleteQuery.execute).toHaveBeenCalledTimes(2)
       expect(txManager.upsert).not.toHaveBeenCalled()
+    })
+
+    it('trims the section description and stores blank ones as null', async () => {
+      const withDescriptions = [
+        { id: 'sec-1', title: 'Week 1', description: '  Intro  ', orderIndex: 1, items: [] },
+        { id: 'sec-2', title: 'Week 2', description: '   ', orderIndex: 2, items: [] },
+      ] as unknown as SaveSectionDto[]
+
+      await repository.replaceAll('class-1', withDescriptions)
+
+      expect(txManager.upsert).toHaveBeenCalledWith(
+        Section,
+        [
+          {
+            id: 'sec-1',
+            classId: 'class-1',
+            title: 'Week 1',
+            description: 'Intro',
+            orderIndex: 1,
+          },
+          {
+            id: 'sec-2',
+            classId: 'class-1',
+            title: 'Week 2',
+            description: null,
+            orderIndex: 2,
+          },
+        ],
+        ['id'],
+      )
     })
 
     it('skips the item upsert when sections have no items', async () => {

@@ -7,9 +7,6 @@ import {
   Patch,
   Post,
   Query,
-  Delete,
-  HttpCode,
-  HttpStatus,
 } from '@nestjs/common';
 import { ClassService } from '../services/class.service.js';
 import { CreateClassDto } from '../dto/create-class.dto.js';
