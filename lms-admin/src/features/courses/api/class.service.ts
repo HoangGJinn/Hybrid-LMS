@@ -36,6 +36,9 @@ export const classService = {
     });
   },
 
+  getClass: (id: string): Promise<ClassView> =>
+    get<ClassView>(`/api/classes/${id}`),
+
   createClass: (payload: CreateClassPayload): Promise<ClassView> =>
     post<ClassView>('/api/classes', payload),
 

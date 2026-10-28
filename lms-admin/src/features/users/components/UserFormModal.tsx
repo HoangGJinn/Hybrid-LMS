@@ -20,8 +20,6 @@ interface FormValues {
   fullName: string;
   code: string;
   status: string;
-  /** Edit only: lets the admin move the account to the other list. */
-  role: ManagedRole;
 }
 type FormErrors = Partial<Record<keyof FormValues, string>>;
 
@@ -30,14 +28,6 @@ const CODE_PATTERN = /^(SV|GV)\d{8}$/;
 const EMAIL_MAX = 255;
 const NAME_MAX = 255;
 const HTTP_CONFLICT = 409;
-
-const ROLE_OPTIONS: { value: ManagedRole; label: string }[] = [
-  { value: 'STUDENT', label: 'Student' },
-  { value: 'LECTURER', label: 'Lecturer' },
-];
-
-const isManagedRole = (value: string): value is ManagedRole =>
-  ROLE_OPTIONS.some((option) => option.value === value);
 
 const validate = (
   values: FormValues,
@@ -71,20 +61,17 @@ const validate = (
 
 /**
  * Only the fields that differ from the stored user: the API treats every sent field as a change.
- * On a role change the status is not sent: the new profile starts from its default status.
  */
 const buildUpdatePayload = (
   values: FormValues,
   user: ManagedUser,
-  role: ManagedRole,
 ): UpdateUserPayload => {
   const payload: UpdateUserPayload = {};
   const email = values.email.trim().toLowerCase();
   const name = values.fullName.trim();
   if (!user.hasLoggedIn && email !== user.email) payload.email = email;
   if (name !== user.fullName) payload.fullName = name;
-  if (values.role !== role) payload.role = values.role;
-  else if (values.status && values.status !== user.profileStatus)
+  if (values.status && values.status !== user.profileStatus)
     payload.status = values.status;
   return payload;
 };
@@ -104,7 +91,6 @@ const UserForm = ({
     fullName: user?.fullName ?? '',
     code: user?.code ?? '',
     status: user?.profileStatus ?? '',
-    role,
   }));
   const [errors, setErrors] = useState<FormErrors>({});
   const [serverError, setServerError] = useState<string | null>(null);
@@ -119,7 +105,6 @@ const UserForm = ({
     setServerError(null);
   };
 
-  const roleChanged = Boolean(user) && values.role !== role;
   const statusOptions = [...STATUS_OPTIONS[role]];
   if (
     user?.profileStatus &&
@@ -139,7 +124,6 @@ const UserForm = ({
       // Duplicate email or code: keep the dialog open and mark the field the server named.
       setErrors((prev) => ({ ...prev, [field]: message }));
     } else {
-      // Anything else (e.g. a refused role change) is shown above the form.
       setServerError(message);
     }
   };
@@ -151,7 +135,7 @@ const UserForm = ({
     if (Object.keys(nextErrors).length > 0) return;
 
     if (user) {
-      const payload = buildUpdatePayload(values, user, role);
+      const payload = buildUpdatePayload(values, user);
       if (Object.keys(payload).length === 0) {
         onClose();
         return;
@@ -160,11 +144,7 @@ const UserForm = ({
         { id: user.id, payload },
         {
           onSuccess: () => {
-            toast.success(
-              payload.role
-                ? `Role changed: now a ${ROLE_CONFIG[payload.role].singular}.`
-                : `${config.singular} updated.`,
-            );
+            toast.success(`${config.singular} updated.`);
             onClose();
           },
           onError: handleError,
@@ -240,9 +220,7 @@ const UserForm = ({
         error={errors.code}
         hint={
           user
-            ? roleChanged
-              ? 'A new code is generated for the new role.'
-              : 'Permanent identity code, cannot be changed.'
+            ? 'Permanent identity code, cannot be changed.'
             : `Optional. Auto-generated in format ${config.codePrefix}yyNNNNNN if left empty.`
         }
         placeholder={user ? undefined : `e.g. ${config.codeExample}`}
@@ -250,26 +228,6 @@ const UserForm = ({
         disabled={Boolean(user)}
       />
       {user && (
-        <div className="space-y-1.5">
-          <Select
-            label="Role"
-            value={values.role}
-            onChange={(event) => {
-              if (isManagedRole(event.target.value))
-                setField('role', event.target.value);
-            }}
-            options={ROLE_OPTIONS}
-          />
-          {roleChanged && (
-            <p className="m-0 text-xs text-muted-foreground">
-              Saving moves this account to the {ROLE_CONFIG[values.role].plural}{' '}
-              list with a new code and the default status. It is refused while
-              the account already has classes, exams or other records.
-            </p>
-          )}
-        </div>
-      )}
-      {user && !roleChanged && (
         <Select
           label="Status"
           value={values.status}
@@ -298,16 +256,26 @@ interface UserFormModalProps {
   onClose: () => void;
 }
 
-/** Create / edit dialog. The form is mounted only while open, so each opening starts from fresh state. */
-export const UserFormModal = ({ open, role, user, onClose }: UserFormModalProps) => (
-  <Modal
-    open={open}
-    title={user ? `Edit ${ROLE_CONFIG[role].singular}` : ROLE_CONFIG[role].addLabel}
-    onClose={onClose}
-    size="lg"
-  >
-    {open && (
-      <UserForm key={user?.id ?? 'new'} role={role} user={user} onClose={onClose} />
-    )}
-  </Modal>
-);
+/** Modal dialog to pre-provision an account or edit its name, email and status. */
+export const UserFormModal = ({
+  open,
+  role,
+  user,
+  onClose,
+}: UserFormModalProps) => {
+  const config = ROLE_CONFIG[role];
+  const title = user
+    ? `Edit ${config.singular}`
+    : `Add ${config.singular.toLowerCase()}`;
+
+  return (
+    <Modal open={open} onClose={onClose} title={title}>
+      <UserForm
+        key={`${role}-${user?.id ?? 'new'}`}
+        role={role}
+        user={user}
+        onClose={onClose}
+      />
+    </Modal>
+  );
+};
