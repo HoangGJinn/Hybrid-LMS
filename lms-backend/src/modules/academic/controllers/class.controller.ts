@@ -17,6 +17,8 @@ import { CurrentUser } from '../../../common/decorators/current-user.decorator.j
 import { AuthenticatedUser } from '../../../common/types/authenticated-user.type.js';
 import { AcademicFacade } from '../facades/academic.facade.js';
 import { Role } from '../../../common/enums/role.enum.js';
+import { ClassmateView } from '../types/classmate-view.type.js';
+import { RosterStudentView } from '../types/roster-student-view.type.js';
 
 @Controller('classes')
 @Auth(Role.ADMIN)
@@ -71,6 +73,24 @@ export class ClassController {
     const cls = await this.classService.findById(id);
     const count = await this.classService.countStudents(id);
     return ClassView.fromEntity(cls, count);
+  }
+
+  @Get(':id/classmates')
+  @Auth(Role.STUDENT, Role.LECTURER, Role.ADMIN)
+  async getClassmates(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<ClassmateView[]> {
+    return this.classService.getClassmates(id, user);
+  }
+
+  @Get(':id/students')
+  @Auth(Role.LECTURER, Role.ADMIN)
+  async getRoster(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<RosterStudentView[]> {
+    return this.classService.getRoster(id, user);
   }
 
   @Patch(':id')

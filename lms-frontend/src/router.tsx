@@ -14,7 +14,7 @@ import {
 } from '@features/dashboard/routes';
 import {
   createStudentCourseRoutes,
-  lecturerClassRoutes,
+  createLecturerClassRoutes,
 } from '@features/courses/routes';
 import {
   courseGradesTabRoute,
@@ -22,6 +22,7 @@ import {
 } from '@features/grading/routes';
 import {
   classmatesTabRoute,
+  lecturerMembersTabRoute,
   studentRosterRoute,
 } from '@features/participants/routes';
 import { documentRoute } from '@features/documents/routes';
@@ -87,8 +88,7 @@ export const router = createBrowserRouter([
                 ...crumb('Lecturer'),
                 children: [
                   lecturerDashboardRoute,
-                  lecturerClassRoutes,
-                  gradingDeskRoute,
+                  createLecturerClassRoutes({ tabs: [lecturerMembersTabRoute] }),                  gradingDeskRoute,
                   studentRosterRoute,
                   analyticsRoute,
                   aiGeneratorRoute,

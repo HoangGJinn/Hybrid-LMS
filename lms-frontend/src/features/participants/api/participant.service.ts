@@ -20,7 +20,10 @@ export const participantService = {
         )
       : get(`/api/classes/${classId}/classmates`),
 
-  /** Lecturer view: includes scores, mastery and at-risk flag. */
+  /**
+   * Performance view for `/lecturer/students` only (not for managing members, that is `/participants`).
+   * The backend still returns placeholder numbers for scores, mastery and at-risk.
+   */
   getRoster: (classId: string): Promise<RosterStudent[]> =>
     USE_MOCK
       ? delay(mockRoster.filter((r) => r.classId === classId))

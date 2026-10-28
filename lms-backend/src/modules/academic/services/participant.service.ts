@@ -1,26 +1,28 @@
 import {
   BadRequestException,
   ConflictException,
-  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { ClassStudentRepository } from '../repositories/class-student.repository.js';
 import { ClassService } from './class.service.js';
 import { AddParticipantDto } from '../dto/add-participant.dto.js';
+import { AddParticipantsDto } from '../dto/add-participants.dto.js';
 import { ImportParticipantsDto } from '../dto/import-participants.dto.js';
 import { Class } from '../entities/class.entity.js';
+import { ClassAccessPolicy } from '../policies/class-access.policy.js';
 import {
   ParticipantCandidateView,
   ParticipantImportResult,
   ParticipantImportRowResult,
   ParticipantView,
 } from '../types/participant-view.type.js';
+import { AddStudentsResult } from '../types/add-students-result.type.js';
 import { UserFacade } from '../../user/facades/user.facade.js';
 import { StudentSummary } from '../../user/types/student-summary.type.js';
 import { AuthenticatedUser } from '../../../common/types/authenticated-user.type.js';
-import { Role } from '../../../common/enums/role.enum.js';
 import { isUniqueViolation } from '../../../common/utils/pg-error.util.js';
+import { emptyToNull } from '../../../common/utils/string.util.js';
 
 const DEFAULT_CANDIDATE_LIMIT = 20;
 const MAX_CANDIDATE_LIMIT = 50;
@@ -31,12 +33,6 @@ interface NormalizedImportRow {
   readonly code: string | null;
   readonly email: string | null;
 }
-
-const emptyToNull = (value: string | undefined): string | null => {
-  const trimmed = value?.trim();
-  if (!trimmed) return null;
-  return trimmed;
-};
 
 const unique = <T>(values: T[]): T[] => [...new Set(values)];
 
@@ -52,7 +48,8 @@ export class ParticipantService {
     private readonly classService: ClassService,
     private readonly participantRepo: ClassStudentRepository,
     private readonly userFacade: UserFacade,
-  ) { }
+    private readonly accessPolicy: ClassAccessPolicy,
+  ) {}
 
   /** Participants of the class, optionally filtered by name, email or student code. */
   async list(
@@ -123,6 +120,40 @@ export class ParticipantService {
     );
     if (!created) throw new NotFoundException('Participant not found');
     return ParticipantView.fromEntity(created);
+  }
+
+  /** Adds several students at once; students already in the class are skipped. */
+  async addMany(
+    classId: string,
+    actor: AuthenticatedUser,
+    dto: AddParticipantsDto,
+  ): Promise<AddStudentsResult> {
+    const cls = await this.loadManageableClass(classId, actor);
+    this.assertClassIsOpen(cls);
+
+    const ids = unique(dto.studentIds);
+    const students = await this.userFacade.findStudentsByIds(ids);
+
+    const found = new Set(students.map((s) => s.userId));
+    const missing = ids.filter((id) => !found.has(id));
+    if (missing.length > 0) {
+      throw new BadRequestException(
+        `Students not found: ${missing.join(', ')}`,
+      );
+    }
+    const blocked = students.filter((s) => s.enrollmentBlockedReason);
+    if (blocked.length > 0) {
+      throw new BadRequestException(
+        blocked
+          .map((s) => `${s.studentCode}: ${s.enrollmentBlockedReason}`)
+          .join('; '),
+      );
+    }
+
+    const enrolled = await this.participantRepo.findStudentIds(classId);
+    const toAdd = ids.filter((id) => !enrolled.has(id));
+    await this.participantRepo.addMany(classId, toAdd);
+    return { added: toAdd.length, skipped: ids.length - toAdd.length };
   }
 
   /** Remove Participant (alternative of UC-23). Only the enrolment is removed, never the student. */
@@ -278,19 +309,11 @@ export class ParticipantService {
     actor: AuthenticatedUser,
   ): Promise<Class> {
     const cls = await this.classService.findById(classId);
-    if (actor.role === Role.ADMIN) return cls;
-    if (actor.role === Role.LECTURER && cls.lecturerId === actor.id) return cls;
-    throw new ForbiddenException(
-      'You can only manage the participants of your own classes',
-    );
+    this.accessPolicy.assertCanManage(cls, actor);
+    return cls;
   }
 
-  /** Participants are frozen once a class has ended, like the rest of the class. */
   private assertClassIsOpen(cls: Class): void {
-    if (!cls.isActive) {
-      throw new ConflictException(
-        'This class has ended, so its participants can no longer be changed',
-      );
-    }
+    this.accessPolicy.assertParticipantsEditable(cls);
   }
 }

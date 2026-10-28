@@ -12,12 +12,14 @@ import {
 } from '@nestjs/common';
 import { ParticipantService } from '../services/participant.service.js';
 import { AddParticipantDto } from '../dto/add-participant.dto.js';
+import { AddParticipantsDto } from '../dto/add-participants.dto.js';
 import { ImportParticipantsDto } from '../dto/import-participants.dto.js';
 import {
   ParticipantCandidateView,
   ParticipantImportResult,
   ParticipantView,
 } from '../types/participant-view.type.js';
+import { AddStudentsResult } from '../types/add-students-result.type.js';
 import { Auth } from '../../../common/decorators/auth.decorator.js';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator.js';
 import { AuthenticatedUser } from '../../../common/types/authenticated-user.type.js';
@@ -66,6 +68,16 @@ export class ParticipantController {
     @Body() dto: AddParticipantDto,
   ): Promise<ParticipantView> {
     return this.participantService.add(classId, user, dto);
+  }
+
+  /** Add several students at once. Students already in the class are skipped. */
+  @Post('bulk')
+  async addMany(
+    @Param('classId', ParseUUIDPipe) classId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: AddParticipantsDto,
+  ): Promise<AddStudentsResult> {
+    return this.participantService.addMany(classId, user, dto);
   }
 
   /** Bulk add from an import file. `dryRun: true` only previews the outcome. */

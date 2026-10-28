@@ -6,6 +6,7 @@ export interface Classmate {
   email: string;
 }
 
+/** A row of `/lecturer/students`. The score fields are placeholders until the mastery module exists. */
 export interface RosterStudent {
   id: string;
   classId: string;

@@ -32,6 +32,14 @@ const StudentRosterPage = () => {
           )
         }
       />
+      {/* TODO(mastery): scores, mastery, submissions and at-risk are placeholders until those modules are real. */}
+      <p
+        role="note"
+        className="mb-4 rounded-md border bg-muted px-3 py-2 text-sm text-muted-foreground"
+      >
+        Performance data is not available yet. Average score, KC mastery, submissions and the
+        “On track” status are placeholders. To add or remove students, use the Members tab.
+      </p>
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div className="relative w-full max-w-xs">
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />

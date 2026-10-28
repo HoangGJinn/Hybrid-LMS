@@ -2,6 +2,7 @@ import { USE_MOCK } from '@core/config/env';
 import { mockSections, delay } from '@core/mocks';
 import type { ClassRoom, Section } from '../types/courses.types';
 import { get, post } from '@core/api/http';
+import { toSectionsPayload } from '../utils/section-payload';
 
 export const classService = {
   // ----- shared: backend resolves role from JWT -----
@@ -21,7 +22,9 @@ export const classService = {
 
   saveSections: (classId: string, sections: Section[]): Promise<Section[]> => {
     if (!USE_MOCK)
-      return post(`/api/classes/${classId}/sections/bulk`, { sections });
+      return post(`/api/classes/${classId}/sections/bulk`, {
+        sections: toSectionsPayload(sections),
+      });
     const others = mockSections.filter((s) => s.classId !== classId);
     mockSections.splice(
       0,
