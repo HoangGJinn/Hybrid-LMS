@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Archive, Pencil, Plus, Search } from 'lucide-react';
+import { Archive, Pencil, Plus, Search, Users } from 'lucide-react';
 import { PageHeader } from '@/shared/components/PageHeader';
 import { AsyncView } from '@/shared/components/AsyncView';
 import { EmptyState } from '@/shared/components/EmptyState';
@@ -16,6 +16,7 @@ import { DeactivateConfirm } from '../components/DeactivateConfirm';
 import { useClasses } from '../hooks/useClasses';
 import { useSemesters } from '../hooks/useCourseLookups';
 import type { ClassStatusFilter, ClassView } from '../types/courses.types';
+import { ClassStudentsModal } from '../components/ClassStudentsModal';
 
 const PAGE_SIZE = 10;
 const SEARCH_DEBOUNCE_MS = 300;
@@ -39,6 +40,7 @@ const CoursesPage = () => {
     course: null,
   });
   const [deactivating, setDeactivating] = useState<ClassView | null>(null);
+  const [managing, setManaging] = useState<ClassView | null>(null);
 
   const search = useDebouncedValue(searchInput, SEARCH_DEBOUNCE_MS);
   const classes = useClasses({ status, semesterId, search });
@@ -121,6 +123,16 @@ const CoursesPage = () => {
             <Pencil className="h-4 w-4" />
           </Button>
           {item.isActive && (
+            <>
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={`Manage students of ${item.classCode}`}
+              title="Manage students"
+              onClick={() => setManaging(item)}
+            >
+              <Users className="h-4 w-4" />
+            </Button>
             <Button
               variant="ghost"
               size="icon"
@@ -130,6 +142,7 @@ const CoursesPage = () => {
             >
               <Archive className="h-4 w-4" />
             </Button>
+            </>
           )}
         </div>
       ),
@@ -235,6 +248,7 @@ const CoursesPage = () => {
 
       <CourseFormModal open={form.open} course={form.course} onClose={closeForm} />
       <DeactivateConfirm course={deactivating} onClose={() => setDeactivating(null)} />
+      <ClassStudentsModal course={managing} onClose={() => setManaging(null)} />
     </>
   );
 };

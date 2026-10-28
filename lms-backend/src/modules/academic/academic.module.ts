@@ -15,13 +15,16 @@ import { SubjectController } from './controllers/subject.controller.js';
 import { SemesterController } from './controllers/semester.controller.js';
 import { AcademicFacade } from './facades/academic.facade.js';
 import { UserModule } from '../user/user.module.js';
+import { ParticipantController } from './controllers/participant.controller.js';
+import { ParticipantRepository } from './repositories/participant.repository.js';
+import { ParticipantService } from './services/participant.service.js';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([ClassStudent, Class, Semester, Subject]),
     UserModule,
   ],
-  controllers: [ClassController, SubjectController, SemesterController],
+  controllers: [ClassController, SubjectController, SemesterController, ParticipantController],
   providers: [
     ClassRepository,
     SubjectRepository,
@@ -30,6 +33,8 @@ import { UserModule } from '../user/user.module.js';
     SubjectService,
     SemesterService,
     AcademicFacade,
+    ParticipantRepository, 
+    ParticipantService,
   ],
   exports: [AcademicFacade],
 })

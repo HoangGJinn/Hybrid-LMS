@@ -63,3 +63,23 @@ export interface ClassFilters {
   /** Matches class code or name. */
   search: string;
 }
+
+export interface ClassStudent {
+  id: string;
+  classId: string;
+  studentCode: string;
+  fullName: string;
+  email: string;
+}
+
+export interface StudentOption {
+  id: string;
+  studentCode: string;
+  fullName: string;
+  email: string;
+}
+
+export interface AddStudentsResult {
+  added: number;
+  skipped: number;
+}

@@ -3,6 +3,7 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { ClassRepository } from '../repositories/class.repository.js';
 import { SubjectService } from './subject.service.js';
@@ -13,6 +14,9 @@ import { Class } from '../entities/class.entity.js';
 import { ClassView } from '../types/class-view.type.js';
 import { UserFacade } from '../../user/facades/user.facade.js';
 import { Role } from '../../../common/enums/role.enum.js';
+import { ClassmateView } from '../types/classmate-view.type.js';
+import { RosterStudentView } from '../types/roster-student-view.type.js';
+import { AuthenticatedUser } from '../../../common/types/authenticated-user.type.js';
 
 @Injectable()
 export class ClassService {
@@ -160,5 +164,44 @@ export class ClassService {
 
   async deactivateClass(id: string): Promise<ClassView> {
     return this.deactivate(id);
+  }
+
+    /** Admin: any class. Lecturer: only their own class. Student: only a class they are enrolled in. */
+  private async assertCanViewMembers(
+    cls: Class,
+    user: AuthenticatedUser,
+  ): Promise<void> {
+    if (user.role === Role.ADMIN) return;
+    if (user.role === Role.LECTURER && cls.lecturerId === user.id) return;
+    if (
+      user.role === Role.STUDENT &&
+      (await this.classRepo.isEnrolled(cls.id, user.id))
+    ) {
+      return;
+    }
+    throw new ForbiddenException('You do not have access to this class');
+  }
+
+  async getClassmates(
+    classId: string,
+    user: AuthenticatedUser,
+  ): Promise<ClassmateView[]> {
+    const cls = await this.findById(classId);
+    await this.assertCanViewMembers(cls, user);
+    const enrollments = await this.classRepo.findEnrollments(classId);
+    return enrollments.map((e) => ClassmateView.fromEnrollment(e));
+  }
+
+  async getRoster(
+    classId: string,
+    user: AuthenticatedUser,
+  ): Promise<RosterStudentView[]> {
+    if (user.role === Role.STUDENT) {
+      throw new ForbiddenException('Only lecturers can view the roster');
+    }
+    const cls = await this.findById(classId);
+    await this.assertCanViewMembers(cls, user);
+    const enrollments = await this.classRepo.findEnrollments(classId);
+    return enrollments.map((e) => RosterStudentView.fromEnrollmentWithStats(e));
   }
 }

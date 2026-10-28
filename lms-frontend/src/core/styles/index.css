@@ -6,64 +6,69 @@
 
 @layer base {
   :root {
-    /* Brand: lightskyblue (#87CEFA) */
-    --primary: 203 92% 75%;
-    --primary-foreground: 215 60% 14%;
-    --brand: 205 88% 32%;            /* darker azure for text/links on light surfaces */
-    --sidebar: 203 92% 75%;
-    --sidebar-foreground: 215 60% 14%;
+    /* Brand: blue #04548F; page background #E9E9E9; links #1565C0 */
+    --primary: 205 95% 29%;
+    --primary-foreground: 0 0% 100%;
+    --brand: 212 80% 42%;             /* link / text accent on light surfaces */
+    --sidebar: 205 95% 29%;
+    --sidebar-foreground: 0 0% 100%;
+    --sidebar-section: 55 100% 45%;   /* menu group titles #E8D400 */
+    --sidebar-active: 39 92% 50%;     /* selected menu item #F5A30C */
+    --tab-indicator: 340 82% 52%;     /* tab underline #E91E63 */
 
-    --background: 204 100% 97%;
-    --foreground: 215 50% 14%;
+    --background: 0 0% 91%;
+    --foreground: 205 40% 12%;
     --card: 0 0% 100%;
-    --card-foreground: 215 50% 14%;
+    --card-foreground: 205 40% 12%;
     --popover: 0 0% 100%;
-    --popover-foreground: 215 50% 14%;
-    --secondary: 203 100% 94%;
-    --secondary-foreground: 215 55% 20%;
-    --muted: 204 60% 94%;
-    --muted-foreground: 215 20% 38%;
-    --accent: 203 100% 92%;
-    --accent-foreground: 215 60% 14%;
+    --popover-foreground: 205 40% 12%;
+    --secondary: 205 25% 94%;
+    --secondary-foreground: 205 95% 29%;
+    --muted: 0 0% 95%;
+    --muted-foreground: 205 12% 38%;
+    --accent: 205 45% 92%;
+    --accent-foreground: 205 95% 29%;
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
     --success: 152 60% 32%;
     --warning: 38 92% 45%;
-    --border: 203 45% 86%;
-    --input: 203 45% 82%;
-    --ring: 205 90% 48%;
+    --border: 0 0% 83%;
+    --input: 0 0% 78%;
+    --ring: 212 80% 42%;
     --radius: 0.75rem;
   }
 }
 
 @layer base {
   .dark {
-    /* Brand stays lightskyblue; surfaces become deep navy. */
-    --primary: 203 92% 75%;
-    --primary-foreground: 215 60% 14%;
-    --brand: 203 92% 75%;            /* light azure for text/links on dark surfaces */
-    --sidebar: 215 45% 11%;
-    --sidebar-foreground: 204 60% 92%;
+    --primary: 205 90% 36%;
+    --primary-foreground: 0 0% 100%;
+    --brand: 205 90% 72%;             /* light blue tint for links on dark surfaces */
+    --sidebar: 205 95% 22%;
+    --sidebar-foreground: 0 0% 100%;
+    --sidebar-section: 55 100% 55%;
+    --sidebar-active: 39 92% 55%;
+    --tab-indicator: 340 82% 62%;
 
-    --background: 215 40% 8%;
-    --foreground: 204 40% 95%;
-    --card: 215 35% 12%;
-    --card-foreground: 204 40% 95%;
-    --popover: 215 35% 12%;
-    --popover-foreground: 204 40% 95%;
-    --secondary: 215 30% 18%;
-    --secondary-foreground: 204 40% 92%;
-    --muted: 215 28% 17%;
-    --muted-foreground: 215 16% 68%;
-    --accent: 215 35% 20%;
-    --accent-foreground: 204 60% 94%;
+    --background: 205 50% 8%;
+    --foreground: 0 0% 93%;
+    --card: 205 40% 12%;
+    --card-foreground: 0 0% 93%;
+    --popover: 205 40% 12%;
+    --popover-foreground: 0 0% 93%;
+    --secondary: 205 30% 18%;
+    --secondary-foreground: 0 0% 93%;
+    --muted: 205 25% 16%;
+    --muted-foreground: 205 14% 68%;
+    --accent: 205 40% 21%;
+    --accent-foreground: 0 0% 93%;
     --destructive: 0 72% 58%;
     --destructive-foreground: 0 0% 100%;
     --success: 152 55% 52%;
     --warning: 38 92% 55%;
-    --border: 215 25% 22%;
-    --input: 215 25% 28%;
-    --ring: 203 92% 70%;
+    --border: 205 25% 24%;
+    --input: 205 25% 28%;
+    --ring: 205 90% 65%;
   }
 }
 
