@@ -63,3 +63,57 @@ export interface ClassFilters {
   /** Matches class code or name. */
   search: string;
 }
+
+/** A student enrolled in a class: row of GET /api/classes/:id/participants. */
+export interface ParticipantView {
+  /** `user.id` of the student. */
+  studentId: string;
+  studentCode: string;
+  fullName: string;
+  email: string;
+  /** StudentStatus, e.g. STUDYING. */
+  status: string;
+  /** false = the account was deactivated after the student joined. */
+  isActive: boolean;
+  joinedAt: string;
+}
+
+/** A student offered by "Add Participant". */
+export interface ParticipantCandidate {
+  studentId: string;
+  studentCode: string;
+  fullName: string;
+  email: string;
+  /** true = already a participant: shown but not selectable. */
+  alreadyInClass: boolean;
+}
+
+/** One data row of an import file, as sent to POST /api/classes/:id/participants/import. */
+export interface ImportRowPayload {
+  /** Row number in the file (the header is row 1). */
+  line: number;
+  studentCode?: string;
+  email?: string;
+}
+
+export type ImportRowStatus = 'added' | 'skipped' | 'error';
+
+export interface ImportRowResult {
+  line: number;
+  /** `added` = will be added (preview) / was added (import). */
+  status: ImportRowStatus;
+  studentCode: string | null;
+  fullName: string | null;
+  message: string | null;
+}
+
+export interface ImportResult {
+  /** true = preview only, nothing was written. */
+  dryRun: boolean;
+  total: number;
+  added: number;
+  skipped: number;
+  failed: number;
+  rows: ImportRowResult[];
+}
+
