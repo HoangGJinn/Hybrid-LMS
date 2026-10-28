@@ -38,6 +38,10 @@ describe('UserService', () => {
       findByEmail: vi.fn(),
       findBySsoId: vi.fn(),
       findById: vi.fn(),
+      findStudentsByIds: vi.fn(),
+      findStudentsByCodes: vi.fn(),
+      findStudentsByEmails: vi.fn(),
+      searchEnrollableStudents: vi.fn(),
       createProvisionedUser: vi.fn(),
       claimSso: vi.fn(),
       findPage: vi.fn(),
@@ -112,6 +116,39 @@ describe('UserService', () => {
 
       expect(mockUserRepo.findByRole).toHaveBeenCalledWith(Role.STUDENT);
       expect(result).toEqual([sampleUser]);
+    });
+  });
+
+  describe('student summaries', () => {
+    const studentEntity = {
+      userId: 'user-uuid-1',
+      studentCode: 'SV26000001',
+      status: 'STUDYING',
+      user: { fullName: 'Nguyen Van A', email: 'user@school.edu.vn', isActive: true },
+    };
+
+    it('maps students found by id, code, email or search to summaries', async () => {
+      mockUserRepo.findStudentsByIds!.mockResolvedValue([studentEntity]);
+      mockUserRepo.findStudentsByCodes!.mockResolvedValue([studentEntity]);
+      mockUserRepo.findStudentsByEmails!.mockResolvedValue([studentEntity]);
+      mockUserRepo.searchEnrollableStudents!.mockResolvedValue([studentEntity]);
+
+      const results = await Promise.all([
+        service.findStudentsByIds(['user-uuid-1']),
+        service.findStudentsByCodes(['SV26000001']),
+        service.findStudentsByEmails(['user@school.edu.vn']),
+        service.searchEnrollableStudents('nguyen', 20),
+      ]);
+
+      for (const [summary] of results) {
+        expect(summary).toMatchObject({
+          userId: 'user-uuid-1',
+          studentCode: 'SV26000001',
+          fullName: 'Nguyen Van A',
+          email: 'user@school.edu.vn',
+          enrollmentBlockedReason: null,
+        });
+      }
     });
   });
 
@@ -210,12 +247,6 @@ describe('UserService', () => {
       Object.assign(new Error('duplicate key'), { code: '23505', detail }),
     );
 
-  const foreignKeyViolation = () =>
-    new QueryFailedError(
-      'DELETE',
-      [],
-      Object.assign(new Error('violates foreign key'), { code: '23503' }),
-    );
 
   describe('claimProvisionedAccount', () => {
     it('binds the Google identity and takes the Google name when the admin typed none', async () => {
@@ -656,78 +687,6 @@ describe('UserService', () => {
       );
     });
 
-    it('changes the role of a student to lecturer', async () => {
-      mockUserRepo.findById!.mockResolvedValue(sampleUser);
-      mockUserRepo.updateUserAndProfile!.mockResolvedValue({
-        ...sampleUser,
-        role: Role.LECTURER,
-      });
-
-      await service.updateUser('user-uuid-1', { role: Role.LECTURER });
-
-      expect(mockUserRepo.updateUserAndProfile).toHaveBeenCalledWith(
-        sampleUser,
-        expect.objectContaining({ role: Role.LECTURER }),
-      );
-    });
-
-    it('does not report a role change when the role stays the same', async () => {
-      mockUserRepo.findById!.mockResolvedValue(sampleUser);
-      mockUserRepo.updateUserAndProfile!.mockResolvedValue(sampleUser);
-
-      await service.updateUser('user-uuid-1', { role: Role.STUDENT });
-
-      expect(mockUserRepo.updateUserAndProfile).toHaveBeenCalledWith(
-        sampleUser,
-        expect.objectContaining({ role: undefined }),
-      );
-    });
-
-    it('checks the status against the new role when the role changes', async () => {
-      mockUserRepo.findById!.mockResolvedValue(sampleUser); // student
-
-      await expect(
-        service.updateUser('user-uuid-1', {
-          role: Role.LECTURER,
-          status: 'GRADUATED', // a student status
-        }),
-      ).rejects.toThrow(BadRequestException);
-
-      mockUserRepo.updateUserAndProfile!.mockResolvedValue(sampleUser);
-      await service.updateUser('user-uuid-1', {
-        role: Role.LECTURER,
-        status: 'ON_LEAVE',
-      });
-      expect(mockUserRepo.updateUserAndProfile).toHaveBeenCalledWith(
-        sampleUser,
-        expect.objectContaining({
-          role: Role.LECTURER,
-          lecturerStatus: 'ON_LEAVE',
-        }),
-      );
-    });
-
-    it('turns a refused role change (records still reference the profile) into a conflict', async () => {
-      mockUserRepo.findById!.mockResolvedValue(sampleUser);
-      mockUserRepo.updateUserAndProfile!.mockRejectedValue(
-        foreignKeyViolation(),
-      );
-
-      await expect(
-        service.updateUser('user-uuid-1', { role: Role.LECTURER }),
-      ).rejects.toThrow(ConflictException);
-    });
-
-    it('does not mistake a foreign-key error for a role problem when the role is unchanged', async () => {
-      mockUserRepo.findById!.mockResolvedValue(sampleUser);
-      mockUserRepo.updateUserAndProfile!.mockRejectedValue(
-        foreignKeyViolation(),
-      );
-
-      await expect(
-        service.updateUser('user-uuid-1', { fullName: 'New Name' }),
-      ).rejects.toBeInstanceOf(QueryFailedError);
-    });
   });
 
   describe('deactivateUser', () => {

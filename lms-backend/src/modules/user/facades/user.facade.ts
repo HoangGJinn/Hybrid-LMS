@@ -3,6 +3,7 @@ import { UserService } from '../services/user.service.js';
 import { UserView } from '../types/user-view.type.js';
 import { CreateUserDto } from '../dto/create-user.dto.js';
 import { GoogleAccountData } from '../types/google-account-data.type.js';
+import { StudentSummary } from '../types/student-summary.type.js';
 import { Role } from '../../../common/enums/role.enum.js';
 
 /**
@@ -42,6 +43,27 @@ export class UserFacade {
   async getUserById(id: string): Promise<UserView> {
     const user = await this.userService.getUserById(id);
     return UserView.fromEntity(user);
+  }
+
+  /** Students by user id; ids that are not students are missing from the result. */
+  async findStudentsByIds(ids: string[]): Promise<StudentSummary[]> {
+    return this.userService.findStudentsByIds(ids);
+  }
+
+  async findStudentsByCodes(codes: string[]): Promise<StudentSummary[]> {
+    return this.userService.findStudentsByCodes(codes);
+  }
+
+  async findStudentsByEmails(emails: string[]): Promise<StudentSummary[]> {
+    return this.userService.findStudentsByEmails(emails);
+  }
+
+  /** Students that can still join a class: active account and status STUDYING. */
+  async searchEnrollableStudents(
+    search: string | undefined,
+    limit: number,
+  ): Promise<StudentSummary[]> {
+    return this.userService.searchEnrollableStudents(search, limit);
   }
 
   /**

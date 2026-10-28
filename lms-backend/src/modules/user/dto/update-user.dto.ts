@@ -1,17 +1,12 @@
 import { Transform } from 'class-transformer';
 import {
   IsEmail,
-  IsIn,
   IsOptional,
   IsString,
   MaxLength,
   MinLength,
 } from 'class-validator';
 import { ValidationMessage } from '../../../common/enums/validation-message.enum.js';
-import {
-  PROVISIONABLE_ROLES,
-  type ProvisionableRole,
-} from './create-managed-user.dto.js';
 
 const trim = ({ value }: { value: unknown }): unknown =>
   typeof value === 'string' ? value.trim() : value;
@@ -21,8 +16,7 @@ const normalizeEmail = ({ value }: { value: unknown }): unknown =>
 
 /**
  * Body of `PATCH /api/users/:id` (admin only). Every field is optional; only the ones sent are changed.
- * Changing the role swaps the profile row (student <-> lecturer): a new code is generated and the
- * status starts from the default. It is refused while other records still point at the old profile.
+ * Only fullName, email (before first login), and profile status can be edited. Role and code are permanent.
  */
 export class UpdateUserDto {
   @Transform(trim)
@@ -42,11 +36,6 @@ export class UpdateUserDto {
   })
   @IsOptional()
   readonly email?: string;
-
-  /** Moves the account between student and lecturer. Admin accounts can never be given or lose this role. */
-  @IsIn(PROVISIONABLE_ROLES, { message: ValidationMessage.ROLE_INVALID })
-  @IsOptional()
-  readonly role?: ProvisionableRole;
 
   /**
    * Profile status: STUDYING | GRADUATED | SUSPENDED | RESERVED for students,

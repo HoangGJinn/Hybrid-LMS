@@ -1,12 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import {
-  EntityManager,
-  In,
-  IsNull,
-  QueryFailedError,
-  Repository,
-} from 'typeorm';
+import { EntityManager, In, IsNull, Repository } from 'typeorm';
 import { User } from '../entities/user.entity.js';
 import { Student } from '../entities/student.entity.js';
 import { Lecturer } from '../entities/lecturer.entity.js';
@@ -18,9 +12,18 @@ import { StudentStatus } from '../enums/student-status.enum.js';
 import { LecturerStatus } from '../enums/lecturer-status.enum.js';
 import { UserProfileInfo } from '../types/managed-user-view.type.js';
 import { generateProfileCode } from '../utils/profile-code.util.js';
+import { escapeLike } from '../../../common/utils/sql.util.js';
+import {
+  isForeignKeyViolation,
+  isUniqueViolation,
+  uniqueViolationField,
+} from '../../../common/utils/pg-error.util.js';
 
-const PG_UNIQUE_VIOLATION = '23505';
-const PG_FOREIGN_KEY_VIOLATION = '23503';
+export {
+  isForeignKeyViolation,
+  isUniqueViolation,
+  uniqueViolationField,
+};
 
 /** Filters of the admin user list. */
 export interface UserListFilters {
@@ -50,11 +53,9 @@ export interface ProvisionedUserData {
 export interface UserUpdateData {
   readonly fullName?: string;
   readonly email?: string;
-  /** Moves the account to the other profile type; the old profile row is deleted, a new one is created. */
-  readonly role?: Role.LECTURER | Role.STUDENT;
-  /** Only meaningful for a student (after any role change); the service rejects it for other roles. */
+  /** Only meaningful for a student; the service rejects it for other roles. */
   readonly studentStatus?: StudentStatus;
-  /** Only meaningful for a lecturer (after any role change); the service rejects it for other roles. */
+  /** Only meaningful for a lecturer; the service rejects it for other roles. */
   readonly lecturerStatus?: LecturerStatus;
 }
 
@@ -66,48 +67,6 @@ export interface SsoClaimData {
   /** Set only when the admin did not provide a real name. */
   readonly fullName?: string;
 }
-
-const driverErrorOf = (error: unknown): object | null => {
-  if (!(error instanceof QueryFailedError)) return null;
-  const driverError: unknown = error.driverError;
-  return typeof driverError === 'object' ? driverError : null;
-};
-
-const hasDriverCode = (error: unknown, code: string): boolean => {
-  const driverError = driverErrorOf(error);
-  return (
-    driverError !== null && 'code' in driverError && driverError.code === code
-  );
-};
-
-/** True when a database error is a unique-constraint violation (duplicate email, code or ssoId). */
-export const isUniqueViolation = (error: unknown): boolean =>
-  hasDriverCode(error, PG_UNIQUE_VIOLATION);
-
-/** True when a database error is a foreign-key violation (a row is still referenced by another table). */
-export const isForeignKeyViolation = (error: unknown): boolean =>
-  hasDriverCode(error, PG_FOREIGN_KEY_VIOLATION);
-
-/** Which form field a unique violation is about; null when the driver does not say. */
-export const uniqueViolationField = (error: unknown): 'email' | 'code' | null => {
-  if (!isUniqueViolation(error)) return null;
-  const driverError = driverErrorOf(error);
-  // Postgres: `Key (email)=(a@b.c) already exists.`
-  const detail =
-    driverError !== null &&
-    'detail' in driverError &&
-    typeof driverError.detail === 'string'
-      ? driverError.detail
-      : '';
-  if (detail.includes('(email)')) return 'email';
-  if (detail.includes('(student_code)') || detail.includes('(lecturer_code)'))
-    return 'code';
-  return null;
-};
-
-/** Escapes `%`, `_` and `\` so user input is matched literally inside ILIKE. */
-const escapeLike = (value: string): string =>
-  value.replace(/[\\%_]/g, (character) => `\\${character}`);
 
 /** Encapsulates database operations for the User aggregate (User + Student/Lecturer/Admin profiles). */
 @Injectable()
@@ -297,7 +256,6 @@ export class UserRepository {
 
   /**
    * Applies an admin edit to the user row and to its profile row in one transaction.
-   * A role change swaps the profile row first, so the status of `data` is applied to the new profile.
    */
   async updateUserAndProfile(user: User, data: UserUpdateData): Promise<User> {
     return this.userRepo.manager.transaction(async (manager) => {
@@ -307,17 +265,13 @@ export class UserRepository {
           email: data.email,
         });
       }
-      const role = data.role ?? user.role;
-      if (role !== user.role) {
-        await this.switchProfile(manager, user, role);
-      }
-      if (role === Role.LECTURER) {
+      if (user.role === Role.LECTURER) {
         if (data.lecturerStatus !== undefined) {
           await manager.update(Lecturer, user.id, {
             status: data.lecturerStatus,
           });
         }
-      } else if (role === Role.STUDENT) {
+      } else if (user.role === Role.STUDENT) {
         if (data.studentStatus !== undefined) {
           await manager.update(Student, user.id, {
             status: data.studentStatus,
@@ -328,29 +282,58 @@ export class UserRepository {
     });
   }
 
-  /**
-   * Student <-> lecturer: deletes the old profile row, sets the new role and creates the new profile
-   * with a generated code. When other tables still reference the old profile (classes, enrolments,
-   * exams, ...) the database refuses the delete and the whole transaction is rolled back.
-   */
-  private async switchProfile(
-    manager: EntityManager,
-    user: User,
-    role: Role,
-  ): Promise<void> {
-    if (user.role === Role.STUDENT) {
-      await manager.delete(Student, { userId: user.id });
-    } else if (user.role === Role.LECTURER) {
-      await manager.delete(Lecturer, { userId: user.id });
-    }
-    await manager.update(User, user.id, { role });
-    await this.createProfile(manager, user.id, role);
-  }
-
   /** Soft delete / restore: users are never removed from the database. */
   async setActive(id: string, isActive: boolean): Promise<User> {
     await this.userRepo.update(id, { isActive });
     return this.userRepo.findOneOrFail({ where: { id } });
+  }
+
+  /** Students (with their user) by user id. */
+  async findStudentsByIds(userIds: string[]): Promise<Student[]> {
+    if (userIds.length === 0) return [];
+    return this.studentRepo.find({
+      where: { userId: In(userIds) },
+      relations: { user: true },
+    });
+  }
+
+  /** Students (with their user) by student code. */
+  async findStudentsByCodes(codes: string[]): Promise<Student[]> {
+    if (codes.length === 0) return [];
+    return this.studentRepo.find({
+      where: { studentCode: In(codes) },
+      relations: { user: true },
+    });
+  }
+
+  /** Students (with their user) by email (stored in lower case). */
+  async findStudentsByEmails(emails: string[]): Promise<Student[]> {
+    if (emails.length === 0) return [];
+    return this.studentRepo.find({
+      where: { user: { email: In(emails) } },
+      relations: { user: true },
+    });
+  }
+
+  /** Active, currently studying students whose name, email or code contains `search`, by code. */
+  async searchEnrollableStudents(
+    search: string | undefined,
+    limit: number,
+  ): Promise<Student[]> {
+    const query = this.studentRepo
+      .createQueryBuilder('s')
+      .innerJoinAndSelect('s.user', 'u')
+      .where('u.isActive = :isActive', { isActive: true })
+      .andWhere('s.status = :status', { status: StudentStatus.STUDYING })
+      .orderBy('s.studentCode', 'ASC')
+      .take(limit);
+    if (search) {
+      query.andWhere(
+        '(u.fullName ILIKE :search OR u.email ILIKE :search OR s.studentCode ILIKE :search)',
+        { search: `%${escapeLike(search)}%` },
+      );
+    }
+    return query.getMany();
   }
 
   async findByRole(role?: Role): Promise<User[]> {

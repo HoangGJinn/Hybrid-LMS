@@ -31,6 +31,10 @@ describe('UserFacade', () => {
       findByEmail: vi.fn(),
       findBySsoId: vi.fn(),
       getUserById: vi.fn(),
+      findStudentsByIds: vi.fn(),
+      findStudentsByCodes: vi.fn(),
+      findStudentsByEmails: vi.fn(),
+      searchEnrollableStudents: vi.fn(),
       claimProvisionedAccount: vi.fn(),
     };
     facade = new UserFacade(mockUserService as unknown as UserService);
@@ -155,6 +159,21 @@ describe('UserFacade', () => {
       const result = await facade.claimProvisionedAccount('usr-1', account);
 
       expect(result).toBeNull();
+    });
+  });
+
+  describe('student lookups', () => {
+    it('delegates lookup by id, code, email and search to userService', async () => {
+      const summaries = [{ userId: 'usr-1' } as any];
+      mockUserService.findStudentsByIds!.mockResolvedValue(summaries);
+      mockUserService.findStudentsByCodes!.mockResolvedValue(summaries);
+      mockUserService.findStudentsByEmails!.mockResolvedValue(summaries);
+      mockUserService.searchEnrollableStudents!.mockResolvedValue(summaries);
+
+      expect(await facade.findStudentsByIds(['usr-1'])).toEqual(summaries);
+      expect(await facade.findStudentsByCodes(['SV26000001'])).toEqual(summaries);
+      expect(await facade.findStudentsByEmails(['a@school.edu.vn'])).toEqual(summaries);
+      expect(await facade.searchEnrollableStudents('text', 10)).toEqual(summaries);
     });
   });
 });
