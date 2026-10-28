@@ -1,14 +1,17 @@
+import { cn } from '@shared/utils/cn';
 import { useEffect, useRef, type MouseEvent, type ReactNode } from 'react';
 
 interface ModalProps {
   open: boolean;
   title: string;
   onClose: () => void;
+  /** Width of the dialog; `lg` suits tables and previews. */
+  size?: 'md' | 'lg';
   children: ReactNode;
 }
 
 /** Accessible modal built on the native <dialog>: focus trap, Esc to close and backdrop come from the browser. */
-export const Modal = ({ open, title, onClose, children }: ModalProps) => {
+export const Modal = ({ open, title, onClose, size = 'md', children }: ModalProps) => {
   const dialogRef = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
@@ -29,7 +32,10 @@ export const Modal = ({ open, title, onClose, children }: ModalProps) => {
       aria-label={title}
       onClose={onClose}
       onClick={handleBackdropClick}
-      className="m-auto w-[calc(100%-2rem)] max-w-md rounded-2xl border bg-card p-0 text-card-foreground shadow-xl backdrop:bg-black/50"
+      className={cn(
+        'm-auto w-[calc(100%-2rem)] rounded-2xl border bg-card p-0 text-card-foreground shadow-xl backdrop:bg-black/50',
+        size === 'lg' ? 'max-w-2xl' : 'max-w-md',
+      )}
     >
       <div className="p-6">
         <h2 className="mb-4 mt-0 text-lg font-semibold">{title}</h2>

@@ -1,27 +1,25 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common'
+import { BadRequestException, Injectable } from '@nestjs/common'
 import type { AuthenticatedUser } from '../../../common/types/authenticated-user.type.js'
 import type { CreateSectionDto } from '../dto/create-section.dto.js'
 import type { SaveSectionsDto } from '../dto/save-sections.dto.js'
 import { SectionRepository } from '../repositories/section.repository.js'
 import { SectionView } from '../types/section-view.type.js'
-import { Role } from '../../../common/enums/role.enum.js'
+import { AcademicFacade } from '../../academic/facades/academic.facade.js'
 
 /** Business rules for course sections: readable by class members, editable by the class lecturer. */
 @Injectable()
 export class SectionService {
-  constructor(private readonly sectionRepository: SectionRepository) {}
+  constructor(
+    private readonly sectionRepository: SectionRepository,
+    private readonly academicFacade: AcademicFacade,
+  ) {}
 
   /** Lists the sections (with items) of a class: its lecturer, an admin, or an enrolled student. */
   async findByClass(
     classId: string,
     user: AuthenticatedUser,
   ): Promise<SectionView[]> {
-    await this.assertCanView(classId, user)
+    await this.academicFacade.assertCanViewClass(classId, user)
     return this.findViews(classId)
   }
 
@@ -31,7 +29,7 @@ export class SectionService {
     dto: CreateSectionDto,
     user: AuthenticatedUser,
   ): Promise<SectionView> {
-    await this.assertTeachesClass(classId, user)
+    await this.academicFacade.assertCanManageClass(classId, user)
     const section = await this.sectionRepository.createAtEnd(classId, dto.title)
     return SectionView.fromEntity(section)
   }
@@ -42,7 +40,7 @@ export class SectionService {
     dto: SaveSectionsDto,
     user: AuthenticatedUser,
   ): Promise<SectionView[]> {
-    await this.assertTeachesClass(classId, user)
+    await this.academicFacade.assertCanManageClass(classId, user)
     const sectionIds = dto.sections.map((section) => section.id)
     const itemIds = dto.sections.flatMap((section) =>
       section.items.map((item) => item.id),
@@ -78,32 +76,5 @@ export class SectionService {
     if (new Set(ids).size !== ids.length) {
       throw new BadRequestException('Duplicate ids in payload')
     }
-  }
-
-  private async assertTeachesClass(
-    classId: string,
-    user: AuthenticatedUser,
-  ): Promise<void> {
-    const lecturerId = await this.sectionRepository.findClassLecturerId(classId)
-    if (lecturerId === null) throw new NotFoundException('Class not found')
-    if (lecturerId !== user.id) {
-      throw new ForbiddenException('You do not teach this class')
-    }
-  }
-
-  private async assertCanView(
-    classId: string,
-    user: AuthenticatedUser,
-  ): Promise<void> {
-    const lecturerId = await this.sectionRepository.findClassLecturerId(classId)
-    if (lecturerId === null) throw new NotFoundException('Class not found')
-    if (user.role === Role.ADMIN || lecturerId === user.id) return
-    if (
-      user.role === Role.STUDENT &&
-      (await this.sectionRepository.isStudentEnrolled(classId, user.id))
-    ) {
-      return
-    }
-    throw new ForbiddenException('You do not have access to this class')
   }
 }

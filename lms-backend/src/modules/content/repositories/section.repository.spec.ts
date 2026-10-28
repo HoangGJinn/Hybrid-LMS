@@ -1,7 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Repository } from 'typeorm'
-import { ClassStudent } from '../../academic/entities/class-student.entity.js'
-import { Class } from '../../academic/entities/class.entity.js'
 import type { SaveSectionDto } from '../dto/save-section.dto.js'
 import { SectionItem } from '../entities/section-item.entity.js'
 import { Section } from '../entities/section.entity.js'
@@ -43,9 +41,8 @@ const sectionsPayload = [
 ] as unknown as SaveSectionDto[]
 
 describe('SectionRepository', () => {
-  let sectionOrm: { find: Mock; manager: { transaction: Mock; exists: Mock } }
+  let sectionOrm: { find: Mock; manager: { transaction: Mock } }
   let itemOrm: { find: Mock; createQueryBuilder: Mock }
-  let classOrm: { findOne: Mock }
   let itemQuery: Builder
   let maxQuery: Builder
   let deleteQuery: Builder
@@ -77,28 +74,13 @@ describe('SectionRepository', () => {
         transaction: vi.fn((callback: (manager: unknown) => Promise<unknown>) =>
           callback(txManager),
         ),
-        exists: vi.fn(),
       },
     }
     itemOrm = { find: vi.fn(), createQueryBuilder: vi.fn().mockReturnValue(itemQuery) }
-    classOrm = { findOne: vi.fn() }
     repository = new SectionRepository(
       sectionOrm as unknown as Repository<Section>,
       itemOrm as unknown as Repository<SectionItem>,
-      classOrm as unknown as Repository<Class>,
     )
-  })
-
-  describe('findClassLecturerId', () => {
-    it('returns the lecturer id of the class', async () => {
-      classOrm.findOne.mockResolvedValue({ id: 'class-1', lecturerId: 'lec-1' })
-      await expect(repository.findClassLecturerId('class-1')).resolves.toBe('lec-1')
-    })
-
-    it('returns null when the class does not exist', async () => {
-      classOrm.findOne.mockResolvedValue(null)
-      await expect(repository.findClassLecturerId('class-1')).resolves.toBeNull()
-    })
   })
 
   it('findByClassId lists sections in display order', async () => {
@@ -304,21 +286,6 @@ describe('SectionRepository', () => {
 
       expect(txManager.upsert).toHaveBeenCalledTimes(1)
       expect(txManager.upsert).toHaveBeenCalledWith(Section, expect.any(Array), ['id'])
-    })
-  })
-
-  describe('isStudentEnrolled', () => {
-    it('returns true when the student is enrolled', async () => {
-      sectionOrm.manager.exists.mockResolvedValue(true)
-      await expect(repository.isStudentEnrolled('class-1', 'stu-1')).resolves.toBe(true)
-      expect(sectionOrm.manager.exists).toHaveBeenCalledWith(ClassStudent, {
-        where: { classId: 'class-1', studentId: 'stu-1' },
-      })
-    })
-
-    it('returns false when the student is not enrolled', async () => {
-      sectionOrm.manager.exists.mockResolvedValue(false)
-      await expect(repository.isStudentEnrolled('class-1', 'stu-1')).resolves.toBe(false)
     })
   })
 })

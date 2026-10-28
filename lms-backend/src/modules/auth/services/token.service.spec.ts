@@ -24,8 +24,6 @@ describe('TokenService', () => {
         id: 'usr-123',
         email: 'user@school.edu.vn',
         fullName: 'User Name',
-        ssoId: 'sso-123',
-        ssoProvider: 'GOOGLE',
         avatarUrl: null,
         role: Role.STUDENT,
         isActive: true,

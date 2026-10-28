@@ -30,18 +30,13 @@ import { deriveDisplayName } from '../utils/display-name.util.js';
 import { profilePrefixFor } from '../utils/profile-code.util.js';
 import { PaginatedResult } from '../../../common/types/paginated-result.type.js';
 import { Role } from '../../../common/enums/role.enum.js';
+import { emptyToUndefined } from '../../../common/utils/string.util.js';
 
 const isStudentStatus = (value: string): value is StudentStatus =>
   Object.values(StudentStatus).some((status) => status === value);
 
 const isLecturerStatus = (value: string): value is LecturerStatus =>
   Object.values(LecturerStatus).some((status) => status === value);
-
-const emptyToUndefined = (value: string | undefined): string | undefined => {
-  const trimmed = value?.trim();
-  if (!trimmed) return undefined;
-  return trimmed;
-};
 
 /** Handles business logic for the User module. */
 @Injectable()

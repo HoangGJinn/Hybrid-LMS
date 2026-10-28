@@ -7,3 +7,6 @@ export const post = async <T>(url: string, body?: unknown): Promise<T> =>
   (await apiClient.post(url, body)).data.data;
 export const patch = async <T>(url: string, body?: unknown): Promise<T> =>
   (await apiClient.patch(url, body)).data.data;
+
+export const del = async <T = void>(url: string): Promise<T> =>
+  (await apiClient.delete(url)).data.data;

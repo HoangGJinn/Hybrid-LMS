@@ -293,37 +293,4 @@ describe('ClassRepository', () => {
       expect(mockClassRepo.delete).toHaveBeenCalledWith('class-1');
     });
   });
-
-  describe('findEnrollments', () => {
-    it('lists the enrolments of the class ordered by student code', async () => {
-      const rows = [{ classId: 'class-1', studentId: 'stu-1' }];
-      mockClassStudentRepo.find.mockResolvedValue(rows);
-
-      const result = await repository.findEnrollments('class-1');
-
-      expect(mockClassStudentRepo.find).toHaveBeenCalledWith({
-        where: { classId: 'class-1' },
-        relations: { student: { user: true } },
-        order: { student: { studentCode: 'ASC' } },
-      });
-      expect(result).toBe(rows);
-    });
-  });
-
-  describe('isEnrolled', () => {
-    it('returns true when the student is enrolled', async () => {
-      mockClassStudentRepo.exists.mockResolvedValue(true);
-
-      await expect(repository.isEnrolled('class-1', 'stu-1')).resolves.toBe(true);
-      expect(mockClassStudentRepo.exists).toHaveBeenCalledWith({
-        where: { classId: 'class-1', studentId: 'stu-1' },
-      });
-    });
-
-    it('returns false when the student is not enrolled', async () => {
-      mockClassStudentRepo.exists.mockResolvedValue(false);
-
-      await expect(repository.isEnrolled('class-1', 'stu-1')).resolves.toBe(false);
-    });
-  });
 });

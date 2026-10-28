@@ -6,6 +6,7 @@ import { Semester } from './entities/semester.entity.js';
 import { Subject } from './entities/subject.entity.js';
 import { ClassRepository } from './repositories/class.repository.js';
 import { ClassStudentRepository } from './repositories/class-student.repository.js';
+import { ClassAccessPolicy } from './policies/class-access.policy.js';
 import { SubjectRepository } from './repositories/subject.repository.js';
 import { SemesterRepository } from './repositories/semester.repository.js';
 import { ClassService } from './services/class.service.js';
@@ -35,6 +36,7 @@ import { UserModule } from '../user/user.module.js';
     ClassStudentRepository,
     SubjectRepository,
     SemesterRepository,
+    ClassAccessPolicy,
     ClassService,
     ParticipantService,
     SubjectService,

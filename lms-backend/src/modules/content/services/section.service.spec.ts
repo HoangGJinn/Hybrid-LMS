@@ -6,6 +6,7 @@ import type { CreateSectionDto } from '../dto/create-section.dto.js'
 import type { SaveSectionsDto } from '../dto/save-sections.dto.js'
 import type { SectionItem } from '../entities/section-item.entity.js'
 import type { Section } from '../entities/section.entity.js'
+import { AcademicFacade } from '../../academic/facades/academic.facade.js'
 import { SectionRepository } from '../repositories/section.repository.js'
 import { SectionView } from '../types/section-view.type.js'
 import { SectionService } from './section.service.js'
@@ -21,7 +22,6 @@ function makeUser(id: string, role: Role): AuthenticatedUser {
 
 const lecturer = makeUser(LECTURER_ID, Role.LECTURER)
 const otherLecturer = makeUser('lec-2', Role.LECTURER)
-const admin = makeUser('admin-1', Role.ADMIN)
 const student = makeUser('stu-1', Role.STUDENT)
 
 const sectionRows = [
@@ -60,48 +60,40 @@ function makeSaveDto(
 
 describe('SectionService', () => {
   let repository: {
-    findClassLecturerId: Mock
     findByClassId: Mock
     findItemsBySectionIds: Mock
     findIdsOwnedByOtherClasses: Mock
     createAtEnd: Mock
     replaceAll: Mock
-    isStudentEnrolled: Mock
   }
+  let academicFacade: { assertCanViewClass: Mock; assertCanManageClass: Mock }
   let service: SectionService
 
   beforeEach(() => {
     repository = {
-      findClassLecturerId: vi.fn().mockResolvedValue(LECTURER_ID),
       findByClassId: vi.fn().mockResolvedValue(sectionRows),
       findItemsBySectionIds: vi.fn().mockResolvedValue(itemRows),
       findIdsOwnedByOtherClasses: vi.fn().mockResolvedValue([]),
       createAtEnd: vi.fn(),
       replaceAll: vi.fn().mockResolvedValue(undefined),
-      isStudentEnrolled: vi.fn().mockResolvedValue(false),
     }
-    service = new SectionService(repository as unknown as SectionRepository)
+    academicFacade = {
+      assertCanViewClass: vi.fn().mockResolvedValue(undefined),
+      assertCanManageClass: vi.fn().mockResolvedValue(undefined),
+    }
+    service = new SectionService(
+      repository as unknown as SectionRepository,
+      academicFacade as unknown as AcademicFacade,
+    )
   })
 
   describe('findByClass', () => {
-    it('returns sections with their items for the class lecturer', async () => {
+    it('checks view access, then returns sections with their items', async () => {
       const result = await service.findByClass(CLASS_ID, lecturer)
 
+      expect(academicFacade.assertCanViewClass).toHaveBeenCalledWith(CLASS_ID, lecturer)
       expect(result).toEqual(expectedViews())
       expect(repository.findItemsBySectionIds).toHaveBeenCalledWith(['sec-1', 'sec-2'])
-      expect(repository.isStudentEnrolled).not.toHaveBeenCalled()
-    })
-
-    it('allows an admin without checking enrollment', async () => {
-      await expect(service.findByClass(CLASS_ID, admin)).resolves.toEqual(expectedViews())
-      expect(repository.isStudentEnrolled).not.toHaveBeenCalled()
-    })
-
-    it('allows an enrolled student', async () => {
-      repository.isStudentEnrolled.mockResolvedValue(true)
-
-      await expect(service.findByClass(CLASS_ID, student)).resolves.toEqual(expectedViews())
-      expect(repository.isStudentEnrolled).toHaveBeenCalledWith(CLASS_ID, student.id)
     })
 
     it('returns an empty list when the class has no sections', async () => {
@@ -111,8 +103,8 @@ describe('SectionService', () => {
       await expect(service.findByClass(CLASS_ID, lecturer)).resolves.toEqual([])
     })
 
-    it('throws NotFoundException when the class does not exist', async () => {
-      repository.findClassLecturerId.mockResolvedValue(null)
+    it('propagates NotFoundException when the class does not exist', async () => {
+      academicFacade.assertCanViewClass.mockRejectedValue(new NotFoundException())
 
       await expect(service.findByClass(CLASS_ID, lecturer)).rejects.toBeInstanceOf(
         NotFoundException,
@@ -120,36 +112,32 @@ describe('SectionService', () => {
       expect(repository.findByClassId).not.toHaveBeenCalled()
     })
 
-    it('throws ForbiddenException for a student who is not enrolled', async () => {
+    it('propagates ForbiddenException when the user has no access to the class', async () => {
+      academicFacade.assertCanViewClass.mockRejectedValue(new ForbiddenException())
+
       await expect(service.findByClass(CLASS_ID, student)).rejects.toBeInstanceOf(
         ForbiddenException,
       )
       expect(repository.findByClassId).not.toHaveBeenCalled()
-    })
-
-    it('throws ForbiddenException for a lecturer of another class', async () => {
-      await expect(service.findByClass(CLASS_ID, otherLecturer)).rejects.toBeInstanceOf(
-        ForbiddenException,
-      )
-      expect(repository.isStudentEnrolled).not.toHaveBeenCalled()
     })
   })
 
   describe('create', () => {
     const dto = { title: 'Week 3' } as unknown as CreateSectionDto
 
-    it('appends a section and returns its view', async () => {
+    it('checks manage access, appends a section and returns its view', async () => {
       const created = { id: 'sec-3', classId: CLASS_ID, title: 'Week 3', orderIndex: 3 }
       repository.createAtEnd.mockResolvedValue(created)
 
       const result = await service.create(CLASS_ID, dto, lecturer)
 
+      expect(academicFacade.assertCanManageClass).toHaveBeenCalledWith(CLASS_ID, lecturer)
       expect(repository.createAtEnd).toHaveBeenCalledWith(CLASS_ID, 'Week 3')
       expect(result).toEqual(SectionView.fromEntity(created as unknown as Section))
     })
 
-    it('throws NotFoundException when the class does not exist', async () => {
-      repository.findClassLecturerId.mockResolvedValue(null)
+    it('propagates NotFoundException when the class does not exist', async () => {
+      academicFacade.assertCanManageClass.mockRejectedValue(new NotFoundException())
 
       await expect(service.create(CLASS_ID, dto, lecturer)).rejects.toBeInstanceOf(
         NotFoundException,
@@ -157,17 +145,13 @@ describe('SectionService', () => {
       expect(repository.createAtEnd).not.toHaveBeenCalled()
     })
 
-    it('throws ForbiddenException when the user does not teach the class', async () => {
+    it('propagates ForbiddenException when the user cannot manage the class', async () => {
+      academicFacade.assertCanManageClass.mockRejectedValue(new ForbiddenException())
+
       await expect(service.create(CLASS_ID, dto, otherLecturer)).rejects.toBeInstanceOf(
         ForbiddenException,
       )
       expect(repository.createAtEnd).not.toHaveBeenCalled()
-    })
-
-    it('does not let an admin who is not the lecturer edit the class', async () => {
-      await expect(service.create(CLASS_ID, dto, admin)).rejects.toBeInstanceOf(
-        ForbiddenException,
-      )
     })
   })
 
@@ -189,8 +173,8 @@ describe('SectionService', () => {
       expect(result).toEqual(expectedViews())
     })
 
-    it('throws NotFoundException when the class does not exist', async () => {
-      repository.findClassLecturerId.mockResolvedValue(null)
+    it('propagates NotFoundException when the class does not exist', async () => {
+      academicFacade.assertCanManageClass.mockRejectedValue(new NotFoundException())
 
       await expect(service.saveAll(CLASS_ID, dto, lecturer)).rejects.toBeInstanceOf(
         NotFoundException,
@@ -198,7 +182,9 @@ describe('SectionService', () => {
       expect(repository.replaceAll).not.toHaveBeenCalled()
     })
 
-    it('throws ForbiddenException when the user does not teach the class', async () => {
+    it('propagates ForbiddenException when the user cannot manage the class', async () => {
+      academicFacade.assertCanManageClass.mockRejectedValue(new ForbiddenException())
+
       await expect(service.saveAll(CLASS_ID, dto, student)).rejects.toBeInstanceOf(
         ForbiddenException,
       )

@@ -1,68 +1,103 @@
 import { useState } from 'react';
 import { useParams } from 'react-router';
-import { Search, UserPlus } from 'lucide-react';
+import { Download, Search, Upload, UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
+import { getErrorMessage } from '@core/api/errors';
 import { AsyncView } from '@shared/components/AsyncView';
 import { EmptyState } from '@shared/components/EmptyState';
 import { Button } from '@shared/components/ui/button';
 import { Input } from '@shared/components/ui/input';
+import { downloadCsv } from '@shared/utils/download';
 import { toAsyncState } from '@shared/utils/async-state';
+import { useCourse } from '@features/courses';
+import { participantManagementService } from '../api/participant-management.service';
 import { AddParticipantsPanel } from '../components/AddParticipantsPanel';
 import { AlphabetFilter } from '../components/AlphabetFilter';
-import { RosterTable } from '../components/RosterTable';
-import { useRemoveParticipant } from '../hooks/useRemoveParticipant';
-import { useRoster } from '../hooks/useRoster';
-import type { RosterStudent } from '../types/participants.types';
+import { ImportParticipantsModal } from '../components/ImportParticipantsModal';
+import { ParticipantTable } from '../components/ParticipantTable';
+import { RemoveParticipantConfirm } from '../components/RemoveParticipantConfirm';
+import { useParticipants } from '../hooks/useParticipants';
+import type { ParticipantView } from '../types/participant-management.types';
 import {
   EMPTY_FILTERS,
-  filterRoster,
-  type RosterFilters,
-  type StatusFilter,
-} from '../utils/roster-filter';
+  filterParticipants,
+  isFiltered,
+  type ParticipantFilters,
+} from '../utils/participant-filter';
+import { buildParticipantsCsv, participantsFileName } from '../utils/participant-csv';
 
-const STATUS_OPTIONS: { value: StatusFilter; label: string }[] = [
-  { value: 'all', label: 'All statuses' },
-  { value: 'at-risk', label: 'At risk' },
-  { value: 'on-track', label: 'On track' },
-];
-
-const isStatusFilter = (value: string): value is StatusFilter =>
-  STATUS_OPTIONS.some((option) => option.value === value);
-
-/** Members tab of a lecturer's class: enrolled students with filters, performance, add and remove. */
+/** Members tab of a lecturer's class: enrolled students (from `/participants`) with search, letter filters, add and remove. */
 const CourseMembersPage = () => {
   const { courseId = '' } = useParams();
-  const roster = toAsyncState(useRoster(courseId));
-  const removeParticipant = useRemoveParticipant(courseId);
-  const [filters, setFilters] = useState<RosterFilters>(EMPTY_FILTERS);
+  const course = useCourse(courseId).data;
+  const participants = toAsyncState(useParticipants(courseId));
+  const [filters, setFilters] = useState<ParticipantFilters>(EMPTY_FILTERS);
   const [isAdding, setIsAdding] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [removing, setRemoving] = useState<ParticipantView | null>(null);
 
-  const setFilter = <K extends keyof RosterFilters>(key: K, value: RosterFilters[K]) =>
-    setFilters((prev) => ({ ...prev, [key]: value }));
-  const isFiltered =
-    filters.query !== '' ||
-    filters.status !== 'all' ||
-    filters.given !== '' ||
-    filters.family !== '';
+  // Participants are frozen once the class has ended: the server answers 409, so the UI hides the controls.
+  // `isActive` is optional on the type (mock data), so only an explicit `false` counts as ended.
+  const canChange = course?.isActive !== false;
+  const classCode = course?.classCode ?? '';
 
-  const handleRemove = (student: RosterStudent) => {
-    if (!window.confirm(`Remove ${student.fullName} from this class?`)) return;
-    removeParticipant.mutate(student.id, {
-      onSuccess: () => toast.success(`${student.fullName} removed`),
-      onError: (error) => toast.error(error.message),
-    });
+  const setFilter = <K extends keyof ParticipantFilters>(
+    key: K,
+    value: ParticipantFilters[K],
+  ) => setFilters((prev) => ({ ...prev, [key]: value }));
+
+  /** Exports the whole class, not just the rows that match the filters. */
+  const handleExport = async () => {
+    setIsExporting(true);
+    try {
+      const all = await participantManagementService.getParticipants(courseId);
+      if (all.length === 0) {
+        toast.info('There are no participants to export.');
+        return;
+      }
+      downloadCsv(buildParticipantsCsv(all), participantsFileName(classCode || courseId));
+      toast.success(`Exported ${all.length} participant${all.length === 1 ? '' : 's'}.`);
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="m-0 text-2xl font-semibold">Enrolled users</h2>
-        <Button onClick={() => setIsAdding(true)} disabled={isAdding}>
-          <UserPlus className="mr-2 h-4 w-4" />
-          Add participants
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => void handleExport()} disabled={isExporting}>
+            <Download className="mr-2 h-4 w-4" />
+            {isExporting ? 'Exporting…' : 'Export'}
+          </Button>
+          {canChange && (
+            <>
+              <Button variant="outline" onClick={() => setIsImporting(true)}>
+                <Upload className="mr-2 h-4 w-4" />
+                Import
+              </Button>
+              <Button onClick={() => setIsAdding(true)} disabled={isAdding}>
+                <UserPlus className="mr-2 h-4 w-4" />
+                Add participants
+              </Button>
+            </>
+          )}
+        </div>
       </div>
-      {isAdding && (
+      {!canChange && (
+        <p
+          role="status"
+          className="m-0 rounded-md border bg-muted px-3 py-2 text-sm text-muted-foreground"
+        >
+          This class has ended. Its participants can still be viewed and exported, but no
+          longer changed.
+        </p>
+      )}
+      {canChange && isAdding && (
         <AddParticipantsPanel classId={courseId} onClose={() => setIsAdding(false)} />
       )}
 
@@ -80,37 +115,31 @@ const CourseMembersPage = () => {
             onChange={(event) => setFilter('query', event.target.value)}
           />
         </div>
-        <select
-          aria-label="Filter by status"
-          value={filters.status}
-          onChange={(event) => {
-            if (isStatusFilter(event.target.value)) setFilter('status', event.target.value);
-          }}
-          className="h-9 rounded-md border bg-card px-3 text-sm"
+        <Button
+          variant="outline"
+          disabled={!isFiltered(filters)}
+          onClick={() => setFilters(EMPTY_FILTERS)}
         >
-          {STATUS_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-        <Button variant="outline" disabled={!isFiltered} onClick={() => setFilters(EMPTY_FILTERS)}>
           Clear filters
         </Button>
       </div>
 
       <AsyncView
-        state={roster}
+        state={participants}
         isEmpty={(rows) => rows.length === 0}
         empty={
           <EmptyState
             title="No students yet"
-            description="Use “Add participants” to enroll the first student."
+            description={
+              canChange
+                ? 'Use “Add participants” or Import to enroll the first students.'
+                : 'Nobody was enrolled in this class.'
+            }
           />
         }
       >
         {(all) => {
-          const list = filterRoster(all, filters);
+          const list = filterParticipants(all, filters);
           return (
             <div className="space-y-4">
               <p className="m-0 text-sm text-muted-foreground">
@@ -129,16 +158,27 @@ const CourseMembersPage = () => {
               {list.length === 0 ? (
                 <EmptyState title="No participants match" />
               ) : (
-                <RosterTable
-                  students={list}
-                  onRemove={handleRemove}
-                  pendingId={removeParticipant.isPending ? (removeParticipant.variables ?? null) : null}
+                <ParticipantTable
+                  participants={list}
+                  onRemove={canChange ? setRemoving : undefined}
                 />
               )}
             </div>
           );
         }}
       </AsyncView>
+      <ImportParticipantsModal
+        open={isImporting}
+        classId={courseId}
+        classCode={classCode}
+        onClose={() => setIsImporting(false)}
+      />
+      <RemoveParticipantConfirm
+        participant={removing}
+        classId={courseId}
+        classCode={classCode}
+        onClose={() => setRemoving(null)}
+      />
     </div>
   );
 };

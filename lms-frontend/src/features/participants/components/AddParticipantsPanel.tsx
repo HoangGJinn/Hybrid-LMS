@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { Search } from 'lucide-react';
 import { toast } from 'sonner';
+import { getErrorMessage } from '@core/api/errors';
 import { Button } from '@shared/components/ui/button';
 import { Input } from '@shared/components/ui/input';
 import { useAddParticipant } from '../hooks/useAddParticipant';
 import { useCandidates } from '../hooks/useCandidates';
-import { useDebouncedValue } from '../hooks/useDebouncedValue';
+import { useDebouncedValue } from '@shared/hooks/useDebouncedValue';
 import { cn } from '@shared/utils/cn';
 
 const SEARCH_DEBOUNCE_MS = 300;
@@ -41,7 +42,7 @@ export const AddParticipantsPanel = ({
         );
         setSelected([]);
       },
-      onError: (error) => toast.error(error.message),
+      onError: (error) => toast.error(getErrorMessage(error)),
     });
 
   return (

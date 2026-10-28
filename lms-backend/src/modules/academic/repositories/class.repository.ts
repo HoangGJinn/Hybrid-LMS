@@ -125,16 +125,4 @@ export class ClassRepository {
   async delete(id: string): Promise<void> {
     await this.classRepo.delete(id);
   }
-
-  async findEnrollments(classId: string): Promise<ClassStudent[]> {
-    return this.classStudentRepo.find({
-      where: { classId },
-      relations: { student: { user: true } },
-      order: { student: { studentCode: 'ASC' } },
-    });
-  }
-
-  async isEnrolled(classId: string, studentId: string): Promise<boolean> {
-    return this.classStudentRepo.exists({ where: { classId, studentId } });
-  }
 }

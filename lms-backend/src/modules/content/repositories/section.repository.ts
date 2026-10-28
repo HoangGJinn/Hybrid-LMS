@@ -1,11 +1,10 @@
 import { Injectable } from '@nestjs/common'
 import { InjectRepository } from '@nestjs/typeorm'
 import { EntityManager, In, Not, Repository } from 'typeorm'
-import { Class } from '../../academic/entities/class.entity.js'
 import type { SaveSectionDto } from '../dto/save-section.dto.js'
 import { SectionItem } from '../entities/section-item.entity.js'
 import { Section } from '../entities/section.entity.js'
-import { ClassStudent } from '../../academic/entities/class-student.entity.js'
+import { emptyToNull } from '../../../common/utils/string.util.js'
 
 /** All TypeORM access for sections and their items. */
 @Injectable()
@@ -15,18 +14,7 @@ export class SectionRepository {
     private readonly sectionOrmRepository: Repository<Section>,
     @InjectRepository(SectionItem)
     private readonly itemOrmRepository: Repository<SectionItem>,
-    @InjectRepository(Class)
-    private readonly classOrmRepository: Repository<Class>,
   ) {}
-
-  /** Returns the lecturer id that teaches the class, or null when the class does not exist. */
-  async findClassLecturerId(classId: string): Promise<string | null> {
-    const found = await this.classOrmRepository.findOne({
-      where: { id: classId },
-      select: { id: true, lecturerId: true },
-    })
-    return found?.lecturerId ?? null
-  }
 
   /** Lists the sections of a class in display order. */
   async findByClassId(classId: string): Promise<Section[]> {
@@ -145,7 +133,7 @@ export class SectionRepository {
       id,
       classId,
       title,
-      description: description?.trim() || null,
+      description: emptyToNull(description),
       orderIndex,
     }))
     await manager.upsert(Section, rows, ['id'])
@@ -169,12 +157,5 @@ export class SectionRepository {
     )
     if (rows.length === 0) return
     await manager.upsert(SectionItem, rows, ['id'])
-  }
-
-  /** Returns true when the student is enrolled in the class. */
-  async isStudentEnrolled(classId: string, studentId: string): Promise<boolean> {
-    return this.sectionOrmRepository.manager.exists(ClassStudent, {
-      where: { classId, studentId },
-    })
   }
 }
