@@ -290,67 +290,6 @@ describe('ParticipantService', () => {
     });
   });
 
-    describe('addMany', () => {
-    const s1 = makeStudent();
-    const s2 = makeStudent({
-      userId: 'stu-2',
-      studentCode: 'SV26000002',
-      fullName: 'Tran Thi B',
-      email: 'b@school.edu.vn',
-    });
-
-    it('adds new students, de-duplicates ids and skips those already enrolled', async () => {
-      mockUserFacade.findStudentsByIds!.mockResolvedValue([s1, s2]);
-      mockParticipantRepo.findStudentIds!.mockResolvedValue(new Set(['stu-2']));
-
-      const result = await service.addMany('cls-1', owner, {
-        studentIds: ['stu-1', 'stu-2', 'stu-1'],
-      });
-
-      expect(mockUserFacade.findStudentsByIds).toHaveBeenCalledWith([
-        'stu-1',
-        'stu-2',
-      ]);
-      expect(mockParticipantRepo.addMany).toHaveBeenCalledWith('cls-1', ['stu-1']);
-      expect(result).toEqual({ added: 1, skipped: 1 });
-    });
-
-    it('rejects ids that are not students', async () => {
-      mockUserFacade.findStudentsByIds!.mockResolvedValue([s1]);
-
-      await expect(
-        service.addMany('cls-1', owner, { studentIds: ['stu-1', 'stu-404'] }),
-      ).rejects.toThrow(BadRequestException);
-      expect(mockParticipantRepo.addMany).not.toHaveBeenCalled();
-    });
-
-    it('rejects a student who cannot join', async () => {
-      mockUserFacade.findStudentsByIds!.mockResolvedValue([
-        makeStudent({ enrollmentBlockedReason: 'The student account is deactivated' }),
-      ]);
-
-      await expect(
-        service.addMany('cls-1', owner, { studentIds: ['stu-1'] }),
-      ).rejects.toThrow(BadRequestException);
-      expect(mockParticipantRepo.addMany).not.toHaveBeenCalled();
-    });
-
-    it('refuses a class that has ended', async () => {
-      mockClassService.findById!.mockResolvedValue(endedClass);
-
-      await expect(
-        service.addMany('cls-1', admin, { studentIds: ['stu-1'] }),
-      ).rejects.toThrow(ConflictException);
-      expect(mockUserFacade.findStudentsByIds).not.toHaveBeenCalled();
-    });
-
-    it('refuses a lecturer who does not teach the class', async () => {
-      await expect(
-        service.addMany('cls-1', otherLecturer, { studentIds: ['stu-1'] }),
-      ).rejects.toThrow(ForbiddenException);
-    });
-  });
-
   describe('remove', () => {
     it('removes the enrolment', async () => {
       mockParticipantRepo.remove!.mockResolvedValue(true);

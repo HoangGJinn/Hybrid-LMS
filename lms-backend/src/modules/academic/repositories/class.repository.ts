@@ -126,7 +126,7 @@ export class ClassRepository {
     await this.classRepo.delete(id);
   }
 
-    async findEnrollments(classId: string): Promise<ClassStudent[]> {
+  async findEnrollments(classId: string): Promise<ClassStudent[]> {
     return this.classStudentRepo.find({
       where: { classId },
       relations: { student: { user: true } },

@@ -8,6 +8,7 @@ const createMockSection = (classId: string, title: string): Promise<Section> =>
     id: crypto.randomUUID(),
     classId,
     title,
+    description : null,
     orderIndex: 0,
     items: [],
   })

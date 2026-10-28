@@ -135,6 +135,7 @@ const CourseEditorPage = () => {
                   onToggle={() => handleToggleSection(sec.id)}
                   onToggleAll={() => handleToggleAll(sections)}
                   onTitleChange={(title) => update(sec.id, { title })}
+                  onDescriptionChange={(description) => update(sec.id, { description })}
                   onItemsChange={(items) => update(sec.id, { items })}
                   onAddItem={(type) => addItem(sec, type)}
                   onMoveUp={() => setSections((s) => moveItem(s, i, -1))}

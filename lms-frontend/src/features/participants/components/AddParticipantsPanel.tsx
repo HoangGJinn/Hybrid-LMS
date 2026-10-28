@@ -6,6 +6,7 @@ import { Input } from '@shared/components/ui/input';
 import { useAddParticipant } from '../hooks/useAddParticipant';
 import { useCandidates } from '../hooks/useCandidates';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
+import { cn } from '@shared/utils/cn';
 
 const SEARCH_DEBOUNCE_MS = 300;
 
@@ -65,25 +66,34 @@ export const AddParticipantsPanel = ({
           </p>
         ) : (
           <ul className="m-0 list-none divide-y p-0">
-            {list.map((student) => (
-              <li key={student.id}>
-                <label className="flex cursor-pointer items-center gap-3 px-3 py-2 hover:bg-muted/40">
-                  <input
-                    type="checkbox"
-                    checked={selected.includes(student.id)}
-                    onChange={() => handleToggle(student.id)}
-                  />
-                  <span className="min-w-0">
-                    <span className="block truncate text-sm font-medium">
-                      {student.fullName}
-                    </span>
-                    <span className="block truncate text-xs text-muted-foreground">
-                      {student.studentCode} · {student.email}
-                    </span>
+          {list.map((student) => (
+            <li key={student.studentId}>
+              <label
+                className={cn(
+                  'flex items-center gap-3 px-3 py-2',
+                  student.alreadyInClass
+                    ? 'cursor-not-allowed opacity-50'
+                    : 'cursor-pointer hover:bg-muted/40',
+                )}
+              >
+                <input
+                  type="checkbox"
+                  disabled={student.alreadyInClass}
+                  checked={selected.includes(student.studentId)}
+                  onChange={() => handleToggle(student.studentId)}
+                />
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-medium">
+                    {student.fullName}
+                    {student.alreadyInClass && ' (already in class)'}
                   </span>
-                </label>
-              </li>
-            ))}
+                  <span className="block truncate text-xs text-muted-foreground">
+                    {student.studentCode} · {student.email}
+                  </span>
+                </span>
+              </label>
+            </li>
+          ))}
           </ul>
         )}
       </div>

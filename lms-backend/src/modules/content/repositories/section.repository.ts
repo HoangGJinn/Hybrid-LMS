@@ -141,10 +141,11 @@ export class SectionRepository {
     sections: readonly SaveSectionDto[],
   ): Promise<void> {
     if (sections.length === 0) return
-    const rows = sections.map(({ id, title, orderIndex }) => ({
+    const rows = sections.map(({ id, title, description, orderIndex }) => ({
       id,
       classId,
       title,
+      description: description?.trim() || null,
       orderIndex,
     }))
     await manager.upsert(Section, rows, ['id'])

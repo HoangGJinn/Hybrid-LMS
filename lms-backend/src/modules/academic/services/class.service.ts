@@ -17,7 +17,6 @@ import { Role } from '../../../common/enums/role.enum.js';
 import { ClassmateView } from '../types/classmate-view.type.js';
 import { RosterStudentView } from '../types/roster-student-view.type.js';
 import { AuthenticatedUser } from '../../../common/types/authenticated-user.type.js';
-
 @Injectable()
 export class ClassService {
   constructor(
@@ -166,7 +165,7 @@ export class ClassService {
     return this.deactivate(id);
   }
 
-    /** Admin: any class. Lecturer: only their own class. Student: only a class they are enrolled in. */
+  /** Admin: any class. Lecturer: only their own class. Student: only a class they are enrolled in. */
   private async assertCanViewMembers(
     cls: Class,
     user: AuthenticatedUser,

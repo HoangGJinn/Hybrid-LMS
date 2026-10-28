@@ -21,7 +21,6 @@ describe('ParticipantController', () => {
       list: vi.fn().mockResolvedValue([]),
       searchCandidates: vi.fn().mockResolvedValue([]),
       add: vi.fn(),
-      addMany: vi.fn().mockResolvedValue({ added: 2, skipped: 0 }),
       importParticipants: vi.fn(),
       remove: vi.fn().mockResolvedValue(undefined),
     };
@@ -53,17 +52,6 @@ describe('ParticipantController', () => {
     expect(mockService.add).toHaveBeenCalledWith('cls-1', user, {
       studentId: 'stu-1',
     });
-  });
-
-  it('adds several participants at once', async () => {
-    const dto = { studentIds: ['stu-1', 'stu-2'] };
-
-    await expect(controller.addMany('cls-1', user, dto)).resolves.toEqual({
-      added: 2,
-      skipped: 0,
-    });
-
-    expect(mockService.addMany).toHaveBeenCalledWith('cls-1', user, dto);
   });
 
   it('imports participants', async () => {

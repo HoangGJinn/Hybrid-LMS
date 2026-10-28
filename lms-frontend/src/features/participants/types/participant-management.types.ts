@@ -16,12 +16,15 @@
 //   email: string
 // }
 
-/** A student who can still be added to a class. */
+/** A student who can be picked in the "Add participants" dialog. */
 export interface StudentCandidate {
-  id: string
+  /** `user.id` of the student (UUID). */
+  studentId: string
   studentCode: string
   fullName: string
   email: string
+  /** true = already in the class; shown but not selectable. */
+  alreadyInClass: boolean
 }
 
 export interface AddParticipantsResult {

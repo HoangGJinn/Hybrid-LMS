@@ -18,15 +18,18 @@ import { SubjectController } from './controllers/subject.controller.js';
 import { SemesterController } from './controllers/semester.controller.js';
 import { AcademicFacade } from './facades/academic.facade.js';
 import { UserModule } from '../user/user.module.js';
-import { ParticipantRepository } from './repositories/participant.repository.js';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([ClassStudent, Class, Semester, Subject]),
     UserModule,
   ],
-  controllers: [ClassController, SubjectController, SemesterController, ParticipantController],
-
+  controllers: [
+    ClassController,
+    ParticipantController,
+    SubjectController,
+    SemesterController,
+  ],
   providers: [
     ClassRepository,
     ClassStudentRepository,
@@ -37,8 +40,6 @@ import { ParticipantRepository } from './repositories/participant.repository.js'
     SubjectService,
     SemesterService,
     AcademicFacade,
-    ParticipantRepository, 
-    ParticipantService,
   ],
   exports: [AcademicFacade],
 })

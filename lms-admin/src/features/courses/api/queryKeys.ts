@@ -8,8 +8,4 @@ export const courseKeys = {
   subjects: () => [...courseKeys.all, 'subjects'] as const,
   semesters: () => [...courseKeys.all, 'semesters'] as const,
   lecturers: () => [...courseKeys.all, 'lecturers'] as const,
-    classStudents: (classId: string) =>
-    [...courseKeys.all, 'class-students', classId] as const,
-  availableStudents: (classId: string, search = '') =>
-    [...courseKeys.classStudents(classId), 'available', search] as const,
 };

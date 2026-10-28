@@ -51,6 +51,7 @@ export interface Section {
   id: string;
   classId: string;
   title: string;
+  description: string | null;
   orderIndex: number;
   items: SectionItem[];
 }

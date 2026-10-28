@@ -7,6 +7,7 @@ export class SectionView {
   readonly id: string
   readonly classId: string
   readonly title: string
+  readonly description: string | null
   readonly orderIndex: number
   readonly items: readonly SectionItemView[]
 
@@ -14,6 +15,7 @@ export class SectionView {
     this.id = entity.id
     this.classId = entity.classId
     this.title = entity.title
+    this.description = entity.description
     this.orderIndex = entity.orderIndex
     this.items = items.map((item) => SectionItemView.fromEntity(item))
   }

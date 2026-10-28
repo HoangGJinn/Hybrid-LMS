@@ -31,6 +31,7 @@ interface SectionCardProps {
   onToggle: () => void
   onToggleAll: () => void
   onTitleChange: (title: string) => void
+  onDescriptionChange: (description: string) => void
   onItemsChange: (items: SectionItem[]) => void
   onAddItem: (itemType: ItemType) => void
   onMoveUp: () => void
@@ -47,6 +48,7 @@ export const SectionCard = ({
   onToggle,
   onToggleAll,
   onTitleChange,
+  onDescriptionChange,
   onItemsChange,
   onAddItem,
   onMoveUp,
@@ -54,7 +56,8 @@ export const SectionCard = ({
   onDelete,
 }: SectionCardProps) => {
   const items = section.items
-  const hasBody = isOpen && (items.length > 0 || isEditing)
+  const hasDescription = Boolean(section.description?.trim())
+  const hasBody = isOpen && (items.length > 0 || isEditing || hasDescription)
   return (
     <div className="rounded-2xl border bg-card">
       <div
@@ -107,6 +110,24 @@ export const SectionCard = ({
           </button>
         )}
       </div>
+      {isOpen && (isEditing || hasDescription) && (
+      <div className="mx-5 pt-4">
+        {isEditing ? (
+          <textarea
+            aria-label="Section description"
+            placeholder="Section description (optional)"
+            rows={4}
+            value={section.description ?? ''}
+            onChange={(e) => onDescriptionChange(e.target.value)}
+            className="w-full rounded-md border bg-background p-3 text-sm"
+          />
+        ) : (
+          <p className="m-0 whitespace-pre-line text-sm text-muted-foreground">
+            {section.description}
+          </p>
+        )}
+      </div>
+    )}
       {hasBody && (
         <ul className="m-0 list-none space-y-1 px-5 py-4">
           {items.map((item, index) => {

@@ -5,6 +5,7 @@ export const toSectionsPayload = (sections: Section[]) =>
   sections.map((section, sectionIndex) => ({
     id: section.id,
     title: section.title,
+    description: section.description,
     orderIndex: sectionIndex,
     items: section.items.map((item, itemIndex) => ({
       id: item.id,

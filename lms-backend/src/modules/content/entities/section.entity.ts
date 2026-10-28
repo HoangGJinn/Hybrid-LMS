@@ -22,6 +22,9 @@ export class Section {
   @Column({ length: 255 })
   title: string;
 
+  @Column({ type: 'text', nullable: true })
+  description: string | null;
+
   @Column({ name: 'order_index', type: 'int' })
   orderIndex: number;
 }
