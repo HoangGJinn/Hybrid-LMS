@@ -1,6 +1,7 @@
 export { AcademicModule } from './academic.module.js';
 export { AcademicFacade } from './facades/academic.facade.js';
 export { ClassView } from './types/class-view.type.js';
+export { ParticipantView } from './types/participant-view.type.js';
 export { SubjectView } from './types/subject-view.type.js';
 export { SemesterView } from './types/semester-view.type.js';
 export { CreateClassDto } from './dto/create-class.dto.js';

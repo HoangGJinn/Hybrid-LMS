@@ -11,7 +11,7 @@ export class ClassRepository {
     private readonly classRepo: Repository<Class>,
     @InjectRepository(ClassStudent)
     private readonly classStudentRepo: Repository<ClassStudent>,
-  ) {}
+  ) { }
 
   async create(data: Partial<Class>): Promise<Class> {
     const entity = this.classRepo.create(data);
@@ -96,7 +96,7 @@ export class ClassRepository {
     });
     return enrollments
       .map((e) => e.class)
-      .filter((c): c is Class => Boolean(c && c.isActive));
+      .filter((c): c is Class => Boolean(c?.isActive));
   }
 
   async countStudents(classId: string): Promise<number> {
