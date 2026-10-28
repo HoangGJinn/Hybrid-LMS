@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link, useNavigate } from 'react-router';
 import { Archive, Pencil, Plus, Search } from 'lucide-react';
 import { PageHeader } from '@/shared/components/PageHeader';
 import { AsyncView } from '@/shared/components/AsyncView';
@@ -30,6 +31,7 @@ const isStatusFilter = (value: string): value is ClassStatusFilter =>
   STATUS_OPTIONS.some((option) => option.value === value);
 
 const CoursesPage = () => {
+  const navigate = useNavigate();
   const [searchInput, setSearchInput] = useState('');
   const [semesterId, setSemesterId] = useState('');
   const [status, setStatus] = useState<ClassStatusFilter>('active');
@@ -62,7 +64,14 @@ const CoursesPage = () => {
     {
       key: 'classCode',
       header: 'Code',
-      render: (item) => <span className="font-semibold">{item.classCode}</span>,
+      render: (item) => (
+        <Link
+          to={`/courses/${item.id}`}
+          className="font-semibold text-foreground no-underline hover:text-brand hover:underline"
+        >
+          {item.classCode}
+        </Link>
+      ),
     },
     {
       key: 'name',
@@ -116,7 +125,10 @@ const CoursesPage = () => {
             size="icon"
             aria-label={`Edit ${item.classCode}`}
             title="Edit"
-            onClick={() => openEdit(item)}
+            onClick={(event) => {
+              event.stopPropagation();
+              openEdit(item);
+            }}
           >
             <Pencil className="h-4 w-4" />
           </Button>
@@ -126,7 +138,10 @@ const CoursesPage = () => {
               size="icon"
               aria-label={`Deactivate ${item.classCode}`}
               title="Deactivate"
-              onClick={() => setDeactivating(item)}
+              onClick={(event) => {
+                event.stopPropagation();
+                setDeactivating(item);
+              }}
             >
               <Archive className="h-4 w-4" />
             </Button>
@@ -221,6 +236,7 @@ const CoursesPage = () => {
                 columns={columns}
                 data={pageRows}
                 keyExtractor={(item) => item.id}
+                onRowClick={(item) => navigate(`/courses/${item.id}`)}
               />
               <Pagination
                 page={currentPage}
