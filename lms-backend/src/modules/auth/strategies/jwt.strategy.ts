@@ -32,7 +32,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
         if (error instanceof NotFoundException) return null;
         throw error;
       });
-    if (!user || !user.isActive) throw new UnauthorizedException();
+    if (!user?.isActive) throw new UnauthorizedException();
     return {
       id: user.id,
       email: user.email,

@@ -9,10 +9,11 @@ import { User } from '../entities/user.entity.js';
 import {
   UserRepository,
   UserUpdateData,
-  isForeignKeyViolation,
+} from '../repositories/user.repository.js';
+import {
   isUniqueViolation,
   uniqueViolationField,
-} from '../repositories/user.repository.js';
+} from '../../../common/utils/pg-error.util.js';
 import { CreateUserDto } from '../dto/create-user.dto.js';
 import {
   CreateManagedUserDto,
@@ -24,6 +25,7 @@ import { LecturerStatus } from '../enums/lecturer-status.enum.js';
 import { StudentStatus } from '../enums/student-status.enum.js';
 import { GoogleAccountData } from '../types/google-account-data.type.js';
 import { ManagedUserView } from '../types/managed-user-view.type.js';
+import { StudentSummary } from '../types/student-summary.type.js';
 import { deriveDisplayName } from '../utils/display-name.util.js';
 import { profilePrefixFor } from '../utils/profile-code.util.js';
 import { PaginatedResult } from '../../../common/types/paginated-result.type.js';
@@ -35,10 +37,16 @@ const isStudentStatus = (value: string): value is StudentStatus =>
 const isLecturerStatus = (value: string): value is LecturerStatus =>
   Object.values(LecturerStatus).some((status) => status === value);
 
+const emptyToUndefined = (value: string | undefined): string | undefined => {
+  const trimmed = value?.trim();
+  if (!trimmed) return undefined;
+  return trimmed;
+};
+
 /** Handles business logic for the User module. */
 @Injectable()
 export class UserService {
-  constructor(private readonly userRepository: UserRepository) {}
+  constructor(private readonly userRepository: UserRepository) { }
 
   /**
    * Creates the account of someone signing in for the first time. Two parallel first logins of the
@@ -138,12 +146,13 @@ export class UserService {
   async listUsers(
     query: ListUsersQueryDto,
   ): Promise<PaginatedResult<ManagedUserView>> {
+    const search = emptyToUndefined(query.search);
     const [users, total] = await this.userRepository.findPage({
       role: query.role,
       isActive: query.isActive,
       hasLoggedIn: query.hasLoggedIn,
       status: query.status,
-      search: query.search || undefined,
+      search,
       sort: query.sort,
       page: query.page,
       limit: query.limit,
@@ -161,24 +170,48 @@ export class UserService {
     return this.toManagedView(await this.getUserById(id));
   }
 
+  /** Students by user id (unknown ids are simply missing from the result). */
+  async findStudentsByIds(ids: string[]): Promise<StudentSummary[]> {
+    const students = await this.userRepository.findStudentsByIds(ids);
+    return students.map((s) => StudentSummary.fromEntity(s));
+  }
+
+  async findStudentsByCodes(codes: string[]): Promise<StudentSummary[]> {
+    const students = await this.userRepository.findStudentsByCodes(codes);
+    return students.map((s) => StudentSummary.fromEntity(s));
+  }
+
+  async findStudentsByEmails(emails: string[]): Promise<StudentSummary[]> {
+    const students = await this.userRepository.findStudentsByEmails(emails);
+    return students.map((s) => StudentSummary.fromEntity(s));
+  }
+
+  /** Students who can still be added to a class (active account, status STUDYING). */
+  async searchEnrollableStudents(
+    search: string | undefined,
+    limit: number,
+  ): Promise<StudentSummary[]> {
+    const students = await this.userRepository.searchEnrollableStudents(
+      search,
+      limit,
+    );
+    return students.map((s) => StudentSummary.fromEntity(s));
+  }
+
   /**
-   * Admin: edits name, email (only before the first Google login), role (student <-> lecturer)
-   * and profile status. The profile code is permanent (a role change generates a new one).
+   * Admin: edits name, email (only before the first Google login) and profile status.
+   * The role and profile code are permanent.
    */
   async updateUser(id: string, dto: UpdateUserDto): Promise<ManagedUserView> {
     const user = await this.getUserById(id);
     this.assertManageable(user);
     await this.assertEmailChangeAllowed(user, dto.email);
 
-    const roleChange =
-      dto.role !== undefined && dto.role !== user.role ? dto.role : undefined;
     const data: UserUpdateData = {
       fullName:
         dto.fullName ?? this.placeholderNameAfterEmailChange(user, dto.email),
       email: dto.email,
-      role: roleChange,
-      // A status is checked against the role the account will have after the update.
-      ...this.resolveStatus(roleChange ?? user.role, dto.status),
+      ...this.resolveStatus(user.role, dto.status),
     };
     try {
       return await this.toManagedView(
@@ -190,11 +223,6 @@ export class UserService {
           message: 'Email is already in use',
           field: 'email',
         });
-      }
-      if (roleChange !== undefined && isForeignKeyViolation(error)) {
-        throw new ConflictException(
-          'The role cannot be changed: this account already has classes, exams or other records tied to its current role',
-        );
       }
       throw error;
     }

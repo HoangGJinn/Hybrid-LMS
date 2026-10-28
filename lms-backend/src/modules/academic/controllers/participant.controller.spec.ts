@@ -1,58 +1,88 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { AuthenticatedUser } from '../../../common/types/authenticated-user.type.js'
-import { AddParticipantsDto } from '../dto/add-participants.dto.js'
-import { ParticipantService } from '../services/participant.service.js'
-import { ParticipantController } from './participant.controller.js'
-
-const user = { id: 'lecturer-1' } as AuthenticatedUser
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { ParticipantController } from './participant.controller.js';
+import { ParticipantService } from '../services/participant.service.js';
+import { AuthenticatedUser } from '../../../common/types/authenticated-user.type.js';
+import { Role } from '../../../common/enums/role.enum.js';
 
 describe('ParticipantController', () => {
-  const participantService = {
-    findAll: vi.fn(),
-    searchCandidates: vi.fn(),
-    add: vi.fn(),
-    remove: vi.fn(),
-  }
-  let controller: ParticipantController
+  let controller: ParticipantController;
+  let mockService: Partial<
+    Record<keyof ParticipantService, ReturnType<typeof vi.fn>>
+  >;
+
+  const user: AuthenticatedUser = {
+    id: 'lec-1',
+    email: 'lecturer@school.edu.vn',
+    role: Role.LECTURER,
+  };
 
   beforeEach(() => {
-    vi.resetAllMocks()
+    mockService = {
+      list: vi.fn().mockResolvedValue([]),
+      searchCandidates: vi.fn().mockResolvedValue([]),
+      add: vi.fn(),
+      addMany: vi.fn().mockResolvedValue({ added: 2, skipped: 0 }),
+      importParticipants: vi.fn(),
+      remove: vi.fn().mockResolvedValue(undefined),
+    };
     controller = new ParticipantController(
-      participantService as unknown as ParticipantService,
-    )
-  })
+      mockService as unknown as ParticipantService,
+    );
+  });
 
-  it('getAll delegates to the service', async () => {
-    participantService.findAll.mockResolvedValue([{ id: 'p1' }])
-    await expect(controller.getAll('class-1', user)).resolves.toEqual([{ id: 'p1' }])
-    expect(participantService.findAll).toHaveBeenCalledWith('class-1', user)
-  })
+  it('lists the participants of the class for the current user', async () => {
+    await controller.list('cls-1', user, 'nguyen');
 
-  it('searchCandidates passes the search term through', async () => {
-    participantService.searchCandidates.mockResolvedValue([])
-    await controller.searchCandidates('class-1', 'an', user)
-    expect(participantService.searchCandidates).toHaveBeenCalledWith('class-1', 'an', user)
-  })
+    expect(mockService.list).toHaveBeenCalledWith('cls-1', user, 'nguyen');
+  });
 
-  it('searchCandidates falls back to an empty term when missing', async () => {
-    participantService.searchCandidates.mockResolvedValue([])
-    await controller.searchCandidates('class-1', undefined, user)
-    expect(participantService.searchCandidates).toHaveBeenCalledWith('class-1', '', user)
-  })
+  it('searches the candidates with the requested limit', async () => {
+    await controller.candidates('cls-1', user, 'sv26', 10);
 
-  it('add delegates to the service and returns its result', async () => {
-    const dto = { studentIds: ['s1'] } as AddParticipantsDto
-    participantService.add.mockResolvedValue({ added: 1, skipped: 0 })
-    await expect(controller.add('class-1', dto, user)).resolves.toEqual({
-      added: 1,
+    expect(mockService.searchCandidates).toHaveBeenCalledWith(
+      'cls-1',
+      user,
+      'sv26',
+      10,
+    );
+  });
+
+  it('adds a participant', async () => {
+    await controller.add('cls-1', user, { studentId: 'stu-1' });
+
+    expect(mockService.add).toHaveBeenCalledWith('cls-1', user, {
+      studentId: 'stu-1',
+    });
+  });
+
+  it('adds several participants at once', async () => {
+    const dto = { studentIds: ['stu-1', 'stu-2'] };
+
+    await expect(controller.addMany('cls-1', user, dto)).resolves.toEqual({
+      added: 2,
       skipped: 0,
-    })
-    expect(participantService.add).toHaveBeenCalledWith('class-1', dto, user)
-  })
+    });
 
-  it('remove delegates to the service', async () => {
-    participantService.remove.mockResolvedValue(undefined)
-    await expect(controller.remove('class-1', 's1', user)).resolves.toBeUndefined()
-    expect(participantService.remove).toHaveBeenCalledWith('class-1', 's1', user)
-  })
-})
+    expect(mockService.addMany).toHaveBeenCalledWith('cls-1', user, dto);
+  });
+
+  it('imports participants', async () => {
+    const dto = { rows: [{ line: 2, studentCode: 'SV26000001' }], dryRun: true };
+
+    await controller.importParticipants('cls-1', user, dto);
+
+    expect(mockService.importParticipants).toHaveBeenCalledWith(
+      'cls-1',
+      user,
+      dto,
+    );
+  });
+
+  it('removes a participant and returns nothing', async () => {
+    await expect(
+      controller.remove('cls-1', 'stu-1', user),
+    ).resolves.toBeUndefined();
+
+    expect(mockService.remove).toHaveBeenCalledWith('cls-1', user, 'stu-1');
+  });
+});

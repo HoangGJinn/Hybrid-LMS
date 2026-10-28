@@ -72,6 +72,8 @@ describe('UserRepository', () => {
     mockStudentRepo = {
       findOneBy: vi.fn(),
       findBy: vi.fn(),
+      find: vi.fn(),
+      createQueryBuilder: vi.fn(),
     };
 
     mockLecturerRepo = {
@@ -492,67 +494,67 @@ describe('UserRepository', () => {
     });
   });
 
-  describe('updateUserAndProfile: role change', () => {
-    it('swaps a student profile for a lecturer profile with a generated code', async () => {
-      mockManager.findOneOrFail!.mockResolvedValue({
-        ...sampleUser,
-        role: Role.LECTURER,
-      });
-
-      await repository.updateUserAndProfile(sampleUser, {
-        role: Role.LECTURER,
-        lecturerStatus: LecturerStatus.ON_LEAVE,
-      });
-
-      expect(mockManager.delete).toHaveBeenCalledWith(Student, {
-        userId: 'usr-1',
-      });
-      expect(mockManager.update).toHaveBeenCalledWith(User, 'usr-1', {
-        role: Role.LECTURER,
-      });
-      expect(mockManager.create).toHaveBeenCalledWith(
-        Lecturer,
-        expect.objectContaining({
-          userId: 'usr-1',
-          lecturerCode: expect.stringMatching(/^GV\d{8}$/),
-          status: LecturerStatus.WORKING,
-        }),
-      );
-      // the requested status is applied to the NEW profile
-      expect(mockManager.update).toHaveBeenCalledWith(Lecturer, 'usr-1', {
-        status: LecturerStatus.ON_LEAVE,
-      });
+  describe('student lookups for enrolment', () => {
+    it('does not query when there is nothing to look up', async () => {
+      expect(await repository.findStudentsByIds([])).toEqual([]);
+      expect(await repository.findStudentsByCodes([])).toEqual([]);
+      expect(await repository.findStudentsByEmails([])).toEqual([]);
+      expect(mockStudentRepo.find).not.toHaveBeenCalled();
     });
 
-    it('swaps a lecturer profile for a student profile', async () => {
-      mockManager.findOneOrFail!.mockResolvedValue(sampleUser);
-      const lecturerUser: User = { ...sampleUser, role: Role.LECTURER };
+    it('loads the students with their user', async () => {
+      mockStudentRepo.find!.mockResolvedValue([]);
 
-      await repository.updateUserAndProfile(lecturerUser, {
-        role: Role.STUDENT,
-      });
+      await repository.findStudentsByCodes(['SV26000001']);
+      await repository.findStudentsByEmails(['a@school.edu.vn']);
 
-      expect(mockManager.delete).toHaveBeenCalledWith(Lecturer, {
-        userId: 'usr-1',
-      });
-      expect(mockManager.create).toHaveBeenCalledWith(
-        Student,
-        expect.objectContaining({
-          userId: 'usr-1',
-          studentCode: expect.stringMatching(/^SV\d{8}$/),
-          status: StudentStatus.STUDYING,
-        }),
+      expect(mockStudentRepo.find).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({ relations: { user: true } }),
+      );
+      expect(mockStudentRepo.find).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({ relations: { user: true } }),
       );
     });
 
-    it('leaves the profile alone when the role is the same', async () => {
-      mockManager.findOneOrFail!.mockResolvedValue(sampleUser);
+    const createStudentQueryMock = () => {
+      const qb = {
+        innerJoinAndSelect: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        andWhere: vi.fn().mockReturnThis(),
+        orderBy: vi.fn().mockReturnThis(),
+        take: vi.fn().mockReturnThis(),
+        getMany: vi.fn().mockResolvedValue([]),
+      };
+      mockStudentRepo.createQueryBuilder!.mockReturnValue(qb);
+      return qb;
+    };
 
-      await repository.updateUserAndProfile(sampleUser, {
-        role: Role.STUDENT,
+    it('searches only active, currently studying students', async () => {
+      const qb = createStudentQueryMock();
+
+      await repository.searchEnrollableStudents(undefined, 20);
+
+      expect(qb.where).toHaveBeenCalledWith('u.isActive = :isActive', {
+        isActive: true,
       });
+      expect(qb.andWhere).toHaveBeenCalledWith('s.status = :status', {
+        status: StudentStatus.STUDYING,
+      });
+      expect(qb.take).toHaveBeenCalledWith(20);
+      expect(qb.andWhere).toHaveBeenCalledTimes(1); // no search clause
+    });
 
-      expect(mockManager.delete).not.toHaveBeenCalled();
+    it('matches the search text literally against name, email and code', async () => {
+      const qb = createStudentQueryMock();
+
+      await repository.searchEnrollableStudents('50%_off', 10);
+
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        expect.stringContaining('s.studentCode ILIKE :search'),
+        { search: '%50\\%\\_off%' },
+      );
     });
   });
 

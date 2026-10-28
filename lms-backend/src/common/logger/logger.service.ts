@@ -4,7 +4,7 @@ import 'winston-daily-rotate-file';
 
 @Injectable()
 export class LoggerService implements NestLoggerService {
-  private logger: winston.Logger;
+  private readonly logger: winston.Logger;
 
   constructor() {
     const dailyRotateFileTransport = new winston.transports.DailyRotateFile({
