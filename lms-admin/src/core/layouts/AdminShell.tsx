@@ -1,9 +1,8 @@
 import { NavLink, Outlet, useNavigation } from 'react-router';
 import { GraduationCap, LogOut, Menu, X } from 'lucide-react';
 import { adminNav } from '@/core/config/navigation';
-import { useAdminAuthStore } from '@/core/store/useAdminAuthStore';
 import { useUiStore } from '@/core/store/useUiStore';
-import { useAdminLogout } from '@/features/auth';
+import { useAdminLogout, useAdminSession } from '@/features/auth';
 import { cn } from '@/shared/utils/cn';
 import { initials } from '@/shared/utils/initials';
 import Breadcrumbs from './Breadcrumbs';
@@ -45,7 +44,7 @@ const SidebarBody = ({ onNavigate }: { onNavigate?: () => void }) => (
 );
 
 const AdminShell = () => {
-  const user = useAdminAuthStore((state) => state.user);
+  const { data: user } = useAdminSession();
   const { mutate: logout, isPending: isLoggingOut } = useAdminLogout();
   const mobileNavOpen = useUiStore((state) => state.mobileNavOpen);
   const setMobileNavOpen = useUiStore((state) => state.setMobileNavOpen);

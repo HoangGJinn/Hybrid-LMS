@@ -5,7 +5,7 @@ import fs from 'fs';
 import path from 'path';
 
 export class PostgresDatabase {
-  constructor(private readonly configService: ConfigService) {}
+  constructor(private readonly configService: ConfigService) { }
 
   getConnection(): TypeOrmModuleOptions {
     const caPath = path.resolve(
@@ -27,6 +27,12 @@ export class PostgresDatabase {
       password: this.configService.get<string>('DATABASE_PASSWORD'),
       database: this.configService.get<string>('DATABASE_NAME'),
       ssl,
+      extra: {
+        max: 10,
+        idleTimeoutMillis: 120000,
+        connectionTimeoutMillis: 10000,
+        keepAlive: true,
+      },
       // Auto-sync entities in development — TURN OFF in production!
       synchronize: process.env.NODE_ENV !== 'production',
       autoLoadEntities: true,

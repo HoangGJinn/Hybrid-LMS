@@ -9,15 +9,15 @@ import { SessionUser } from '../types/session-user.type.js';
 
 describe('AuthController', () => {
   let controller: AuthController;
-  let mockAuthService: Partial<Record<keyof AuthService, ReturnType<typeof vi.fn>>>;
+  let mockAuthService: Partial<
+    Record<keyof AuthService, ReturnType<typeof vi.fn>>
+  >;
   let mockResponse: Partial<Record<keyof Response, ReturnType<typeof vi.fn>>>;
 
   const sampleSessionUser: SessionUser = {
     id: 'usr-1',
     email: 'user@school.edu.vn',
     fullName: 'Test User',
-    ssoId: 'sso-1',
-    ssoProvider: 'GOOGLE',
     avatarUrl: null,
     role: Role.STUDENT,
     isActive: true,
@@ -41,12 +41,6 @@ describe('AuthController', () => {
     controller = new AuthController(mockAuthService as unknown as AuthService);
   });
 
-  describe('test', () => {
-    it('returns OK string', () => {
-      expect(controller.test()).toBe('Auth module OK');
-    });
-  });
-
   describe('loginWithGoogle', () => {
     it('authenticates user and sets httpOnly refresh cookie', async () => {
       mockAuthService.loginWithGoogle!.mockResolvedValue({
@@ -60,7 +54,9 @@ describe('AuthController', () => {
         mockResponse as unknown as Response,
       );
 
-      expect(mockAuthService.loginWithGoogle).toHaveBeenCalledWith('google.id.token');
+      expect(mockAuthService.loginWithGoogle).toHaveBeenCalledWith(
+        'google.id.token',
+      );
       expect(mockResponse.cookie).toHaveBeenCalledWith(
         REFRESH_COOKIE_NAME,
         'refresh.uuid',
@@ -99,7 +95,7 @@ describe('AuthController', () => {
         'new.refresh.token',
         expect.objectContaining({ httpOnly: true }),
       );
-      expect(result.accessToken).toBe('new.access.jwt');
+      expect(result).toEqual({ accessToken: 'new.access.jwt' });
     });
 
     it('throws UnauthorizedException if refresh cookie is missing', async () => {

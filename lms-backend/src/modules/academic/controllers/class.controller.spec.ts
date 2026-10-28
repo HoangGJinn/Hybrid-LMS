@@ -9,8 +9,12 @@ import { Class } from '../entities/class.entity.js';
 
 describe('ClassController', () => {
   let controller: ClassController;
-  let mockClassService: Partial<Record<keyof ClassService, ReturnType<typeof vi.fn>>>;
-  let mockAcademicFacade: Partial<Record<keyof AcademicFacade, ReturnType<typeof vi.fn>>>;
+  let mockClassService: Partial<
+    Record<keyof ClassService, ReturnType<typeof vi.fn>>
+  >;
+  let mockAcademicFacade: Partial<
+    Record<keyof AcademicFacade, ReturnType<typeof vi.fn>>
+  >;
 
   const sampleClassView: ClassView = {
     id: 'cls-uuid-1',
@@ -91,15 +95,11 @@ describe('ClassController', () => {
     );
   });
 
-  describe('test', () => {
-    it('returns OK string', () => {
-      expect(controller.test()).toBe('Class module OK');
-    });
-  });
-
   describe('getMyClasses', () => {
     it('returns classes for STUDENT via academicFacade', async () => {
-      mockAcademicFacade.getClassesByStudent!.mockResolvedValue([sampleClassView]);
+      mockAcademicFacade.getClassesByStudent!.mockResolvedValue([
+        sampleClassView,
+      ]);
       const studentUser: AuthenticatedUser = {
         id: 'stu-user-id',
         email: 'student@school.edu.vn',
@@ -108,12 +108,16 @@ describe('ClassController', () => {
 
       const result = await controller.getMyClasses(studentUser);
 
-      expect(mockAcademicFacade.getClassesByStudent).toHaveBeenCalledWith('stu-user-id');
+      expect(mockAcademicFacade.getClassesByStudent).toHaveBeenCalledWith(
+        'stu-user-id',
+      );
       expect(result).toEqual([sampleClassView]);
     });
 
     it('returns classes for LECTURER via academicFacade', async () => {
-      mockAcademicFacade.getClassesByLecturer!.mockResolvedValue([sampleClassView]);
+      mockAcademicFacade.getClassesByLecturer!.mockResolvedValue([
+        sampleClassView,
+      ]);
       const lecturerUser: AuthenticatedUser = {
         id: 'lec-user-id',
         email: 'lecturer@school.edu.vn',
@@ -122,7 +126,9 @@ describe('ClassController', () => {
 
       const result = await controller.getMyClasses(lecturerUser);
 
-      expect(mockAcademicFacade.getClassesByLecturer).toHaveBeenCalledWith('lec-user-id');
+      expect(mockAcademicFacade.getClassesByLecturer).toHaveBeenCalledWith(
+        'lec-user-id',
+      );
       expect(result).toEqual([sampleClassView]);
     });
 
@@ -195,7 +201,9 @@ describe('ClassController', () => {
       const updatedView = { ...sampleClassView, name: 'New Name' };
       mockClassService.update!.mockResolvedValue(updatedView);
 
-      const result = await controller.update('cls-uuid-1', { name: 'New Name' });
+      const result = await controller.update('cls-uuid-1', {
+        name: 'New Name',
+      });
 
       expect(mockClassService.update).toHaveBeenCalledWith('cls-uuid-1', {
         name: 'New Name',

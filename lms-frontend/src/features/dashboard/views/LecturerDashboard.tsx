@@ -7,13 +7,14 @@ import { HeroHeader } from '@shared/components/HeroHeader';
 import { Button } from '@shared/components/ui/button';
 import { toAsyncState } from '@shared/utils/async-state';
 import { useLecturerDashboard } from '../hooks/useLecturerDashboard';
-import { useAuthStore } from '@core/store/useAuthStore';
+import { useCurrentUser } from '@features/auth';
 import { Bar } from '@shared/components/Bar';
 import { Card } from '@shared/components/ui/card';
 import { StatCard } from '@shared/components/StatCard';
 
 const LecturerDashboard = () => {
-  const name = useAuthStore((s) => s.profile?.fullName ?? 'Lecturer');
+  const { data: user } = useCurrentUser();
+  const name = user?.fullName ?? 'Lecturer';
   const state = toAsyncState(useLecturerDashboard());
 
   return (

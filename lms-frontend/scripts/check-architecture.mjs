@@ -4,7 +4,7 @@
 //   1. every internal import resolves to a file
 //   2. layer table: shared -> shared; core -> shared (layouts: features' public API, mocks: `import type` only);
 //      features -> shared / core / other features through index.ts; nothing imports router.tsx / main.tsx (except main -> router)
-//   3. mocks are used only by features/*/api/** and the dev-only DevRoleSwitcher
+//   3. mocks are used only by features/*/api/**
 //   4. no import cycles: between files (runtime imports) and between features (any import)
 //   5. Zustand stores live in core/store or features/<name>/store; VITE_* env variables are read only in core/config/env.ts
 //   6. feature layout: api/ components/ hooks/ store/ types/ utils/ views/ routes.ts index.ts; routes.ts imports stay light
@@ -66,7 +66,6 @@ for (const file of files.filter(isCode))
   }
 
 /* ---------- layer table ---------- */
-const DEV_ONLY_MOCK_USER = 'src/features/auth/components/DevRoleSwitcher.tsx'
 for (const { file, target, spec, typeOnly } of edges) {
   const from = areaOf(file)
   const to = areaOf(target)
@@ -83,8 +82,8 @@ for (const { file, target, spec, typeOnly } of edges) {
     const allowed = isIndex(target) || (file === 'src/router.tsx' && isRoutes(target))
     if (!allowed) fail('deep-import', `${file}: use '@features/${to.slice(8)}' (index.ts) instead of '${spec}'`)
   }
-  if (target.startsWith('src/core/mocks/') && !(file.startsWith('src/core/mocks/') || /^src\/features\/[^/]+\/api\//.test(file) || file === DEV_ONLY_MOCK_USER || /\.test\.[tj]sx?$/.test(file)))
-    fail('mocks', `${file}: only features/*/api/**, DevRoleSwitcher, and test files may import mocks ('${spec}')`)
+  if (target.startsWith('src/core/mocks/') && !(file.startsWith('src/core/mocks/') || /^src\/features\/[^/]+\/api\//.test(file) || /\.test\.[tj]sx?$/.test(file)))
+    fail('mocks', `${file}: only features/*/api/** and test files may import mocks ('${spec}')`)
   if (from === 'core' && /^src\/core\/(api|query|mocks)\//.test(file) && target.startsWith('src/core/store/')) fail('layers', `${file}: ${file.split('/')[2]} must not read global stores`)
   if (/^src\/(shared\/utils|core\/api|core\/query)\//.test(file) && target.startsWith('src/shared/components/')) fail('layers', `${file}: low-level modules must not import components ('${spec}')`)
   if (from.startsWith('feature:') && to.startsWith('feature:') && to === from && spec.startsWith('@features/')) fail('layers', `${file}: use a relative import inside the feature ('${spec}')`)

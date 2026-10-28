@@ -5,7 +5,9 @@ import { Subject } from '../entities/subject.entity.js';
 
 describe('SubjectController', () => {
   let controller: SubjectController;
-  let mockService: Partial<Record<keyof SubjectService, ReturnType<typeof vi.fn>>>;
+  let mockService: Partial<
+    Record<keyof SubjectService, ReturnType<typeof vi.fn>>
+  >;
 
   const sampleSubject: Subject = {
     id: 'sub-uuid-1',
@@ -22,13 +24,9 @@ describe('SubjectController', () => {
       update: vi.fn(),
       delete: vi.fn(),
     };
-    controller = new SubjectController(mockService as unknown as SubjectService);
-  });
-
-  describe('test', () => {
-    it('returns OK string', () => {
-      expect(controller.test()).toBe('Subject module OK');
-    });
+    controller = new SubjectController(
+      mockService as unknown as SubjectService,
+    );
   });
 
   describe('getAll', () => {

@@ -82,7 +82,7 @@ Toàn bộ dự án thống nhất phong cách định dạng qua **Prettier** (
 
 ### 3.1 Định dạng URL & Định tuyến
 
-- **Tiền tố toàn cục:** Mọi endpoint backend đều bắt đầu bằng `/api/` (ví dụ: `/api/auth/google`, `/api/users/me`).
+- **Tiền tố toàn cục:** Mọi endpoint backend đều bắt đầu bằng `/api/` (ví dụ: `/api/auth/google`, `/api/auth/me`).
 - **Quy ước Route:** Dùng `kebab-case`, danh từ số nhiều:
   - `GET /api/courses` — Danh sách khóa học
   - `GET /api/courses/:id` — Chi tiết khóa học

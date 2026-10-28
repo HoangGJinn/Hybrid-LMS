@@ -40,7 +40,9 @@ export const createStudentCourseRoutes = ({
   ],
 });
 
-export const lecturerClassRoutes: RouteObject = {
+export const createLecturerClassRoutes = ({
+  tabs,
+}: Pick<CourseRouteParts, 'tabs'>): RouteObject => ({
   path: 'classes',
   ...crumb('My Classes'),
   children: [
@@ -48,7 +50,11 @@ export const lecturerClassRoutes: RouteObject = {
     {
       path: ':courseId',
       ...crumb(CourseCrumb),
-      ...lazyPage(() => import('./views/CourseEditorPage')),
+      ...lazyPage(() => import('./views/LecturerCourseLayout')),
+      children: [
+        { index: true, ...lazyPage(() => import('./views/CourseEditorPage')) },
+        ...tabs,
+      ],
     },
   ],
-};
+});

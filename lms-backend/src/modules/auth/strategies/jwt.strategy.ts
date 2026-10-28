@@ -1,4 +1,8 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
@@ -21,8 +25,14 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
   }
 
   async validate(payload: JwtPayload): Promise<AuthenticatedUser> {
-    const user = await this.userFacade.getUserById(payload.sub);
-    if (!user || !user.isActive) throw new UnauthorizedException();
+    // A token of an account that no longer exists is an authentication failure (401), not a missing resource (404).
+    const user = await this.userFacade
+      .getUserById(payload.sub)
+      .catch((error: unknown) => {
+        if (error instanceof NotFoundException) return null;
+        throw error;
+      });
+    if (!user?.isActive) throw new UnauthorizedException();
     return {
       id: user.id,
       email: user.email,

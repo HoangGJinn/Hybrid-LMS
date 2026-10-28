@@ -3,8 +3,11 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { ClassRepository } from '../repositories/class.repository.js';
+import { ClassStudentRepository } from '../repositories/class-student.repository.js';
+import { ClassAccessPolicy } from '../policies/class-access.policy.js';
 import { SubjectService } from './subject.service.js';
 import { SemesterService } from './semester.service.js';
 import { CreateClassDto } from '../dto/create-class.dto.js';
@@ -13,7 +16,9 @@ import { Class } from '../entities/class.entity.js';
 import { ClassView } from '../types/class-view.type.js';
 import { UserFacade } from '../../user/facades/user.facade.js';
 import { Role } from '../../../common/enums/role.enum.js';
-
+import { ClassmateView } from '../types/classmate-view.type.js';
+import { RosterStudentView } from '../types/roster-student-view.type.js';
+import { AuthenticatedUser } from '../../../common/types/authenticated-user.type.js';
 @Injectable()
 export class ClassService {
   constructor(
@@ -21,6 +26,8 @@ export class ClassService {
     private readonly subjectService: SubjectService,
     private readonly semesterService: SemesterService,
     private readonly userFacade: UserFacade,
+    private readonly classStudentRepo: ClassStudentRepository,
+    private readonly accessPolicy: ClassAccessPolicy,
   ) {}
 
   private async validateSubject(subjectId: string): Promise<void> {
@@ -160,5 +167,28 @@ export class ClassService {
 
   async deactivateClass(id: string): Promise<ClassView> {
     return this.deactivate(id);
+  }
+
+  async getClassmates(
+    classId: string,
+    user: AuthenticatedUser,
+  ): Promise<ClassmateView[]> {
+    const cls = await this.findById(classId);
+    await this.accessPolicy.assertCanView(cls, user);
+    const enrollments = await this.classStudentRepo.findByClass(classId);
+    return enrollments.map((e) => ClassmateView.fromEnrollment(e));
+  }
+
+  async getRoster(
+    classId: string,
+    user: AuthenticatedUser,
+  ): Promise<RosterStudentView[]> {
+    if (user.role === Role.STUDENT) {
+      throw new ForbiddenException('Only lecturers can view the roster');
+    }
+    const cls = await this.findById(classId);
+    await this.accessPolicy.assertCanView(cls, user);
+    const enrollments = await this.classStudentRepo.findByClass(classId);
+    return enrollments.map((e) => RosterStudentView.fromEnrollmentWithStats(e));
   }
 }

@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ClassService } from '../services/class.service.js';
+import { ClassAccessPolicy } from '../policies/class-access.policy.js';
+import { AuthenticatedUser } from '../../../common/types/authenticated-user.type.js';
 import { SubjectService } from '../services/subject.service.js';
 import { SemesterService } from '../services/semester.service.js';
 import { ClassView } from '../types/class-view.type.js';
@@ -18,7 +20,29 @@ export class AcademicFacade {
     private readonly classService: ClassService,
     private readonly subjectService: SubjectService,
     private readonly semesterService: SemesterService,
+    private readonly classAccessPolicy: ClassAccessPolicy,
   ) {}
+
+  /**
+   * Throws 404 when the class does not exist and 403 unless the user is an admin,
+   * the class lecturer, or a student enrolled in the class.
+   */
+  async assertCanViewClass(
+    classId: string,
+    user: AuthenticatedUser,
+  ): Promise<void> {
+    const cls = await this.classService.findById(classId);
+    await this.classAccessPolicy.assertCanView(cls, user);
+  }
+
+  /** Throws 404 when the class does not exist and 403 unless the user is an admin or the class lecturer. */
+  async assertCanManageClass(
+    classId: string,
+    user: AuthenticatedUser,
+  ): Promise<void> {
+    const cls = await this.classService.findById(classId);
+    this.classAccessPolicy.assertCanManage(cls, user);
+  }
 
   async getClassById(id: string): Promise<ClassView> {
     const cls = await this.classService.findById(id);

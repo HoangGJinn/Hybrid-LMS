@@ -14,3 +14,9 @@ export const studentRosterRoute: RouteObject = {
   ...crumb('Students'),
   ...lazyPage(() => import('./views/StudentRosterPage')),
 };
+
+export const lecturerMembersTabRoute: RouteObject = {
+  path: 'members',
+  ...crumb('Members'),
+  ...lazyPage(() => import('./views/CourseMembersPage')),
+};

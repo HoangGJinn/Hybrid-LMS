@@ -9,7 +9,7 @@ import { authKeys } from '../api/queryKeys';
  */
 export const useAdminLogin = () => {
   const queryClient = useQueryClient();
-  const login = useAdminAuthStore((state) => state.login);
+  const setAccessToken = useAdminAuthStore((state) => state.setAccessToken);
 
   return useMutation({
     mutationFn: async (idToken: string) => {
@@ -21,7 +21,7 @@ export const useAdminLogin = () => {
       return session;
     },
     onSuccess: ({ user, accessToken }) => {
-      login(user, accessToken);
+      setAccessToken(accessToken);
       queryClient.setQueryData(authKeys.session(), user);
     },
   });

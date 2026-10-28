@@ -5,7 +5,9 @@ import { Subject } from '../entities/subject.entity.js';
 
 describe('SubjectRepository', () => {
   let repository: SubjectRepository;
-  let mockTypeormRepo: Partial<Record<keyof Repository<Subject>, ReturnType<typeof vi.fn>>>;
+  let mockTypeormRepo: Partial<
+    Record<keyof Repository<Subject>, ReturnType<typeof vi.fn>>
+  >;
 
   const sampleSubject: Subject = {
     id: 'sub-1',

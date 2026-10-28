@@ -6,7 +6,9 @@ import { Role } from '../../../common/enums/role.enum.js';
 
 describe('TokenService', () => {
   let service: TokenService;
-  let mockJwtService: Partial<Record<keyof JwtService, ReturnType<typeof vi.fn>>>;
+  let mockJwtService: Partial<
+    Record<keyof JwtService, ReturnType<typeof vi.fn>>
+  >;
 
   beforeEach(() => {
     mockJwtService = {
@@ -22,8 +24,6 @@ describe('TokenService', () => {
         id: 'usr-123',
         email: 'user@school.edu.vn',
         fullName: 'User Name',
-        ssoId: 'sso-123',
-        ssoProvider: 'GOOGLE',
         avatarUrl: null,
         role: Role.STUDENT,
         isActive: true,

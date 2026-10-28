@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
+import { Injectable, UnauthorizedException, Logger, HttpException } from '@nestjs/common';
 import { OAuth2Client } from 'google-auth-library';
 import { ConfigService } from '@nestjs/config';
 
@@ -33,13 +33,21 @@ export class GoogleAuthService {
         );
         throw new UnauthorizedException('Invalid Google token');
       }
+      // Accounts are matched by email, so an unverified address must never be accepted.
+      if (payload.email_verified !== true) {
+        this.logger.warn(`Failed Google login: email is not verified.`);
+        throw new UnauthorizedException('Google email is not verified');
+      }
       return {
         googleId: payload.sub,
-        email: payload.email,
+        email: payload.email.toLowerCase(),
         fullName: payload.name ?? payload.email,
         avatarUrl: payload.picture ?? null,
       };
     } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
       this.logger.error(`Google token verification failed`, error);
       throw new UnauthorizedException('Invalid Google token');
     }

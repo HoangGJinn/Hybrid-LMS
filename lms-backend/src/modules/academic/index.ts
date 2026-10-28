@@ -1,6 +1,7 @@
 export { AcademicModule } from './academic.module.js';
 export { AcademicFacade } from './facades/academic.facade.js';
 export { ClassView } from './types/class-view.type.js';
+export { ParticipantView } from './types/participant-view.type.js';
 export { SubjectView } from './types/subject-view.type.js';
 export { SemesterView } from './types/semester-view.type.js';
 export { CreateClassDto } from './dto/create-class.dto.js';
@@ -13,3 +14,6 @@ export { Semester } from './entities/semester.entity.js';
 export { Subject } from './entities/subject.entity.js';
 export { Class } from './entities/class.entity.js';
 export { ClassStudent } from './entities/class-student.entity.js';
+
+export { ClassmateView } from './types/classmate-view.type.js';
+export { RosterStudentView } from './types/roster-student-view.type.js';

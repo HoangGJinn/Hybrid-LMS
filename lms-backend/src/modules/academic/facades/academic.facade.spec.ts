@@ -3,17 +3,30 @@ import { AcademicFacade } from './academic.facade.js';
 import { ClassService } from '../services/class.service.js';
 import { SubjectService } from '../services/subject.service.js';
 import { SemesterService } from '../services/semester.service.js';
+import { ClassAccessPolicy } from '../policies/class-access.policy.js';
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { Role } from '../../../common/enums/role.enum.js';
 import { Class } from '../entities/class.entity.js';
 import { Subject } from '../entities/subject.entity.js';
 import { Semester } from '../entities/semester.entity.js';
 
 describe('AcademicFacade', () => {
   let facade: AcademicFacade;
-  let mockClassService: Partial<Record<keyof ClassService, ReturnType<typeof vi.fn>>>;
-  let mockSubjectService: Partial<Record<keyof SubjectService, ReturnType<typeof vi.fn>>>;
-  let mockSemesterService: Partial<Record<keyof SemesterService, ReturnType<typeof vi.fn>>>;
+  let mockClassService: Partial<
+    Record<keyof ClassService, ReturnType<typeof vi.fn>>
+  >;
+  let mockSubjectService: Partial<
+    Record<keyof SubjectService, ReturnType<typeof vi.fn>>
+  >;
+  let mockSemesterService: Partial<
+    Record<keyof SemesterService, ReturnType<typeof vi.fn>>
+  >;
 
-  const sampleClass: Class = {
+  let mockAccessPolicy: Partial<
+    Record<keyof ClassAccessPolicy, ReturnType<typeof vi.fn>>
+  >;
+
+  const sampleClass = {
     id: 'cls-1',
     classCode: 'CS101.Q1',
     name: 'Intro CS Q1',
@@ -22,7 +35,7 @@ describe('AcademicFacade', () => {
     lecturerId: 'lec-1',
     isActive: true,
     endedAt: null,
-  };
+  } as Class;
 
   const sampleSubject: Subject = {
     id: 'sub-1',
@@ -57,12 +70,75 @@ describe('AcademicFacade', () => {
       findAll: vi.fn(),
       getActiveSemester: vi.fn(),
     };
+    mockAccessPolicy = {
+      assertCanView: vi.fn().mockResolvedValue(undefined),
+      assertCanManage: vi.fn(),
+    };
 
     facade = new AcademicFacade(
       mockClassService as unknown as ClassService,
       mockSubjectService as unknown as SubjectService,
       mockSemesterService as unknown as SemesterService,
+      mockAccessPolicy as unknown as ClassAccessPolicy,
     );
+  });
+
+  describe('class access checks', () => {
+    const user = { id: 'lec-1', role: Role.LECTURER } as any;
+
+    it('assertCanViewClass loads the class and applies the view rule', async () => {
+      mockClassService.findById!.mockResolvedValue(sampleClass);
+
+      await facade.assertCanViewClass('cls-1', user);
+
+      expect(mockClassService.findById).toHaveBeenCalledWith('cls-1');
+      expect(mockAccessPolicy.assertCanView).toHaveBeenCalledWith(
+        sampleClass,
+        user,
+      );
+    });
+
+    it('assertCanViewClass propagates a refusal', async () => {
+      mockClassService.findById!.mockResolvedValue(sampleClass);
+      mockAccessPolicy.assertCanView!.mockRejectedValue(
+        new ForbiddenException(),
+      );
+
+      await expect(facade.assertCanViewClass('cls-1', user)).rejects.toThrow(
+        ForbiddenException,
+      );
+    });
+
+    it('assertCanManageClass loads the class and applies the manage rule', async () => {
+      mockClassService.findById!.mockResolvedValue(sampleClass);
+
+      await facade.assertCanManageClass('cls-1', user);
+
+      expect(mockAccessPolicy.assertCanManage).toHaveBeenCalledWith(
+        sampleClass,
+        user,
+      );
+    });
+
+    it('assertCanManageClass propagates a refusal', async () => {
+      mockClassService.findById!.mockResolvedValue(sampleClass);
+      mockAccessPolicy.assertCanManage!.mockImplementation(() => {
+        throw new ForbiddenException();
+      });
+
+      await expect(facade.assertCanManageClass('cls-1', user)).rejects.toThrow(
+        ForbiddenException,
+      );
+    });
+
+    it('does not apply the rule when the class does not exist', async () => {
+      mockClassService.findById!.mockRejectedValue(new NotFoundException());
+
+      await expect(facade.assertCanManageClass('nope', user)).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(mockAccessPolicy.assertCanManage).not.toHaveBeenCalled();
+    });
   });
 
   describe('getClassById', () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { UnauthorizedException } from '@nestjs/common';
+import { NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtStrategy } from './jwt.strategy.js';
 import { UserFacade } from '../../user/facades/user.facade.js';
@@ -8,15 +8,17 @@ import { UserView } from '../../user/types/user-view.type.js';
 
 describe('JwtStrategy', () => {
   let strategy: JwtStrategy;
-  let mockUserFacade: Partial<Record<keyof UserFacade, ReturnType<typeof vi.fn>>>;
-  let mockConfigService: Partial<Record<keyof ConfigService, ReturnType<typeof vi.fn>>>;
+  let mockUserFacade: Partial<
+    Record<keyof UserFacade, ReturnType<typeof vi.fn>>
+  >;
+  let mockConfigService: Partial<
+    Record<keyof ConfigService, ReturnType<typeof vi.fn>>
+  >;
 
   const sampleUserView: UserView = {
     id: 'usr-1',
     email: 'user@school.edu.vn',
     fullName: 'Test User',
-    ssoId: 'sso-1',
-    ssoProvider: 'GOOGLE',
     avatarUrl: null,
     role: Role.STUDENT,
     isActive: true,
@@ -65,6 +67,32 @@ describe('JwtStrategy', () => {
           role: Role.STUDENT,
         }),
       ).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('throws UnauthorizedException (401, not 404) when the account no longer exists', async () => {
+      mockUserFacade.getUserById!.mockRejectedValue(
+        new NotFoundException('User #gone not found'),
+      );
+
+      await expect(
+        strategy.validate({
+          sub: 'gone',
+          email: 'gone@school.edu.vn',
+          role: Role.STUDENT,
+        }),
+      ).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('does not hide unexpected errors behind a 401', async () => {
+      mockUserFacade.getUserById!.mockRejectedValue(new Error('db down'));
+
+      await expect(
+        strategy.validate({
+          sub: 'usr-1',
+          email: 'user@school.edu.vn',
+          role: Role.STUDENT,
+        }),
+      ).rejects.toThrow('db down');
     });
 
     it('throws UnauthorizedException when user is inactive', async () => {

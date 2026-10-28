@@ -17,6 +17,8 @@ import { CurrentUser } from '../../../common/decorators/current-user.decorator.j
 import { AuthenticatedUser } from '../../../common/types/authenticated-user.type.js';
 import { AcademicFacade } from '../facades/academic.facade.js';
 import { Role } from '../../../common/enums/role.enum.js';
+import { ClassmateView } from '../types/classmate-view.type.js';
+import { RosterStudentView } from '../types/roster-student-view.type.js';
 
 @Controller('classes')
 @Auth(Role.ADMIN)
@@ -26,11 +28,6 @@ export class ClassController {
     private readonly academicFacade: AcademicFacade,
   ) {}
 
-  @Get('test')
-  test(): string {
-    return 'Class module OK';
-  }
-
   /**
    * Returns classes belonging to the current user:
    * - STUDENT → classes they are enrolled in
@@ -39,7 +36,9 @@ export class ClassController {
    */
   @Get('my')
   @Auth(Role.STUDENT, Role.LECTURER, Role.ADMIN)
-  async getMyClasses(@CurrentUser() user: AuthenticatedUser): Promise<ClassView[]> {
+  async getMyClasses(
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<ClassView[]> {
     if (user.role === Role.STUDENT) {
       return this.academicFacade.getClassesByStudent(user.id);
     }
@@ -76,6 +75,24 @@ export class ClassController {
     return ClassView.fromEntity(cls, count);
   }
 
+  @Get(':id/classmates')
+  @Auth(Role.STUDENT, Role.LECTURER, Role.ADMIN)
+  async getClassmates(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<ClassmateView[]> {
+    return this.classService.getClassmates(id, user);
+  }
+
+  @Get(':id/students')
+  @Auth(Role.LECTURER, Role.ADMIN)
+  async getRoster(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<RosterStudentView[]> {
+    return this.classService.getRoster(id, user);
+  }
+
   @Patch(':id')
   async update(
     @Param('id') id: string,
@@ -89,4 +106,3 @@ export class ClassController {
     return this.classService.deactivate(id);
   }
 }
-

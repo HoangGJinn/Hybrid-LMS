@@ -8,8 +8,6 @@ export interface SessionUser {
   id: string;
   email: string;
   fullName: string;
-  ssoId: string;
-  ssoProvider: string;
   avatarUrl: string | null;
   /** Student or lecturer code; null for admins. */
   code: string | null;

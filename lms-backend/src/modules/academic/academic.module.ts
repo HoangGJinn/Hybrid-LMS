@@ -5,12 +5,16 @@ import { Class } from './entities/class.entity.js';
 import { Semester } from './entities/semester.entity.js';
 import { Subject } from './entities/subject.entity.js';
 import { ClassRepository } from './repositories/class.repository.js';
+import { ClassStudentRepository } from './repositories/class-student.repository.js';
+import { ClassAccessPolicy } from './policies/class-access.policy.js';
 import { SubjectRepository } from './repositories/subject.repository.js';
 import { SemesterRepository } from './repositories/semester.repository.js';
 import { ClassService } from './services/class.service.js';
+import { ParticipantService } from './services/participant.service.js';
 import { SubjectService } from './services/subject.service.js';
 import { SemesterService } from './services/semester.service.js';
 import { ClassController } from './controllers/class.controller.js';
+import { ParticipantController } from './controllers/participant.controller.js';
 import { SubjectController } from './controllers/subject.controller.js';
 import { SemesterController } from './controllers/semester.controller.js';
 import { AcademicFacade } from './facades/academic.facade.js';
@@ -21,12 +25,20 @@ import { UserModule } from '../user/user.module.js';
     TypeOrmModule.forFeature([ClassStudent, Class, Semester, Subject]),
     UserModule,
   ],
-  controllers: [ClassController, SubjectController, SemesterController],
+  controllers: [
+    ClassController,
+    ParticipantController,
+    SubjectController,
+    SemesterController,
+  ],
   providers: [
     ClassRepository,
+    ClassStudentRepository,
     SubjectRepository,
     SemesterRepository,
+    ClassAccessPolicy,
     ClassService,
+    ParticipantService,
     SubjectService,
     SemesterService,
     AcademicFacade,

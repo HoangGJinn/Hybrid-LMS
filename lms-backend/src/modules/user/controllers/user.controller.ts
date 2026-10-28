@@ -1,27 +1,66 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { Auth } from '../../../common/decorators/auth.decorator.js';
-import { CurrentUser } from '../../../common/decorators/current-user.decorator.js';
-import { AuthenticatedUser } from '../../../common/types/authenticated-user.type.js';
-import { UserFacade } from '../facades/user.facade.js';
-import { UserView } from '../types/user-view.type.js';
 import { Role } from '../../../common/enums/role.enum.js';
+import { PaginatedResult } from '../../../common/types/paginated-result.type.js';
+import { CreateManagedUserDto } from '../dto/create-managed-user.dto.js';
+import { ListUsersQueryDto } from '../dto/list-users-query.dto.js';
+import { UpdateUserDto } from '../dto/update-user.dto.js';
+import { UserService } from '../services/user.service.js';
+import { ManagedUserView } from '../types/managed-user-view.type.js';
 
-/** Handles user-related HTTP requests. */
+/** Handles user-related HTTP requests (admin user management: students and lecturers). */
 @Controller('users')
-@Auth()
+@Auth(Role.ADMIN)
 export class UserController {
-  constructor(private readonly userFacade: UserFacade) {}
+  constructor(private readonly userService: UserService) {}
 
-  /** Returns the profile of the currently authenticated user. */
-  @Get('me')
-  getMe(@CurrentUser() user: AuthenticatedUser): AuthenticatedUser {
-    return user;
+  /** Pre-provisions an account (typically a lecturer) by email. */
+  @Post()
+  create(@Body() dto: CreateManagedUserDto): Promise<ManagedUserView> {
+    return this.userService.createManagedUser(dto);
   }
 
-  /** Lists users, optionally filtered by role (e.g. LECTURER for admin class creation). */
+  /**
+   * Paged user list for the student / lecturer management pages and the class form's lecturer dropdown:
+   * `?role=&isActive=&hasLoggedIn=&status=&search=&sort=&page=&limit=`.
+   */
   @Get()
-  @Auth(Role.ADMIN)
-  async getUsers(@Query('role') role?: Role): Promise<UserView[]> {
-    return this.userFacade.findUsers(role);
+  list(
+    @Query() query: ListUsersQueryDto,
+  ): Promise<PaginatedResult<ManagedUserView>> {
+    return this.userService.listUsers(query);
+  }
+
+  @Get(':id')
+  getOne(@Param('id', ParseUUIDPipe) id: string): Promise<ManagedUserView> {
+    return this.userService.getManagedUser(id);
+  }
+
+  @Patch(':id')
+  update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateUserDto,
+  ): Promise<ManagedUserView> {
+    return this.userService.updateUser(id, dto);
+  }
+
+  /** Soft delete: sets `isActive = false`. There is no DELETE endpoint on purpose. */
+  @Patch(':id/deactivate')
+  deactivate(@Param('id', ParseUUIDPipe) id: string): Promise<ManagedUserView> {
+    return this.userService.deactivateUser(id);
+  }
+
+  @Patch(':id/activate')
+  activate(@Param('id', ParseUUIDPipe) id: string): Promise<ManagedUserView> {
+    return this.userService.activateUser(id);
   }
 }

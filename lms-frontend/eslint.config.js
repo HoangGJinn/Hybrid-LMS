@@ -7,7 +7,7 @@ import { defineConfig, globalIgnores } from 'eslint/config'
 import { boundaryConfigs } from './eslint.boundaries.js'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  globalIgnores(['dist', 'coverage']),
   {
     files: ['src/**/*.{ts,tsx}'],
     extends: [

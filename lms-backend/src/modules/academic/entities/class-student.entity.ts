@@ -16,11 +16,11 @@ export class ClassStudent {
   @PrimaryColumn({ name: 'student_id', type: 'uuid' })
   studentId: string;
 
-  @ManyToOne(() => Class)
+  @ManyToOne(() => Class, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'class_id' })
   class: Class;
 
-  @ManyToOne(() => Student)
+  @ManyToOne(() => Student, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'student_id' })
   student: Student;
 

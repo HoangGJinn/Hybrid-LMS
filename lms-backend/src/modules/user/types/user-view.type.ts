@@ -5,8 +5,6 @@ export class UserView {
   id: string;
   email: string;
   fullName: string;
-  ssoId: string;
-  ssoProvider: string;
   avatarUrl: string | null;
   role: Role;
   isActive: boolean;
@@ -18,8 +16,6 @@ export class UserView {
     view.id = user.id;
     view.email = user.email;
     view.fullName = user.fullName;
-    view.ssoId = user.ssoId;
-    view.ssoProvider = user.ssoProvider;
     view.avatarUrl = user.avatarUrl;
     view.role = user.role;
     view.isActive = user.isActive;

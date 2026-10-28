@@ -69,6 +69,11 @@ const CourseContentPage = () => {
                     />
                   </span>
                 </button>
+                {isOpen && s.description?.trim() && (
+                  <p className="m-0 whitespace-pre-line border-t px-4 py-3 text-sm text-muted-foreground">
+                    {s.description}
+                  </p>
+                )}
                 {isOpen && (
                   <ul className="m-0 list-none border-t p-0">
                     {s.items.length === 0 && (

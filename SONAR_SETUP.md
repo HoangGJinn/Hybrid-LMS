@@ -49,13 +49,15 @@ cd lms-frontend
 
 # 4a. Chạy test và sinh file coverage/lcov.info
 pnpm test:cov
+# 4a.1
 
+$env:SONAR_TOKEN = "TOKEN_MOI_CUA_BAN"
 # 4b. Chạy SonarScanner
-docker run --rm --network=host `
+docker run --rm `
+  -e "SONAR_HOST_URL=http://host.docker.internal:9000" `
+  -e "SONAR_TOKEN=$env:SONAR_TOKEN" `
   -v "${PWD}:/usr/src" `
-  sonarsource/sonar-scanner-cli `
-  -Dsonar.host.url=http://localhost:9000 `
-  -Dsonar.token=<TOKEN>
+  sonarsource/sonar-scanner-cli
 ```
 
 ---

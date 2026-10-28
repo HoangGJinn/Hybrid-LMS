@@ -16,4 +16,4 @@ import { DatabaseFactory } from './database.config.js';
     }),
   ],
 })
-export class DatabaseModule {}
+export class DatabaseModule { }

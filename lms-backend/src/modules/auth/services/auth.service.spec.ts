@@ -11,18 +11,26 @@ import { UserView } from '../../user/types/user-view.type.js';
 
 describe('AuthService', () => {
   let service: AuthService;
-  let mockUserFacade: Partial<Record<keyof UserFacade, ReturnType<typeof vi.fn>>>;
-  let mockTokenService: Partial<Record<keyof TokenService, ReturnType<typeof vi.fn>>>;
-  let mockRefreshTokenService: Partial<Record<keyof RefreshTokenService, ReturnType<typeof vi.fn>>>;
-  let mockGoogleAuthService: Partial<Record<keyof GoogleAuthService, ReturnType<typeof vi.fn>>>;
-  let mockConfigService: Partial<Record<keyof ConfigService, ReturnType<typeof vi.fn>>>;
+  let mockUserFacade: Partial<
+    Record<keyof UserFacade, ReturnType<typeof vi.fn>>
+  >;
+  let mockTokenService: Partial<
+    Record<keyof TokenService, ReturnType<typeof vi.fn>>
+  >;
+  let mockRefreshTokenService: Partial<
+    Record<keyof RefreshTokenService, ReturnType<typeof vi.fn>>
+  >;
+  let mockGoogleAuthService: Partial<
+    Record<keyof GoogleAuthService, ReturnType<typeof vi.fn>>
+  >;
+  let mockConfigService: Partial<
+    Record<keyof ConfigService, ReturnType<typeof vi.fn>>
+  >;
 
   const sampleUserView: UserView = {
     id: 'usr-1',
     email: 'user@school.edu.vn',
     fullName: 'Nguyen Van User',
-    ssoId: 'google-id-123',
-    ssoProvider: 'GOOGLE',
     avatarUrl: null,
     role: Role.STUDENT,
     isActive: true,
@@ -42,7 +50,7 @@ describe('AuthService', () => {
       findBySsoId: vi.fn(),
       findByEmail: vi.fn(),
       createUser: vi.fn(),
-      linkSso: vi.fn(),
+      claimProvisionedAccount: vi.fn(),
       getUserById: vi.fn(),
       getProfileCode: vi.fn(),
     };
@@ -59,7 +67,9 @@ describe('AuthService', () => {
       verifyToken: vi.fn(),
     };
     mockConfigService = {
-      get: vi.fn().mockReturnValue('admin@school.edu.vn,hoanggiap1803@gmail.com'),
+      get: vi
+        .fn()
+        .mockReturnValue('admin@school.edu.vn,hoanggiap1803@gmail.com'),
     };
 
     service = new AuthService(
@@ -85,7 +95,9 @@ describe('AuthService', () => {
 
       const session = await service.loginWithGoogle('google-id-token');
 
-      expect(mockGoogleAuthService.verifyToken).toHaveBeenCalledWith('google-id-token');
+      expect(mockGoogleAuthService.verifyToken).toHaveBeenCalledWith(
+        'google-id-token',
+      );
       expect(mockUserFacade.findBySsoId).toHaveBeenCalledWith('google-id-123');
       expect(mockUserFacade.createUser).not.toHaveBeenCalled();
       expect(session.accessToken).toBe('access.token.jwt');
@@ -93,21 +105,70 @@ describe('AuthService', () => {
       expect(session.user.code).toBe('SV001');
     });
 
-    it('links Google SSO to existing user found by email', async () => {
+    it('maps the Google account to the pre-created record and keeps its LECTURER role', async () => {
+      const lecturerView: UserView = { ...sampleUserView, role: Role.LECTURER };
       mockGoogleAuthService.verifyToken!.mockResolvedValue(sampleGoogleProfile);
       mockUserFacade.findBySsoId!.mockResolvedValue(null);
-      mockUserFacade.findByEmail!.mockResolvedValue(sampleUserView);
-      mockUserFacade.linkSso!.mockResolvedValue(sampleUserView);
-      mockUserFacade.getProfileCode!.mockResolvedValue('SV001');
+      mockUserFacade.findByEmail!.mockResolvedValue(lecturerView);
+      mockUserFacade.claimProvisionedAccount!.mockResolvedValue(lecturerView);
+      mockUserFacade.getProfileCode!.mockResolvedValue('GV001');
 
       const session = await service.loginWithGoogle('google-id-token');
 
-      expect(mockUserFacade.linkSso).toHaveBeenCalledWith(sampleUserView.id, {
-        ssoId: 'google-id-123',
-        ssoProvider: 'GOOGLE',
-        avatarUrl: null,
-      });
+      expect(mockUserFacade.claimProvisionedAccount).toHaveBeenCalledWith(
+        lecturerView.id,
+        {
+          ssoId: 'google-id-123',
+          ssoProvider: 'GOOGLE',
+          avatarUrl: null,
+          fullName: 'Nguyen Van User',
+        },
+      );
+      expect(mockUserFacade.createUser).not.toHaveBeenCalled();
       expect(session.user.email).toBe('user@school.edu.vn');
+      expect(session.user.role).toBe(Role.LECTURER);
+    });
+
+    it('refuses an email already linked to a different Google account', async () => {
+      mockGoogleAuthService.verifyToken!.mockResolvedValue(sampleGoogleProfile);
+      mockUserFacade.findBySsoId!.mockResolvedValue(null);
+      mockUserFacade.findByEmail!.mockResolvedValue(sampleUserView);
+      mockUserFacade.claimProvisionedAccount!.mockResolvedValue(null);
+
+      await expect(service.loginWithGoogle('google-id-token')).rejects.toThrow(
+        UnauthorizedException,
+      );
+      expect(mockUserFacade.createUser).not.toHaveBeenCalled();
+      expect(mockRefreshTokenService.issue).not.toHaveBeenCalled();
+    });
+
+    it('does not issue tokens to a deactivated account', async () => {
+      mockGoogleAuthService.verifyToken!.mockResolvedValue(sampleGoogleProfile);
+      mockUserFacade.findBySsoId!.mockResolvedValue({
+        ...sampleUserView,
+        isActive: false,
+      });
+
+      await expect(service.loginWithGoogle('google-id-token')).rejects.toThrow(
+        UnauthorizedException,
+      );
+      expect(mockRefreshTokenService.issue).not.toHaveBeenCalled();
+    });
+
+    it('does not bind a Google identity to a deactivated pre-provisioned account', async () => {
+      mockGoogleAuthService.verifyToken!.mockResolvedValue(sampleGoogleProfile);
+      mockUserFacade.findBySsoId!.mockResolvedValue(null);
+      mockUserFacade.findByEmail!.mockResolvedValue({
+        ...sampleUserView,
+        role: Role.LECTURER,
+        isActive: false,
+      });
+
+      await expect(service.loginWithGoogle('google-id-token')).rejects.toThrow(
+        UnauthorizedException,
+      );
+      expect(mockUserFacade.claimProvisionedAccount).not.toHaveBeenCalled();
+      expect(mockRefreshTokenService.issue).not.toHaveBeenCalled();
     });
 
     it('creates new user with STUDENT role on first login if email is not admin', async () => {
@@ -167,7 +228,9 @@ describe('AuthService', () => {
 
       const session = await service.refresh('raw-refresh-token');
 
-      expect(mockRefreshTokenService.rotate).toHaveBeenCalledWith('raw-refresh-token');
+      expect(mockRefreshTokenService.rotate).toHaveBeenCalledWith(
+        'raw-refresh-token',
+      );
       expect(session.accessToken).toBe('access.token.jwt');
       expect(session.refreshToken).toBe('new-refresh-token');
     });

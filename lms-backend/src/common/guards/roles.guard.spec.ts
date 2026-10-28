@@ -71,7 +71,10 @@ describe('RolesGuard', () => {
   });
 
   it('allows access if user has one of the required roles', () => {
-    mockReflector.getAllAndOverride!.mockReturnValue([Role.ADMIN, Role.LECTURER]);
+    mockReflector.getAllAndOverride!.mockReturnValue([
+      Role.ADMIN,
+      Role.LECTURER,
+    ]);
     const context = createMockContext({
       id: 'lec-1',
       email: 'lecturer@school.edu.vn',
