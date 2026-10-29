@@ -2,11 +2,21 @@
 export { courseKeys } from './api/queryKeys';
 export { ClassSelect } from './components/ClassSelect';
 export { CourseCover } from './components/CourseCover';
+export { CourseOverview } from './components/CourseOverview';
 export { useClassSelection } from './hooks/useClassSelection';
-export { useLecturerClasses, useMyClasses } from './hooks/useClasses';
+export {
+  useLecturerClasses,
+  useMyClasses,
+  useMyCourses,
+} from './hooks/useClasses';
 export { useCourse } from './hooks/useCourse';
 export type {
   ClassRoom,
+  CourseFilterStatus,
+  CourseSort,
+  CourseViewMode,
+  MyCoursesParams,
+  PaginatedCourses,
   Section,
   Semester,
   Subject,
