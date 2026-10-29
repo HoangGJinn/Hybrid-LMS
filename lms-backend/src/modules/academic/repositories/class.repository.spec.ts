@@ -3,6 +3,7 @@ import { Repository } from 'typeorm';
 import { ClassRepository } from './class.repository.js';
 import { Class } from '../entities/class.entity.js';
 import { ClassStudent } from '../entities/class-student.entity.js';
+import { Role } from '../../../common/enums/role.enum.js';
 
 type Mock = ReturnType<typeof vi.fn>;
 
@@ -270,6 +271,120 @@ describe('ClassRepository', () => {
           ['class-1', 12],
           ['class-2', 0],
         ]),
+      );
+    });
+  });
+
+  describe('findMyClasses', () => {
+    function mockMyClassesQuery(rows: Class[], total: number) {
+      const qb = {
+        leftJoinAndSelect: vi.fn().mockReturnThis(),
+        innerJoin: vi.fn().mockReturnThis(),
+        andWhere: vi.fn().mockReturnThis(),
+        orderBy: vi.fn().mockReturnThis(),
+        addOrderBy: vi.fn().mockReturnThis(),
+        skip: vi.fn().mockReturnThis(),
+        take: vi.fn().mockReturnThis(),
+        getManyAndCount: vi.fn().mockResolvedValue([rows, total]),
+      };
+      mockClassRepo.createQueryBuilder.mockReturnValue(qb);
+      return qb;
+    }
+
+    it('queries classes for a student with default pagination and sorting', async () => {
+      const qb = mockMyClassesQuery([sampleClass], 1);
+
+      const [items, total] = await repository.findMyClasses(
+        'student-1',
+        Role.STUDENT,
+        {},
+      );
+
+      expect(mockClassRepo.createQueryBuilder).toHaveBeenCalledWith('c');
+      expect(qb.innerJoin).toHaveBeenCalledWith(
+        ClassStudent,
+        'cs',
+        'cs.classId = c.id AND cs.studentId = :studentId',
+        { studentId: 'student-1' },
+      );
+      expect(qb.skip).toHaveBeenCalledWith(0);
+      expect(qb.take).toHaveBeenCalledWith(6);
+      expect(qb.orderBy).toHaveBeenCalledWith('c.classCode', 'DESC');
+      expect(qb.addOrderBy).toHaveBeenCalledWith('c.name', 'ASC');
+      expect(items).toEqual([sampleClass]);
+      expect(total).toBe(1);
+    });
+
+    it('queries classes for a lecturer and filters by lecturerId', async () => {
+      const qb = mockMyClassesQuery([sampleClass], 1);
+
+      await repository.findMyClasses('lecturer-1', Role.LECTURER, {
+        page: 2,
+        limit: 10,
+        sort: 'name',
+      });
+
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        'c.lecturerId = :lecturerId',
+        { lecturerId: 'lecturer-1' },
+      );
+      expect(qb.orderBy).toHaveBeenCalledWith('c.name', 'ASC');
+      expect(qb.addOrderBy).toHaveBeenCalledWith('c.classCode', 'ASC');
+      expect(qb.skip).toHaveBeenCalledWith(10);
+      expect(qb.take).toHaveBeenCalledWith(10);
+    });
+
+    it('applies search filter when search string is provided', async () => {
+      const qb = mockMyClassesQuery([sampleClass], 1);
+
+      await repository.findMyClasses('student-1', Role.STUDENT, {
+        search: 'Intro',
+      });
+
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        '(c.name ILIKE :search OR c.classCode ILIKE :search)',
+        { search: '%Intro%' },
+      );
+    });
+
+    it('applies in_progress status filter', async () => {
+      const qb = mockMyClassesQuery([sampleClass], 1);
+
+      await repository.findMyClasses('student-1', Role.STUDENT, {
+        status: 'in_progress',
+      });
+
+      expect(qb.andWhere).toHaveBeenCalledWith('c.isActive = true');
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        '(semester.endDate IS NULL OR semester.endDate >= :now) AND (semester.startDate IS NULL OR semester.startDate <= :now)',
+        expect.objectContaining({ now: expect.any(Date) }),
+      );
+    });
+
+    it('applies future status filter', async () => {
+      const qb = mockMyClassesQuery([sampleClass], 1);
+
+      await repository.findMyClasses('student-1', Role.STUDENT, {
+        status: 'future',
+      });
+
+      expect(qb.andWhere).toHaveBeenCalledWith('c.isActive = true');
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        'semester.startDate IS NOT NULL AND semester.startDate > :now',
+        expect.objectContaining({ now: expect.any(Date) }),
+      );
+    });
+
+    it('applies past status filter', async () => {
+      const qb = mockMyClassesQuery([sampleClass], 1);
+
+      await repository.findMyClasses('student-1', Role.STUDENT, {
+        status: 'past',
+      });
+
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        '(c.isActive = false OR (semester.endDate IS NOT NULL AND semester.endDate < :now))',
+        expect.objectContaining({ now: expect.any(Date) }),
       );
     });
   });
