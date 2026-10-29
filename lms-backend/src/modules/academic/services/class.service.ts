@@ -19,6 +19,11 @@ import { Role } from '../../../common/enums/role.enum.js';
 import { ClassmateView } from '../types/classmate-view.type.js';
 import { RosterStudentView } from '../types/roster-student-view.type.js';
 import { AuthenticatedUser } from '../../../common/types/authenticated-user.type.js';
+import { PaginatedResult } from '../../../common/types/paginated-result.type.js';
+import {
+  DEFAULT_MY_CLASSES_LIMIT,
+  QueryMyClassesDto,
+} from '../dto/query-my-classes.dto.js';
 @Injectable()
 export class ClassService {
   constructor(
@@ -116,6 +121,27 @@ export class ClassService {
 
   async findByStudent(studentId: string): Promise<Class[]> {
     return this.classRepo.findByStudentId(studentId);
+  }
+
+  async findMyClasses(
+    userId: string,
+    role: Role,
+    query: QueryMyClassesDto,
+  ): Promise<PaginatedResult<ClassView>> {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? DEFAULT_MY_CLASSES_LIMIT;
+    const [classes, total] = await this.classRepo.findMyClasses(
+      userId,
+      role,
+      query,
+    );
+    const counts = await this.classRepo.countStudentsBatch(
+      classes.map((c) => c.id),
+    );
+    const items = classes.map((c) =>
+      ClassView.fromEntity(c, counts.get(c.id) ?? 0),
+    );
+    return PaginatedResult.of(items, total, page, limit);
   }
 
   async countStudents(classId: string): Promise<number> {

@@ -7,6 +7,9 @@ import { SemesterService } from '../services/semester.service.js';
 import { ClassView } from '../types/class-view.type.js';
 import { SubjectView } from '../types/subject-view.type.js';
 import { SemesterView } from '../types/semester-view.type.js';
+import { Role } from '../../../common/enums/role.enum.js';
+import { PaginatedResult } from '../../../common/types/paginated-result.type.js';
+import { QueryMyClassesDto } from '../dto/query-my-classes.dto.js';
 
 /**
  * Facade pattern for inter-module communication.
@@ -64,6 +67,14 @@ export class AcademicFacade {
       classes.map((c) => c.id),
     );
     return classes.map((c) => ClassView.fromEntity(c, counts.get(c.id) ?? 0));
+  }
+
+  async findMyClasses(
+    userId: string,
+    role: Role,
+    query: QueryMyClassesDto,
+  ): Promise<PaginatedResult<ClassView>> {
+    return this.classService.findMyClasses(userId, role, query);
   }
 
   async findClasses(filter?: {

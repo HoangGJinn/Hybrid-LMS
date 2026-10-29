@@ -3,6 +3,11 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Class } from '../entities/class.entity.js';
 import { ClassStudent } from '../entities/class-student.entity.js';
+import { Role } from '../../../common/enums/role.enum.js';
+import {
+  DEFAULT_MY_CLASSES_LIMIT,
+  QueryMyClassesDto,
+} from '../dto/query-my-classes.dto.js';
 
 @Injectable()
 export class ClassRepository {
@@ -97,6 +102,70 @@ export class ClassRepository {
     return enrollments
       .map((e) => e.class)
       .filter((c): c is Class => Boolean(c?.isActive));
+  }
+
+  async findMyClasses(
+    userId: string,
+    role: Role,
+    query: QueryMyClassesDto,
+  ): Promise<[Class[], number]> {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? DEFAULT_MY_CLASSES_LIMIT;
+    const skip = (page - 1) * limit;
+
+    const qb = this.classRepo
+      .createQueryBuilder('c')
+      .leftJoinAndSelect('c.subject', 'subject')
+      .leftJoinAndSelect('c.semester', 'semester')
+      .leftJoinAndSelect('c.lecturer', 'lecturer')
+      .leftJoinAndSelect('lecturer.user', 'lecturerUser');
+
+    if (role === Role.STUDENT) {
+      qb.innerJoin(
+        ClassStudent,
+        'cs',
+        'cs.classId = c.id AND cs.studentId = :studentId',
+        { studentId: userId },
+      );
+    } else if (role === Role.LECTURER) {
+      qb.andWhere('c.lecturerId = :lecturerId', { lecturerId: userId });
+    }
+
+    if (query.search?.trim()) {
+      qb.andWhere('(c.name ILIKE :search OR c.classCode ILIKE :search)', {
+        search: `%${query.search.trim()}%`,
+      });
+    }
+
+    const now = new Date();
+    if (query.status === 'in_progress') {
+      qb.andWhere('c.isActive = true');
+      qb.andWhere(
+        '(semester.endDate IS NULL OR semester.endDate >= :now) AND (semester.startDate IS NULL OR semester.startDate <= :now)',
+        { now },
+      );
+    } else if (query.status === 'future') {
+      qb.andWhere('c.isActive = true');
+      qb.andWhere(
+        'semester.startDate IS NOT NULL AND semester.startDate > :now',
+        { now },
+      );
+    } else if (query.status === 'past') {
+      qb.andWhere(
+        '(c.isActive = false OR (semester.endDate IS NOT NULL AND semester.endDate < :now))',
+        { now },
+      );
+    }
+
+    if (query.sort === 'name') {
+      qb.orderBy('c.name', 'ASC').addOrderBy('c.classCode', 'ASC');
+    } else {
+      qb.orderBy('c.classCode', 'DESC').addOrderBy('c.name', 'ASC');
+    }
+
+    qb.skip(skip).take(limit);
+
+    return qb.getManyAndCount();
   }
 
   async countStudents(classId: string): Promise<number> {
