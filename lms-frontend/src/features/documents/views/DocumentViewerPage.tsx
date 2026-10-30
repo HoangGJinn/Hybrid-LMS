@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect } from 'react';
-import { Link, useParams } from 'react-router';
+import { Link, useLocation, useParams } from 'react-router';
 import { Download, FileText, Sparkles } from 'lucide-react';
 import { AsyncView } from '@shared/components/AsyncView';
 import { EmptyState } from '@shared/components/EmptyState';
@@ -8,23 +8,28 @@ import { Skeleton } from '@shared/components/ui/skeleton';
 import { StatusBadge } from '@shared/components/ui/badge';
 import { Button } from '@shared/components/ui/button';
 import { toAsyncState } from '@shared/utils/async-state';
-import { useDocumentViewer } from '../hooks/useDocumentViewer';
+import { useMyQuizzes } from '@features/quizzes';
+import { useDocument } from '../hooks/useDocument';
 import { useMarkDocumentSeen } from '../hooks/useMarkDocumentSeen';
 
 // pdf.js is large, so it is only fetched when a PDF is actually opened.
 const PdfViewer = lazy(() => import('../components/PdfViewer'));
 
-const isPdf = (fileName: string, fileUrl: string) =>
-  /\.pdf($|\?)/i.test(fileName) || /\.pdf($|\?)/i.test(fileUrl);
+// The signed URL carries a long query string, so the file name decides the type.
+const isPdf = (fileName: string) => /\.pdf$/i.test(fileName);
 
 const DocumentViewerPage = () => {
   const { courseId = '', docId = '' } = useParams();
-  const state = toAsyncState(useDocumentViewer(docId));
+  // Works for both portals: `/student/courses/:id` and `/lecturer/classes/:id`.
+  const courseBase = useLocation().pathname.split('/documents/')[0];
+  // Only the document decides whether the page loads; a failing quiz request must not hide the file.
+  const state = toAsyncState(useDocument(courseId, docId));
+  const quizzes = useMyQuizzes().data ?? [];
   const { mutate: markSeen } = useMarkDocumentSeen();
 
   useEffect(() => {
-    if (docId) markSeen(docId);
-  }, [docId, markSeen]);
+    if (courseId && docId) markSeen({ classId: courseId, documentId: docId });
+  }, [courseId, docId, markSeen]);
 
   return (
     <AsyncView
@@ -33,12 +38,12 @@ const DocumentViewerPage = () => {
         <EmptyState
           title="Document not found"
           action={
-            <Link to={`/student/courses/${courseId}`}>Back to course</Link>
+            <Link to={courseBase}>Back to course</Link>
           }
         />
       }
     >
-      {({ doc, quizzes }) => (
+      {(doc) => (
         <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
           <div>
             <PageHeader
@@ -54,9 +59,7 @@ const DocumentViewerPage = () => {
               }
             />
             <div className="flex h-[75vh] w-full flex-col overflow-hidden rounded-lg border bg-card text-muted-foreground">
-              {doc.fileUrl &&
-              doc.fileUrl !== '#' &&
-              isPdf(doc.fileName, doc.fileUrl) ? (
+              {doc.fileUrl && doc.fileUrl !== '#' && isPdf(doc.fileName) ? (
                 <Suspense fallback={<Skeleton className="m-4 h-full" />}>
                   <PdfViewer url={doc.fileUrl} title={doc.title} />
                 </Suspense>
@@ -88,7 +91,7 @@ const DocumentViewerPage = () => {
                   {quizzes.map((q) => (
                     <li key={q.id}>
                       <Link
-                        to={`/student/courses/${courseId}/quizzes/${q.id}`}
+                        to={`${courseBase}/quizzes/${q.id}`}
                         className="flex items-center justify-between rounded-md border p-2 text-sm text-foreground no-underline hover:border-primary"
                       >
                         <span>{q.title}</span>
