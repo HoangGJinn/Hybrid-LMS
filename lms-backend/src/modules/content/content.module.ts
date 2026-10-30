@@ -7,6 +7,9 @@ import { AcademicModule } from '../academic/academic.module.js'
 import { SectionController } from './controllers/section.controller.js'
 import { SectionRepository } from './repositories/section.repository.js'
 import { SectionService } from './services/section.service.js'
+import { ContentFacade } from './facades/content.facade.js';
+import { DocumentItemRepository } from './repositories/document-item.repository.js';
+import { ClassDocumentService } from './services/class-document.service.js';
 
 @Module({
   imports: [
@@ -14,7 +17,7 @@ import { SectionService } from './services/section.service.js'
     AcademicModule,
   ],
   controllers: [SectionController],
-  providers: [SectionRepository, SectionService],
-  exports: [],
+  providers: [SectionRepository, SectionService, ContentFacade, DocumentItemRepository, ClassDocumentService],
+  exports: [ContentFacade],
 })
 export class ContentModule {}

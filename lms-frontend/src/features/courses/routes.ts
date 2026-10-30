@@ -7,7 +7,7 @@ import { CourseCrumb } from './components/CourseCrumb';
 export interface CourseRouteParts {
   /** Tabs rendered inside CourseLayout next to Content (e.g. Grades, Classmates). */
   tabs: RouteObject[];
-  /** Standalone pages below `/student/courses/:courseId` (document, quiz, assignment, exam). */
+  /** Standalone pages below a course (document, quiz, assignment, exam). */
   detailPages: RouteObject[];
 }
 
@@ -42,7 +42,9 @@ export const createStudentCourseRoutes = ({
 
 export const createLecturerClassRoutes = ({
   tabs,
-}: Pick<CourseRouteParts, 'tabs'>): RouteObject => ({
+  detailPages = [],
+}: Pick<CourseRouteParts, 'tabs'> &
+  Partial<Pick<CourseRouteParts, 'detailPages'>>): RouteObject => ({
   path: 'classes',
   ...crumb('My Classes'),
   children: [
@@ -50,10 +52,19 @@ export const createLecturerClassRoutes = ({
     {
       path: ':courseId',
       ...crumb(CourseCrumb),
-      ...lazyPage(() => import('./views/LecturerCourseLayout')),
       children: [
-        { index: true, ...lazyPage(() => import('./views/CourseEditorPage')) },
-        ...tabs,
+        {
+          // Banner + tabs; detail pages sit next to it so they are not nested in the banner.
+          ...lazyPage(() => import('./views/LecturerCourseLayout')),
+          children: [
+            {
+              index: true,
+              ...lazyPage(() => import('./views/CourseEditorPage')),
+            },
+            ...tabs,
+          ],
+        },
+        ...detailPages,
       ],
     },
   ],

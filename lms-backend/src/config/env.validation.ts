@@ -77,6 +77,33 @@ class EnvironmentVariables {
   @IsString()
   @IsOptional()
   ADMIN_EMAILS?: string;
+
+  @IsString()
+  @IsOptional()
+  AWS_REGION: string = 'ap-southeast-1';
+
+  /** Private bucket that holds every uploaded file; it is only ever reached through presigned URLs. */
+  @IsString()
+  S3_BUCKET_NAME: string;
+
+  /** Lifetime of a presigned download URL; keep it short (10-15 minutes). */
+  @IsNumber()
+  @IsOptional()
+  S3_DOWNLOAD_URL_TTL: number = 900;
+
+  /** Lifetime of a presigned upload form, in seconds; it only has to cover one upload. */
+  @IsNumber()
+  @IsOptional()
+  S3_UPLOAD_URL_TTL: number = 600;
+
+  /** Optional: when absent the AWS SDK default credential chain (for example an IAM role) is used. */
+  @IsString()
+  @IsOptional()
+  AWS_ACCESS_KEY_ID?: string;
+
+  @IsString()
+  @IsOptional()
+  AWS_SECRET_ACCESS_KEY?: string;
 }
 
 export function validate(config: Record<string, unknown>) {
