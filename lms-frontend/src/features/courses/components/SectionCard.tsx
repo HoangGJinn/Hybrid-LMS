@@ -1,3 +1,4 @@
+import { useRef } from 'react'
 import {
   ArrowDown,
   ArrowUp,
@@ -8,6 +9,7 @@ import {
   Plus,
   Trash2,
 } from 'lucide-react'
+import { DOCUMENT_ACCEPT } from '@features/documents'
 import { Button } from '@shared/components/ui/button'
 import { Input } from '@shared/components/ui/input'
 import { cn } from '@shared/utils/cn'
@@ -20,7 +22,8 @@ const itemIcon = {
   EXAM: PenSquare,
 }
 
-const itemTypes: ItemType[] = ['DOCUMENT', 'ASSIGNMENT', 'EXAM']
+// Documents are added by uploading a file, so they have their own button.
+const itemTypes: ItemType[] = ['ASSIGNMENT', 'EXAM']
 
 interface SectionCardProps {
   section: Section
@@ -34,6 +37,10 @@ interface SectionCardProps {
   onDescriptionChange: (description: string) => void
   onItemsChange: (items: SectionItem[]) => void
   onAddItem: (itemType: ItemType) => void
+  onAddDocument: (file: File) => void
+  /** Asks for confirmation first; plain items are deleted straight away. */
+  onRemoveDocument: (item: SectionItem) => void
+  isUploadingDocument: boolean
   onMoveUp: () => void
   onMoveDown: () => void
   onDelete: () => void
@@ -51,11 +58,15 @@ export const SectionCard = ({
   onDescriptionChange,
   onItemsChange,
   onAddItem,
+  onAddDocument,
+  onRemoveDocument,
+  isUploadingDocument,
   onMoveUp,
   onMoveDown,
   onDelete,
 }: SectionCardProps) => {
   const items = section.items
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const hasDescription = Boolean(section.description?.trim())
   const hasBody = isOpen && (items.length > 0 || isEditing || hasDescription)
   return (
@@ -163,7 +174,16 @@ export const SectionCard = ({
                     <Button size="icon" variant="ghost" aria-label="Move item down" onClick={() => onItemsChange(moveItem(items, index, 1))}>
                       <ArrowDown className="h-3 w-3" />
                     </Button>
-                    <Button size="icon" variant="ghost" aria-label="Delete item" onClick={() => onItemsChange(items.filter((x) => x.id !== item.id))}>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      aria-label={item.itemType === 'DOCUMENT' ? 'Remove document' : 'Delete item'}
+                      onClick={() =>
+                        item.itemType === 'DOCUMENT'
+                          ? onRemoveDocument(item)
+                          : onItemsChange(items.filter((x) => x.id !== item.id))
+                      }
+                    >
                       <Trash2 className="h-3 w-3 text-destructive" />
                     </Button>
                   </div>
@@ -173,6 +193,28 @@ export const SectionCard = ({
           })}
           {isEditing && (
             <li className="flex flex-wrap gap-2 px-3 pt-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                hidden
+                aria-label="Document file"
+                accept={DOCUMENT_ACCEPT}
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  // Clear the input so choosing the same file again still fires onChange.
+                  e.target.value = ''
+                  if (file) onAddDocument(file)
+                }}
+              />
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={isUploadingDocument}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Plus className="mr-1 h-3 w-3" />
+                {isUploadingDocument ? 'Uploading…' : 'Add document'}
+              </Button>
               {itemTypes.map((type) => (
                 <Button key={type} size="sm" variant="outline" onClick={() => onAddItem(type)}>
                   <Plus className="mr-1 h-3 w-3" />
