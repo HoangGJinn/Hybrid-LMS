@@ -11,3 +11,4 @@ services:
       - .env
     volumes:
       - ./ca.pem:/app/ca.pem:ro
+

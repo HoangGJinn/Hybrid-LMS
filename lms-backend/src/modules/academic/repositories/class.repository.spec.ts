@@ -7,8 +7,6 @@ import { Role } from '../../../common/enums/role.enum.js';
 
 type Mock = ReturnType<typeof vi.fn>;
 
-type Mock = ReturnType<typeof vi.fn>;
-
 describe('ClassRepository', () => {
   let repository: ClassRepository;
   let mockClassRepo: {
