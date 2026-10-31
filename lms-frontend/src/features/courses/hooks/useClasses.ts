@@ -5,6 +5,8 @@ import type { MyCoursesParams } from '../types/courses.types';
 
 const CLASSES_STALE_TIME_MS = 60_000; // 60 seconds
 
+const CLASSES_STALE_TIME_MS = 60_000; // 60 seconds
+
 /** Classes the signed-in student is enrolled in. */
 export const useMyClasses = () =>
   useQuery({
