@@ -40,6 +40,12 @@ export class UserFacade {
     return user ? UserView.fromEntity(user) : null;
   }
 
+  async findForPasswordAuth(
+    identifier: string,
+  ): Promise<{ user: UserView; passwordHash: string | null } | null> {
+    return this.userService.findForPasswordAuth(identifier);
+  }
+
   async getUserById(id: string): Promise<UserView> {
     const user = await this.userService.getUserById(id);
     return UserView.fromEntity(user);

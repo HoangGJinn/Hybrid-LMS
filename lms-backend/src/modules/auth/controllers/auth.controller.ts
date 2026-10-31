@@ -13,6 +13,7 @@ import {
 import type { CookieOptions, Request, Response } from 'express';
 import { AuthService } from '../services/auth.service.js';
 import { GoogleAuthDto } from '../dto/google-auth.dto.js';
+import { LoginDto } from '../dto/login.dto.js';
 import { REFRESH_COOKIE_NAME } from '../constants/refresh-cookie-name.constant.js';
 import {
   AuthTokenResponse,
@@ -38,6 +39,18 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ): Promise<LoginResponse> {
     const session = await this.authService.loginWithGoogle(dto.idToken);
+    this.setRefreshCookie(res, session.refreshToken);
+    return { accessToken: session.accessToken, user: session.user };
+  }
+
+  /** Username/password login: returns the access token in the body and sets the refresh token as an httpOnly cookie. */
+  @Post('login')
+  @HttpCode(HttpStatus.OK)
+  async login(
+    @Body() dto: LoginDto,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<LoginResponse> {
+    const session = await this.authService.loginWithCredentials(dto);
     this.setRefreshCookie(res, session.refreshToken);
     return { accessToken: session.accessToken, user: session.user };
   }
