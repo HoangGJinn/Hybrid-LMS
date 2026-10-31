@@ -10,4 +10,5 @@ services:
     env_file:
       - .env
     volumes:
-      - ./ca.pem:/usr/src/app/ca.pem:ro
+      - ./ca.pem:/app/ca.pem:ro
+

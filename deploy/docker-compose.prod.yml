@@ -1,0 +1,15 @@
+# Production Docker Compose for EC2 deployment
+# Location on EC2: ~/hybrid-lms/docker-compose.yml
+services:
+  backend:
+    image: ghcr.io/hoanggjinn/hybrid-lms-backend:latest
+    container_name: lms-backend
+    restart: unless-stopped
+    ports:
+      - '9595:9595'
+    env_file:
+      - .env
+    volumes:
+      - ./ca.pem:/app/ca.pem:ro
+      - ./logs:/app/logs
+
