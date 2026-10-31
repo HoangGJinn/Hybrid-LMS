@@ -1,0 +1,39 @@
+# Dependency directories
+node_modules
+.pnpm-store
+
+# Build and coverage outputs
+dist
+coverage
+*.lcov
+
+# Environment and secrets
+.env
+.env.local
+.env.*.local
+*.pem
+!ca.pem
+
+# Git and IDE
+.git
+.gitignore
+.github
+.vscode
+.idea
+
+# Tests and documentation
+test
+**/*.spec.ts
+**/*.test.ts
+*.md
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db

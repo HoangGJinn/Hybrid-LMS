@@ -1,0 +1,13 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: lms-backend
+    restart: unless-stopped
+    ports:
+      - '9595:9595'
+    env_file:
+      - .env
+    volumes:
+      - ./ca.pem:/app/ca.pem:ro
