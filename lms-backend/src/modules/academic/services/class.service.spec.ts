@@ -97,6 +97,7 @@ describe('ClassService', () => {
       findById: vi.fn(),
       findByLecturerId: vi.fn(),
       findByStudentId: vi.fn(),
+      findMyClasses: vi.fn(),
       countStudents: vi.fn(),
       countStudentsBatch: vi.fn(),
       update: vi.fn(),
@@ -270,6 +271,35 @@ describe('ClassService', () => {
       const result = await service.findByStudent('stu-user-id');
       expect(mockClassRepo.findByStudentId).toHaveBeenCalledWith('stu-user-id');
       expect(result).toEqual([sampleClass]);
+    });
+  });
+
+  describe('findMyClasses', () => {
+    it('returns paginated classes with student counts', async () => {
+      mockClassRepo.findMyClasses!.mockResolvedValue([[sampleClass], 1]);
+      mockClassRepo.countStudentsBatch!.mockResolvedValue(
+        new Map([['cls-uuid-1', 25]]),
+      );
+
+      const result = await service.findMyClasses('user-1', Role.STUDENT, {
+        page: 1,
+        limit: 6,
+      });
+
+      expect(mockClassRepo.findMyClasses).toHaveBeenCalledWith(
+        'user-1',
+        Role.STUDENT,
+        { page: 1, limit: 6 },
+      );
+      expect(mockClassRepo.countStudentsBatch).toHaveBeenCalledWith([
+        'cls-uuid-1',
+      ]);
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].studentCount).toBe(25);
+      expect(result.total).toBe(1);
+      expect(result.page).toBe(1);
+      expect(result.limit).toBe(6);
+      expect(result.totalPages).toBe(1);
     });
   });
 

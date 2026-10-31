@@ -19,6 +19,8 @@ import { AcademicFacade } from '../facades/academic.facade.js';
 import { Role } from '../../../common/enums/role.enum.js';
 import { ClassmateView } from '../types/classmate-view.type.js';
 import { RosterStudentView } from '../types/roster-student-view.type.js';
+import { QueryMyClassesDto } from '../dto/query-my-classes.dto.js';
+import { PaginatedResult } from '../../../common/types/paginated-result.type.js';
 
 @Controller('classes')
 @Auth(Role.ADMIN)
@@ -38,7 +40,17 @@ export class ClassController {
   @Auth(Role.STUDENT, Role.LECTURER, Role.ADMIN)
   async getMyClasses(
     @CurrentUser() user: AuthenticatedUser,
-  ): Promise<ClassView[]> {
+    @Query() query: QueryMyClassesDto = {},
+  ): Promise<PaginatedResult<ClassView> | ClassView[]> {
+    if (
+      query.page !== undefined ||
+      query.limit !== undefined ||
+      query.search !== undefined ||
+      query.status !== undefined ||
+      query.sort !== undefined
+    ) {
+      return this.classService.findMyClasses(user.id, user.role, query);
+    }
     if (user.role === Role.STUDENT) {
       return this.academicFacade.getClassesByStudent(user.id);
     }

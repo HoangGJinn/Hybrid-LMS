@@ -55,3 +55,23 @@ export interface Section {
   orderIndex: number;
   items: SectionItem[];
 }
+
+export type CourseFilterStatus = 'all' | 'in_progress' | 'future' | 'past';
+export type CourseSort = 'last_accessed' | 'name';
+export type CourseViewMode = 'card' | 'list' | 'summary';
+
+export interface MyCoursesParams {
+  page?: number;
+  limit?: number;
+  search?: string;
+  status?: CourseFilterStatus;
+  sort?: CourseSort;
+}
+
+export interface PaginatedCourses {
+  items: ClassRoom[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}

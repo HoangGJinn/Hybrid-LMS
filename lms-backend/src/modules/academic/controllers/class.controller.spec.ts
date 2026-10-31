@@ -83,6 +83,7 @@ describe('ClassController', () => {
       countStudents: vi.fn(),
       update: vi.fn(),
       deactivate: vi.fn(),
+      findMyClasses: vi.fn(),
     };
     mockAcademicFacade = {
       getClassesByStudent: vi.fn(),
@@ -144,6 +145,35 @@ describe('ClassController', () => {
       expect(mockAcademicFacade.getClassesByStudent).not.toHaveBeenCalled();
       expect(mockAcademicFacade.getClassesByLecturer).not.toHaveBeenCalled();
       expect(result).toEqual([]);
+    });
+
+    it('returns paginated classes when query parameters are provided', async () => {
+      const paginatedResult = {
+        items: [sampleClassView],
+        total: 1,
+        page: 1,
+        limit: 6,
+        totalPages: 1,
+      };
+      mockClassService.findMyClasses!.mockResolvedValue(paginatedResult);
+      const studentUser: AuthenticatedUser = {
+        id: 'stu-user-id',
+        email: 'student@school.edu.vn',
+        role: Role.STUDENT,
+      };
+
+      const result = await controller.getMyClasses(studentUser, {
+        page: 1,
+        limit: 6,
+        status: 'in_progress',
+      });
+
+      expect(mockClassService.findMyClasses).toHaveBeenCalledWith(
+        'stu-user-id',
+        Role.STUDENT,
+        { page: 1, limit: 6, status: 'in_progress' },
+      );
+      expect(result).toEqual(paginatedResult);
     });
   });
 
