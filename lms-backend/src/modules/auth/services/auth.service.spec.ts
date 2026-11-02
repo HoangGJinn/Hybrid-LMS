@@ -53,6 +53,7 @@ describe('AuthService', () => {
       claimProvisionedAccount: vi.fn(),
       getUserById: vi.fn(),
       getProfileCode: vi.fn(),
+      findForPasswordAuth: vi.fn(),
     };
     mockTokenService = {
       generateAccessToken: vi.fn().mockReturnValue('access.token.jwt'),
@@ -214,6 +215,81 @@ describe('AuthService', () => {
           role: Role.ADMIN,
         }),
       );
+    });
+  });
+
+  describe('loginWithCredentials', () => {
+    const passwordHash = '$2b$10$0efWZrLo4lZBp7tCszn/uO6qAY7r4MX8XsWK3We8JG9gYKGqbbW0e';
+
+    it('authenticates user and returns session when credentials are valid', async () => {
+      mockUserFacade.findForPasswordAuth!.mockResolvedValue({
+        user: sampleUserView,
+        passwordHash,
+      });
+      mockUserFacade.getProfileCode!.mockResolvedValue('SV001');
+
+      const result = await service.loginWithCredentials({
+        username: 'student1',
+        password: 'admine123456',
+      });
+
+      expect(mockUserFacade.findForPasswordAuth).toHaveBeenCalledWith('student1');
+      expect(result.accessToken).toBe('access.token.jwt');
+      expect(result.refreshToken).toBe('refresh-token-uuid');
+      expect(result.user.email).toBe(sampleUserView.email);
+    });
+
+    it('throws UnauthorizedException when user is not found', async () => {
+      mockUserFacade.findForPasswordAuth!.mockResolvedValue(null);
+
+      await expect(
+        service.loginWithCredentials({
+          username: 'unknown',
+          password: 'admine123456',
+        }),
+      ).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('throws UnauthorizedException when user has no password set', async () => {
+      mockUserFacade.findForPasswordAuth!.mockResolvedValue({
+        user: sampleUserView,
+        passwordHash: null,
+      });
+
+      await expect(
+        service.loginWithCredentials({
+          username: 'student1',
+          password: 'admine123456',
+        }),
+      ).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('throws UnauthorizedException when password is incorrect', async () => {
+      mockUserFacade.findForPasswordAuth!.mockResolvedValue({
+        user: sampleUserView,
+        passwordHash,
+      });
+
+      await expect(
+        service.loginWithCredentials({
+          username: 'student1',
+          password: 'wrong_password',
+        }),
+      ).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('throws UnauthorizedException when account is disabled', async () => {
+      mockUserFacade.findForPasswordAuth!.mockResolvedValue({
+        user: { ...sampleUserView, isActive: false },
+        passwordHash,
+      });
+
+      await expect(
+        service.loginWithCredentials({
+          username: 'student1',
+          password: 'admine123456',
+        }),
+      ).rejects.toThrow(UnauthorizedException);
     });
   });
 

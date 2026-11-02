@@ -26,6 +26,7 @@ import { StudentStatus } from '../enums/student-status.enum.js';
 import { GoogleAccountData } from '../types/google-account-data.type.js';
 import { ManagedUserView } from '../types/managed-user-view.type.js';
 import { StudentSummary } from '../types/student-summary.type.js';
+import { UserView } from '../types/user-view.type.js';
 import { deriveDisplayName } from '../utils/display-name.util.js';
 import { profilePrefixFor } from '../utils/profile-code.util.js';
 import { PaginatedResult } from '../../../common/types/paginated-result.type.js';
@@ -76,6 +77,17 @@ export class UserService {
 
   async findBySsoId(ssoId: string): Promise<User | null> {
     return this.userRepository.findBySsoId(ssoId);
+  }
+
+  async findForPasswordAuth(
+    identifier: string,
+  ): Promise<{ user: UserView; passwordHash: string | null } | null> {
+    const user = await this.userRepository.findForPasswordAuth(identifier);
+    if (!user) return null;
+    return {
+      user: UserView.fromEntity(user),
+      passwordHash: user.passwordHash,
+    };
   }
 
   async getUserById(id: string): Promise<User> {

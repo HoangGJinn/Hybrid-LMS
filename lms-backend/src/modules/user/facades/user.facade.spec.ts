@@ -36,6 +36,7 @@ describe('UserFacade', () => {
       findStudentsByEmails: vi.fn(),
       searchEnrollableStudents: vi.fn(),
       claimProvisionedAccount: vi.fn(),
+      findForPasswordAuth: vi.fn(),
     };
     facade = new UserFacade(mockUserService as unknown as UserService);
   });
@@ -118,6 +119,21 @@ describe('UserFacade', () => {
       const result = await facade.findBySsoId('unknown-sso');
 
       expect(result).toBeNull();
+    });
+  });
+
+  describe('findForPasswordAuth', () => {
+    it('delegates to userService.findForPasswordAuth', async () => {
+      const mockResult = {
+        user: { ...sampleUser },
+        passwordHash: 'some-hash',
+      };
+      mockUserService.findForPasswordAuth!.mockResolvedValue(mockResult);
+
+      const result = await facade.findForPasswordAuth('student1');
+
+      expect(mockUserService.findForPasswordAuth).toHaveBeenCalledWith('student1');
+      expect(result).toEqual(mockResult);
     });
   });
 

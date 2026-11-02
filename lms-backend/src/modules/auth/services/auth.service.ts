@@ -1,5 +1,6 @@
 import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import bcrypt from 'bcryptjs';
 import { UserFacade } from '../../user/facades/user.facade.js';
 import { UserView } from '../../user/types/user-view.type.js';
 import { AuthSession } from '../types/auth-session.type.js';
@@ -7,6 +8,7 @@ import { SessionUser } from '../types/session-user.type.js';
 import { TokenService } from './token.service.js';
 import { RefreshTokenService } from './refresh-token.service.js';
 import { GoogleAuthService, GoogleUserProfile } from './google-auth.service.js';
+import { LoginDto } from '../dto/login.dto.js';
 import { Role } from '../../../common/enums/role.enum.js';
 
 const GOOGLE_PROVIDER = 'GOOGLE';
@@ -40,6 +42,35 @@ export class AuthService {
     return this.startSession(
       user,
       await this.refreshTokenService.issue(user.id),
+    );
+  }
+
+  async loginWithCredentials(dto: LoginDto): Promise<AuthSession> {
+    this.logger.log(`Attempting password login for: ${dto.username}`);
+    const account = await this.userFacade.findForPasswordAuth(dto.username);
+    if (!account || !account.passwordHash) {
+      this.logger.warn(
+        `Login failed: user not found or has no password set: ${dto.username}`,
+      );
+      throw new UnauthorizedException('Invalid username or password');
+    }
+    const isPasswordValid = await bcrypt.compare(
+      dto.password,
+      account.passwordHash,
+    );
+    if (!isPasswordValid) {
+      this.logger.warn(`Login failed: incorrect password for: ${dto.username}`);
+      throw new UnauthorizedException('Invalid username or password');
+    }
+    if (!account.user.isActive) {
+      this.logger.warn(
+        `Login refused, account is disabled: ${account.user.email}`,
+      );
+      throw new UnauthorizedException('Account is disabled');
+    }
+    return this.startSession(
+      account.user,
+      await this.refreshTokenService.issue(account.user.id),
     );
   }
 
