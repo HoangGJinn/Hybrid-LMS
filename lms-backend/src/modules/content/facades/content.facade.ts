@@ -24,4 +24,12 @@ export class ContentFacade {
   async markDocumentSeen(classId: string, documentId: string, studentId: string): Promise<void> {
     return this.classDocumentService.markSeen(classId, documentId, studentId);
   }
+
+    async removeDocumentFromClass(classId: string, documentId: string): Promise<number> {
+    return this.classDocumentService.removeDocument(classId, documentId);
+  }
+
+  async isDocumentReferenced(documentId: string): Promise<boolean> {
+    return this.classDocumentService.isDocumentReferenced(documentId);
+  }
 }

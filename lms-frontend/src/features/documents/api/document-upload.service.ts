@@ -2,7 +2,7 @@ import { post } from '@core/api/http';
 import { USE_MOCK } from '@core/config/env';
 import { delay, mockDocuments } from '@core/mocks';
 import type { LmsDocumentSummary } from '../types/documents.types';
-import { titleFromFileName } from '../utils/upload-rules';
+import { resolveContentType, titleFromFileName } from '../utils/upload-rules';
 
 interface UploadRequest {
   fileId: string;
@@ -13,7 +13,7 @@ const requestUpload = (file: File): Promise<UploadRequest> =>
   post('/api/files/upload-requests', {
     purpose: 'DOCUMENT',
     fileName: file.name,
-    contentType: file.type,
+    contentType: resolveContentType(file),
     size: file.size,
   });
 

@@ -1,7 +1,7 @@
 import { USE_MOCK } from '@core/config/env';
 import { mockDocuments, delay } from '@core/mocks';
 import type { LmsDocument, LmsDocumentSummary } from '../types/documents.types';
-import { get, patch } from '@core/api/http';
+import { del, get, patch } from '@core/api/http';
 
 export const documentService = {
   getDocuments: (classId: string): Promise<LmsDocumentSummary[]> =>
@@ -14,6 +14,10 @@ export const documentService = {
     USE_MOCK
       ? delay(mockDocuments.find((d) => d.id === documentId))
       : get(`/api/classes/${classId}/documents/${documentId}`),
+      remove: (classId: string, documentId: string): Promise<void> =>
+    USE_MOCK
+      ? delay(undefined)
+      : del(`/api/classes/${classId}/documents/${documentId}`),
   markSeen: (classId: string, documentId: string): Promise<void> => {
     if (!USE_MOCK)
       return patch(`/api/classes/${classId}/documents/${documentId}/seen`);

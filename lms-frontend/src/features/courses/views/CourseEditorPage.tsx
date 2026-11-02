@@ -1,14 +1,21 @@
 import { toast } from 'sonner'
+import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useParams } from 'react-router'
 import { Plus } from 'lucide-react'
-import { useUploadDocument, validateDocumentFile } from '@features/documents'
+import {
+  useRemoveDocument,
+  useUploadDocument,
+  validateDocumentFile,
+} from '@features/documents'
 import { AsyncView } from '@shared/components/AsyncView'
 import { EmptyState } from '@shared/components/EmptyState'
 import { ErrorState } from '@shared/components/ErrorState'
 import { Button } from '@shared/components/ui/button'
 import { Input } from '@shared/components/ui/input'
 import { toAsyncState } from '@shared/utils/async-state'
+import { courseKeys } from '../api/queryKeys'
+import { AddVideoDialog } from '../components/AddVideoDialog'
 import { RemoveDocumentConfirm } from '../components/RemoveDocumentConfirm'
 import { SectionCard } from '../components/SectionCard'
 import { useCourseSections } from '../hooks/useCourse'
@@ -25,14 +32,18 @@ const CourseEditorPage = () => {
   const saveSections = useSaveSections(courseId)
   const createSection = useCreateSection(courseId)
   const uploadDocument = useUploadDocument()
+  const removeDocument = useRemoveDocument()
+  const queryClient = useQueryClient()
   // `null` = no "new section" form open; otherwise the title being typed.
   const [newTitle, setNewTitle] = useState<string | null>(null)
   // `null` = read-only view of the server data. While editing, the draft overlays it, so no effect has to copy query data into state.
   const [draft, setDraft] = useState<Section[] | null>(null)
   // Section ids the lecturer collapsed; everything is open by default.
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
-  // Document waiting for the lecturer's confirmation (UC-30), with the section it belongs to.
+  // Document waiting for the lecturer's confirmation (UC-30).
   const [pendingRemoval, setPendingRemoval] = useState<SectionItem | null>(null)
+  // Section the lecturer is adding a YouTube video to; `null` keeps the dialog closed.
+  const [videoSectionId, setVideoSectionId] = useState<string | null>(null)
   const editing = draft !== null
 
   const setSections = (updater: (current: Section[]) => Section[]) =>
@@ -99,19 +110,63 @@ const CourseEditorPage = () => {
     )
   }
 
+  /** Adds a YouTube video to the draft section; "Save changes" publishes it. */
+  const handleAddVideo = (video: { title: string; url: string }) => {
+    const sectionId = videoSectionId
+    if (sectionId === null) return
+    setSections((current) =>
+      current.map((x) =>
+        x.id === sectionId
+          ? {
+              ...x,
+              items: [
+                ...x.items,
+                {
+                  id: crypto.randomUUID(),
+                  sectionId,
+                  itemType: 'VIDEO',
+                  title: video.title,
+                  externalUrl: video.url,
+                  orderIndex: x.items.length + 1,
+                  documentId: null,
+                  assignmentId: null,
+                  isCompleted: false,
+                },
+              ],
+            }
+          : x,
+      ),
+    )
+    setVideoSectionId(null)
+    toast.success('Video added. Save changes to publish it.')
+  }
+
+  /** UC-30: after confirmation the document and its stored file are deleted right away. */
   const handleConfirmRemoval = () => {
     if (pendingRemoval === null) return
-    setSections((current) =>
-      removeItem(current, pendingRemoval.sectionId, pendingRemoval.id),
+    const item = pendingRemoval
+    const finish = () => {
+      setSections((current) => removeItem(current, item.sectionId, item.id))
+      setPendingRemoval(null)
+      queryClient.invalidateQueries({ queryKey: courseKeys.sections(courseId) })
+      toast.success('Document deleted')
+    }
+    // An item without a document was never uploaded, so there is nothing to delete on the server.
+    if (item.documentId === null) {
+      finish()
+      return
+    }
+    removeDocument.mutate(
+      { classId: courseId, documentId: item.documentId },
+      { onSuccess: finish, onError: (error) => toast.error(error.message) },
     )
-    setPendingRemoval(null)
-    toast.success('Document removed. Save changes to apply.')
   }
 
   const handleStartEditing = () => setDraft(state.data ?? [])
   const handleCancel = () => {
     setDraft(null)
     setPendingRemoval(null)
+    setVideoSectionId(null)
     setNewTitle(null)
   }
   const handleToggleSection = (id: string) =>
@@ -197,6 +252,7 @@ const CourseEditorPage = () => {
                   onItemsChange={(items) => update(sec.id, { items })}
                   onAddItem={(type) => addItem(sec, type)}
                   onAddDocument={(file) => addDocument(sec.id, file)}
+                  onAddVideo={() => setVideoSectionId(sec.id)}
                   onRemoveDocument={setPendingRemoval}
                   isUploadingDocument={uploadDocument.isPending}
                   onMoveUp={() => setSections((s) => moveItem(s, i, -1))}
@@ -244,8 +300,14 @@ const CourseEditorPage = () => {
           )
         }}
       </AsyncView>
+      <AddVideoDialog
+        open={videoSectionId !== null}
+        onClose={() => setVideoSectionId(null)}
+        onSubmit={handleAddVideo}
+      />
       <RemoveDocumentConfirm
         item={pendingRemoval}
+        isRemoving={removeDocument.isPending}
         onConfirm={handleConfirmRemoval}
         onClose={() => setPendingRemoval(null)}
       />

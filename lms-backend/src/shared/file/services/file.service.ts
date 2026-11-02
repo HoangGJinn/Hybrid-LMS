@@ -129,4 +129,15 @@ export class FileService {
     }
     return file;
   }
+
+    /**
+   * Permanently deletes the object from S3 and then its record. The object goes first, so a failure
+   * leaves the record in place and the deletion can simply be retried. A missing file is a no-op.
+   */
+  async deleteFile(fileId: string): Promise<void> {
+    const file = await this.fileRepository.findById(fileId);
+    if (!file) return;
+    await this.fileStorageService.deleteObject(file.storageKey);
+    await this.fileRepository.deleteById(file.id);
+  }
 }

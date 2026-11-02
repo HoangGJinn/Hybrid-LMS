@@ -37,4 +37,9 @@ export class FileRepository {
   async markReady(id: string): Promise<void> {
     await this.fileOrmRepository.update({ id }, { status: FileStatus.READY });
   }
+
+    /** Removes the file record. */
+  async deleteById(id: string): Promise<void> {
+    await this.fileOrmRepository.delete({ id });
+  }
 }

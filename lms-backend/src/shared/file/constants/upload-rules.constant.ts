@@ -32,6 +32,11 @@ export const UPLOAD_RULES: Readonly<Record<FilePurpose, UploadRule>> = {
         'xlsx',
       'video/mp4': 'mp4',
       'application/zip': 'zip',
+      // Windows browsers often report .zip files with this type.
+      'application/x-zip-compressed': 'zip',
+      'application/vnd.rar': 'rar',
+      'application/x-rar-compressed': 'rar',
+      'application/x-7z-compressed': '7z',
     },
   },
 };

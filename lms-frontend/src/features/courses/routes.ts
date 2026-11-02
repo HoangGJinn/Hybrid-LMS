@@ -2,6 +2,7 @@ import type { RouteObject } from 'react-router';
 import { lazyPage } from '@core/router/lazyPage';
 import { crumb } from '@core/router/route-handle';
 import { CourseCrumb } from './components/CourseCrumb';
+import { VideoCrumb } from './components/VideoCrumb';
 
 /** Routes other features plug into a course, so `courses` never has to import them. */
 export interface CourseRouteParts {
@@ -10,6 +11,13 @@ export interface CourseRouteParts {
   /** Standalone pages below a course (document, quiz, assignment, exam). */
   detailPages: RouteObject[];
 }
+
+/** Standalone page below a course, shared by the student and lecturer trees. */
+const videoRoute: RouteObject = {
+  path: 'videos/:itemId',
+  ...crumb(VideoCrumb),
+  ...lazyPage(() => import('./views/VideoViewerPage')),
+};
 
 export const createStudentCourseRoutes = ({
   tabs,
@@ -34,6 +42,7 @@ export const createStudentCourseRoutes = ({
             ...tabs,
           ],
         },
+        videoRoute,
         ...detailPages,
       ],
     },
@@ -42,9 +51,8 @@ export const createStudentCourseRoutes = ({
 
 export const createLecturerClassRoutes = ({
   tabs,
-  detailPages = [],
-}: Pick<CourseRouteParts, 'tabs'> &
-  Partial<Pick<CourseRouteParts, 'detailPages'>>): RouteObject => ({
+  detailPages,
+}: CourseRouteParts): RouteObject => ({
   path: 'classes',
   ...crumb('My Classes'),
   children: [
@@ -54,7 +62,7 @@ export const createLecturerClassRoutes = ({
       ...crumb(CourseCrumb),
       children: [
         {
-          // Banner + tabs; detail pages sit next to it so they are not nested in the banner.
+          // Banner + tabs shared by the editor and Members; detail pages below render without them.
           ...lazyPage(() => import('./views/LecturerCourseLayout')),
           children: [
             {
@@ -64,6 +72,7 @@ export const createLecturerClassRoutes = ({
             ...tabs,
           ],
         },
+        videoRoute,
         ...detailPages,
       ],
     },

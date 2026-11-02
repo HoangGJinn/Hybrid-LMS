@@ -53,4 +53,13 @@ export class ClassDocumentService {
     }
     await this.documentItemRepository.markItemsCompleted(studentId, itemIds);
   }
+    /** Removes the document from every section of the class; returns how many section items were removed. */
+  async removeDocument(classId: string, documentId: string): Promise<number> {
+    return this.documentItemRepository.deleteItemsByDocument(classId, documentId);
+  }
+
+  /** Tells whether any class still shows the document. */
+  async isDocumentReferenced(documentId: string): Promise<boolean> {
+    return this.documentItemRepository.isDocumentReferenced(documentId);
+  }
 }

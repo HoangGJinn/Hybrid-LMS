@@ -11,14 +11,41 @@ export const DOCUMENT_CONTENT_TYPES = [
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   'video/mp4',
   'application/zip',
+  'application/x-zip-compressed',
+  'application/vnd.rar',
+  'application/x-rar-compressed',
+  'application/x-7z-compressed',
 ] as const;
 
-/** Value for `<input accept>`. */
-export const DOCUMENT_ACCEPT = DOCUMENT_CONTENT_TYPES.join(',');
+/** Browsers often report an empty type for archives, so the extension decides in that case. */
+const CONTENT_TYPE_BY_EXTENSION: Readonly<Record<string, string>> = {
+  zip: 'application/zip',
+  rar: 'application/vnd.rar',
+  '7z': 'application/x-7z-compressed',
+};
+
+/** The content type sent to the backend and signed into the S3 upload. */
+export const resolveContentType = (file: File): string => {
+  if (file.type) return file.type;
+  const extension = file.name.split('.').pop()?.toLowerCase() ?? '';
+  return CONTENT_TYPE_BY_EXTENSION[extension] ?? '';
+};
+
+/** Value for `<input accept>`; the extensions let the file picker show archives whose type is unknown. */
+export const DOCUMENT_ACCEPT = [
+  ...DOCUMENT_CONTENT_TYPES,
+  '.zip',
+  '.rar',
+  '.7z',
+].join(',');
 
 /** Returns an error message for an invalid file (UC-29 exception flow), or null when it can be uploaded. */
 export const validateDocumentFile = (file: File): string | null => {
-  if (!(DOCUMENT_CONTENT_TYPES as readonly string[]).includes(file.type)) {
+  if (
+    !(DOCUMENT_CONTENT_TYPES as readonly string[]).includes(
+      resolveContentType(file),
+    )
+  ) {
     return 'This file format is not supported';
   }
   if (file.size === 0) return 'This file is empty';

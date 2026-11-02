@@ -1,4 +1,5 @@
 import { useRef } from 'react'
+import { Link } from 'react-router'
 import {
   ArrowDown,
   ArrowUp,
@@ -6,6 +7,7 @@ import {
   ClipboardList,
   FileText,
   PenSquare,
+  PlayCircle,
   Plus,
   Trash2,
 } from 'lucide-react'
@@ -20,9 +22,20 @@ const itemIcon = {
   DOCUMENT: FileText,
   ASSIGNMENT: ClipboardList,
   EXAM: PenSquare,
+  VIDEO: PlayCircle,
 }
 
-// Documents are added by uploading a file, so they have their own button.
+/** Where a lecturer opens an item from the read-only view; plain items have no page yet. */
+const itemLink = (classId: string, item: SectionItem): string | null => {
+  if (item.itemType === 'DOCUMENT' && item.documentId)
+    return `/lecturer/classes/${classId}/documents/${item.documentId}`
+  if (item.itemType === 'VIDEO')
+
+    return `/lecturer/classes/${classId}/videos/${item.id}`
+  return null
+}
+
+// Documents and videos are added through their own buttons.
 const itemTypes: ItemType[] = ['ASSIGNMENT', 'EXAM']
 
 interface SectionCardProps {
@@ -38,6 +51,7 @@ interface SectionCardProps {
   onItemsChange: (items: SectionItem[]) => void
   onAddItem: (itemType: ItemType) => void
   onAddDocument: (file: File) => void
+  onAddVideo: () => void
   /** Asks for confirmation first; plain items are deleted straight away. */
   onRemoveDocument: (item: SectionItem) => void
   isUploadingDocument: boolean
@@ -49,6 +63,7 @@ interface SectionCardProps {
 /** One rounded week card: circular chevron, large title, then its items. */
 export const SectionCard = ({
   section,
+
   isOpen,
   isEditing,
   toggleAllLabel,
@@ -59,6 +74,7 @@ export const SectionCard = ({
   onItemsChange,
   onAddItem,
   onAddDocument,
+  onAddVideo,
   onRemoveDocument,
   isUploadingDocument,
   onMoveUp,
@@ -80,6 +96,7 @@ export const SectionCard = ({
         <button
           type="button"
           aria-expanded={isOpen}
+
           aria-label={isOpen ? 'Collapse section' : 'Expand section'}
           onClick={onToggle}
           className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-0 bg-accent text-brand"
@@ -112,6 +129,7 @@ export const SectionCard = ({
           </div>
         )}
         {toggleAllLabel && (
+
           <button
             type="button"
             onClick={onToggleAll}
@@ -122,27 +140,29 @@ export const SectionCard = ({
         )}
       </div>
       {isOpen && (isEditing || hasDescription) && (
-      <div className="mx-5 pt-4">
-        {isEditing ? (
-          <textarea
-            aria-label="Section description"
-            placeholder="Section description (optional)"
-            rows={4}
-            value={section.description ?? ''}
-            onChange={(e) => onDescriptionChange(e.target.value)}
-            className="w-full rounded-md border bg-background p-3 text-sm"
-          />
-        ) : (
-          <p className="m-0 whitespace-pre-line text-sm text-muted-foreground">
-            {section.description}
-          </p>
-        )}
-      </div>
-    )}
+        <div className="mx-5 pt-4">
+          {isEditing ? (
+            <textarea
+              aria-label="Section description"
+              placeholder="Section description (optional)"
+              rows={4}
+              value={section.description ?? ''}
+              onChange={(e) => onDescriptionChange(e.target.value)}
+              className="w-full rounded-md border bg-background p-3 text-sm"
+            />
+          ) : (
+            <p className="m-0 whitespace-pre-line text-sm text-muted-foreground">
+              {section.description}
+            </p>
+          )}
+        </div>
+      )}
       {hasBody && (
         <ul className="m-0 list-none space-y-1 px-5 py-4">
           {items.map((item, index) => {
             const Icon = itemIcon[item.itemType]
+            const link = itemLink(section.classId, item)
+
             return (
               <li
                 key={item.id}
@@ -162,12 +182,20 @@ export const SectionCard = ({
                     }
                     className="h-8 flex-1"
                   />
+                ) : link ? (
+                  <Link
+                    to={link}
+                    className="flex-1 text-sm text-brand hover:underline"
+                  >
+                    {item.title}
+                  </Link>
                 ) : (
                   <span className="flex-1 text-sm text-brand">{item.title}</span>
                 )}
                 <span className="text-xs text-muted-foreground">{item.itemType}</span>
                 {isEditing && (
                   <div className="flex gap-1">
+
                     <Button size="icon" variant="ghost" aria-label="Move item up" onClick={() => onItemsChange(moveItem(items, index, -1))}>
                       <ArrowUp className="h-3 w-3" />
                     </Button>
@@ -200,6 +228,7 @@ export const SectionCard = ({
                 aria-label="Document file"
                 accept={DOCUMENT_ACCEPT}
                 onChange={(e) => {
+
                   const file = e.target.files?.[0]
                   // Clear the input so choosing the same file again still fires onChange.
                   e.target.value = ''
@@ -214,6 +243,10 @@ export const SectionCard = ({
               >
                 <Plus className="mr-1 h-3 w-3" />
                 {isUploadingDocument ? 'Uploading…' : 'Add document'}
+              </Button>
+              <Button size="sm" variant="outline" onClick={onAddVideo}>
+                <Plus className="mr-1 h-3 w-3" />
+                Add video
               </Button>
               {itemTypes.map((type) => (
                 <Button key={type} size="sm" variant="outline" onClick={() => onAddItem(type)}>
