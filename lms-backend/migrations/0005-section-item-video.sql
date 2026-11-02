@@ -1,0 +1,1 @@
+ALTER TYPE section_items_item_type_enum ADD VALUE IF NOT EXISTS 'VIDEO';

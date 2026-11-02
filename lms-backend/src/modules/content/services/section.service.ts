@@ -5,6 +5,8 @@ import type { SaveSectionsDto } from '../dto/save-sections.dto.js'
 import { SectionRepository } from '../repositories/section.repository.js'
 import { SectionView } from '../types/section-view.type.js'
 import { AcademicFacade } from '../../academic/facades/academic.facade.js'
+import { ItemType } from '../enums/item-type.enum.js'
+import { extractYoutubeVideoId } from '../utils/youtube.util.js'
 
 /** Business rules for course sections: readable by class members, editable by the class lecturer. */
 @Injectable()
@@ -46,6 +48,7 @@ export class SectionService {
       section.items.map((item) => item.id),
     )
     this.assertNoDuplicates(sectionIds)
+    this.assertValidVideos(dto)
     this.assertNoDuplicates(itemIds)
     const foreignIds = await this.sectionRepository.findIdsOwnedByOtherClasses(
       classId,
@@ -70,6 +73,20 @@ export class SectionService {
         items.filter((item) => item.sectionId === section.id),
       ),
     )
+  }
+
+  /** A VIDEO item must carry a real YouTube link, so nothing else can ever end up inside the embed. */
+  private assertValidVideos(dto: SaveSectionsDto): void {
+    const hasInvalidVideo = dto.sections.some((section) =>
+      section.items.some(
+        (item) =>
+          item.itemType === ItemType.VIDEO &&
+          (!item.externalUrl || extractYoutubeVideoId(item.externalUrl) === null),
+      ),
+    )
+    if (hasInvalidVideo) {
+      throw new BadRequestException('A video needs a valid YouTube link')
+    }
   }
 
   private assertNoDuplicates(ids: string[]): void {

@@ -82,4 +82,24 @@ export class DocumentItemRepository {
     if (rows.length === 0) return;
     await this.completionOrmRepository.insert(rows);
   }
+
+    /** Removes the class's section items that show the document and returns how many were removed. */
+  async deleteItemsByDocument(classId: string, documentId: string): Promise<number> {
+    const result = await this.itemOrmRepository
+      .createQueryBuilder()
+      .delete()
+      .from(SectionItem)
+      .where('document_id = :documentId', { documentId })
+      .andWhere(
+        'section_id IN (SELECT id FROM sections WHERE class_id = :classId)',
+        { classId },
+      )
+      .execute();
+    return result.affected ?? 0;
+  }
+
+  /** Tells whether any section item, in any class, still shows the document. */
+  async isDocumentReferenced(documentId: string): Promise<boolean> {
+    return this.itemOrmRepository.exists({ where: { documentId } });
+  }
 }

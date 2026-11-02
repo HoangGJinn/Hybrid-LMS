@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Role } from '../../../common/enums/role.enum.js';
 import type { AuthenticatedUser } from '../../../common/types/authenticated-user.type.js';
 import { FileFacade } from '../../../shared/file/facades/file.facade.js';
@@ -8,13 +8,20 @@ import type { CreateDocumentDto } from '../dto/create-document.dto.js';
 import { DocumentRepository } from '../repositories/document.repository.js';
 import { DocumentSummaryView } from '../types/document-summary-view.type.js';
 import { DocumentView } from '../types/document-view.type.js';
+import { QueryFailedError } from 'typeorm';
+const FOREIGN_KEY_VIOLATION = '23503';
 
+const isForeignKeyViolation = (error: unknown): boolean =>
+  error instanceof QueryFailedError &&
+  'code' in error.driverError &&
+  error.driverError.code === FOREIGN_KEY_VIOLATION;
 /**
  * Business rules for viewing course documents: a user may open a document only through a class they
  * can view, and only if that class shows the document. File bytes always travel straight from S3.
  */
 @Injectable()
 export class DocumentService {
+    private readonly logger = new Logger(DocumentService.name);
   constructor(
     private readonly documentRepository: DocumentRepository,
     private readonly academicFacade: AcademicFacade,
@@ -109,5 +116,33 @@ export class DocumentService {
   ): Promise<ReadonlySet<string>> {
     if (user.role !== Role.STUDENT) return new Set();
     return this.contentFacade.getSeenDocumentIds(classId, user.id);
+  }
+    /**
+   * UC-30: removes the document from the class and, when nothing else needs it, deletes the file for good
+   * (S3 object included). The file is KEPT when another class still shows the document, when it belongs
+   * to another lecturer, or when generated quizzes still depend on it. An upload that was never saved
+   * into a section (nothing to unlink) is cleaned up too.
+   * If S3 fails after the record is deleted, the request fails and the object stays orphaned in the bucket.
+   */
+  async remove(classId: string, documentId: string, user: AuthenticatedUser): Promise<void> {
+    await this.academicFacade.assertCanManageClass(classId, user);
+    const document = await this.documentRepository.findById(documentId);
+    if (!document) {
+      throw new NotFoundException('Document not found');
+    }
+    const removedItems = await this.contentFacade.removeDocumentFromClass(classId, documentId);
+    const isStillShown = await this.contentFacade.isDocumentReferenced(documentId);
+    if (removedItems === 0 && isStillShown) {
+      throw new NotFoundException('Document not found in this class');
+    }
+    if (isStillShown || document.uploadedBy !== user.id) return;
+    try {
+      await this.documentRepository.deleteById(documentId);
+    } catch (error) {
+      if (!isForeignKeyViolation(error)) throw error;
+      this.logger.warn(`Document ${documentId} kept: generated content still uses it`);
+      return;
+    }
+    await this.fileFacade.deleteFile(document.fileId);
   }
 }

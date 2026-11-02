@@ -33,7 +33,7 @@ export interface ClassRoom {
   coverImage?: string;
 }
 
-export type ItemType = 'DOCUMENT' | 'ASSIGNMENT' | 'EXAM';
+export type ItemType = 'DOCUMENT' | 'ASSIGNMENT' | 'EXAM' | 'VIDEO';
 
 export interface SectionItem {
   id: string;

@@ -8,6 +8,7 @@ import {
   Patch,
   Post,
   Body,
+  Delete,
 } from '@nestjs/common';
 import { Auth } from '../../../common/decorators/auth.decorator.js';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator.js';
@@ -67,5 +68,16 @@ export class DocumentController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<void> {
     return this.documentService.markSeen(classId, documentId, user);
+  }
+
+  @Delete(':documentId')
+  @Auth(Role.LECTURER)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async remove(
+    @Param('classId', ParseUUIDPipe) classId: string,
+    @Param('documentId', ParseUUIDPipe) documentId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<void> {
+    return this.documentService.remove(classId, documentId, user);
   }
 }

@@ -1,4 +1,5 @@
 import {
+  DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
   NotFound,
@@ -97,5 +98,11 @@ export class FileStorageService {
       if (error instanceof NotFound) return null;
       throw error;
     }
+  }
+    /** Permanently deletes one object from the bucket; deleting a missing key is not an error in S3. */
+  async deleteObject(storageKey: string): Promise<void> {
+    await this.s3Client.send(
+      new DeleteObjectCommand({ Bucket: this.bucketName, Key: storageKey }),
+    );
   }
 }

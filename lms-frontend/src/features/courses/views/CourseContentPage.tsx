@@ -7,6 +7,7 @@ import {
   ClipboardList,
   FileText,
   PenSquare,
+  PlayCircle,
 } from 'lucide-react';
 import { AsyncView } from '@shared/components/AsyncView';
 import { EmptyState } from '@shared/components/EmptyState';
@@ -15,15 +16,19 @@ import { toAsyncState } from '@shared/utils/async-state';
 import { cn } from '@shared/utils/cn';
 import type { SectionItem } from '../types/courses.types';
 
+// 2) itemIcon:
 const itemIcon = {
   DOCUMENT: FileText,
   ASSIGNMENT: ClipboardList,
   EXAM: PenSquare,
+  VIDEO: PlayCircle,
 };
 
 const itemLink = (courseId: string, item: SectionItem) => {
   if (item.itemType === 'DOCUMENT' && item.documentId)
     return `/student/courses/${courseId}/documents/${item.documentId}`;
+  if (item.itemType === 'VIDEO')
+    return `/student/courses/${courseId}/videos/${item.id}`;
   if (item.itemType === 'ASSIGNMENT' && item.assignmentId)
     return `/student/courses/${courseId}/assignments/${item.assignmentId}`;
   return '/student/exams';

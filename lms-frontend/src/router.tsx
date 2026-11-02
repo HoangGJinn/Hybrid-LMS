@@ -25,7 +25,10 @@ import {
   lecturerMembersTabRoute,
   studentRosterRoute,
 } from '@features/participants/routes';
-import { documentRoute } from '@features/documents/routes';
+import {
+  documentRoute,
+  lecturerDocumentRoute,
+} from '@features/documents/routes';
 import { quizRoute } from '@features/quizzes/routes';
 import {
   assignmentDetailRoute,
@@ -88,7 +91,11 @@ export const router = createBrowserRouter([
                 ...crumb('Lecturer'),
                 children: [
                   lecturerDashboardRoute,
-                  createLecturerClassRoutes({ tabs: [lecturerMembersTabRoute] }),                  gradingDeskRoute,
+                  createLecturerClassRoutes({
+                    tabs: [lecturerMembersTabRoute],
+                    detailPages: [lecturerDocumentRoute],
+                  }),          
+                  gradingDeskRoute,
                   studentRosterRoute,
                   analyticsRoute,
                   aiGeneratorRoute,

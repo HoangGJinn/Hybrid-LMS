@@ -16,4 +16,8 @@ export class FileFacade {
   async assertOwnedReadyFile(fileId: string, ownerId: string): Promise<void> {
     return this.fileService.assertOwnedReadyFile(fileId, ownerId);
   }
+    /** Deletes the file from S3 and from the database. The caller must already have checked who may do it. */
+  async deleteFile(fileId: string): Promise<void> {
+    return this.fileService.deleteFile(fileId);
+  }
 }
