@@ -5,9 +5,16 @@ export {
   useMyAssignments,
   useMySubmissions,
 } from './hooks/useAssignmentLists';
+export { useAssignmentDetail } from './hooks/useAssignmentDetail';
+export { useCreateAssignment } from './hooks/useCreateAssignment';
+export { useRemoveAssignment } from './hooks/useRemoveAssignment';
+export { CreateAssignmentDialog } from './components/CreateAssignmentDialog';
+
 export { assignmentKeys } from './api/queryKeys';
 export type {
   Assignment,
   AssignmentStatus,
   AssignmentSubmission,
+  AssignmentDetail,
+  NewAssignmentInput,
 } from './types/assignments.types';

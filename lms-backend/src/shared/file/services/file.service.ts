@@ -45,8 +45,12 @@ export class FileService {
     if (dto.size > rule.maxSizeBytes) {
       throw new BadRequestException('This file is too large');
     }
+        if (rule.isScopedToAssignment && !dto.assignmentId) {
+      throw new BadRequestException('An assignment is required for this upload');
+    }
     const fileId = randomUUID();
-    const storageKey = `${rule.keyPrefix}/${user.id}/${fileId}.${extension}`;
+    const scope = rule.isScopedToAssignment ? `${dto.assignmentId}/` : '';
+    const storageKey = `${rule.keyPrefix}/${scope}${user.id}/${fileId}.${extension}`;
     await this.fileRepository.createPending({
       id: fileId,
       ownerId: user.id,
@@ -98,6 +102,47 @@ export class FileService {
     const file = await this.findOwnedFile(fileId, ownerId);
     if (file.status !== FileStatus.READY) {
       throw new BadRequestException('The file upload has not been confirmed');
+    }
+  }
+
+    /** Like assertOwnedReadyFile, for many files at once; every id must pass. */
+  async assertOwnedReadyFiles(fileIds: string[], ownerId: string): Promise<void> {
+    const files = await this.fileRepository.findByIds(fileIds);
+    const isValid =
+      files.length === new Set(fileIds).size &&
+      files.every(
+        (file) => file.ownerId === ownerId && file.status === FileStatus.READY,
+      );
+    if (!isValid) {
+      throw new BadRequestException('One or more files are missing or not confirmed');
+    }
+  }
+
+  /** Signed download links for the given files, in the given order; files that are missing or not READY are skipped. */
+  async getDownloadLinks(fileIds: string[]): Promise<FileDownloadView[]> {
+    const files = await this.fileRepository.findByIds(fileIds);
+    const readyById = new Map(
+      files.filter((file) => file.status === FileStatus.READY).map((file) => [file.id, file]),
+    );
+    const links = await Promise.all(
+      fileIds.map(async (fileId) => {
+        const file = readyById.get(fileId);
+        if (!file) return null;
+        const downloadUrl = await this.fileStorageService.createDownloadUrl({
+          storageKey: file.storageKey,
+          fileName: file.fileName,
+          contentType: file.fileType,
+        });
+        return FileDownloadView.fromEntity(file, downloadUrl);
+      }),
+    );
+    return links.filter((link) => link !== null);
+  }
+
+  /** Deletes every given file from S3 and the database, one after another. */
+  async deleteFiles(fileIds: string[]): Promise<void> {
+    for (const fileId of fileIds) {
+      await this.deleteFile(fileId);
     }
   }
 

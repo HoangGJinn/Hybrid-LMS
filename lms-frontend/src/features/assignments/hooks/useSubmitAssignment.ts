@@ -1,18 +1,20 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { assignmentService } from '../api/assignment.service';
 import { assignmentKeys } from '../api/queryKeys';
+import type { SubmissionInput } from '../types/assignments.types';
 
 interface SubmitAssignmentInput {
+  classId: string;
   assignmentId: string;
-  fileNames: string[];
+  submission: SubmissionInput;
 }
 
-/** Submits (or resubmits) the student's files; refreshes every assignment/submission list afterwards. */
+/** Submits (or edits) the student's work; refreshes every assignment/submission list afterwards. */
 export const useSubmitAssignment = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ assignmentId, fileNames }: SubmitAssignmentInput) =>
-      assignmentService.submit(assignmentId, fileNames),
+    mutationFn: ({ classId, assignmentId, submission }: SubmitAssignmentInput) =>
+      assignmentService.submit(classId, assignmentId, submission),
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: assignmentKeys.all }),
   });

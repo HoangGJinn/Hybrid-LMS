@@ -29,14 +29,20 @@ const itemIcon = {
 const itemLink = (classId: string, item: SectionItem): string | null => {
   if (item.itemType === 'DOCUMENT' && item.documentId)
     return `/lecturer/classes/${classId}/documents/${item.documentId}`
+  if (item.itemType === 'ASSIGNMENT' && item.assignmentId)
+    return `/lecturer/classes/${classId}/assignments/${item.assignmentId}`
   if (item.itemType === 'VIDEO')
 
     return `/lecturer/classes/${classId}/videos/${item.id}`
   return null
 }
 
-// Documents and videos are added through their own buttons.
-const itemTypes: ItemType[] = ['ASSIGNMENT', 'EXAM']
+/** Documents and assignments own stored data, so removing them asks for confirmation first. */
+const isConfirmed = (item: SectionItem): boolean =>
+  item.itemType === 'DOCUMENT' || item.itemType === 'ASSIGNMENT'
+
+// Documents, videos and assignments are added through their own buttons.
+const itemTypes: ItemType[] = ['EXAM']
 
 interface SectionCardProps {
   section: Section
@@ -52,8 +58,9 @@ interface SectionCardProps {
   onAddItem: (itemType: ItemType) => void
   onAddDocument: (file: File) => void
   onAddVideo: () => void
+  onAddAssignment: () => void
   /** Asks for confirmation first; plain items are deleted straight away. */
-  onRemoveDocument: (item: SectionItem) => void
+  onRemoveContent: (item: SectionItem) => void
   isUploadingDocument: boolean
   onMoveUp: () => void
   onMoveDown: () => void
@@ -75,7 +82,8 @@ export const SectionCard = ({
   onAddItem,
   onAddDocument,
   onAddVideo,
-  onRemoveDocument,
+  onAddAssignment,
+  onRemoveContent,
   isUploadingDocument,
   onMoveUp,
   onMoveDown,
@@ -205,10 +213,10 @@ export const SectionCard = ({
                     <Button
                       size="icon"
                       variant="ghost"
-                      aria-label={item.itemType === 'DOCUMENT' ? 'Remove document' : 'Delete item'}
+                      aria-label={isConfirmed(item) ? 'Remove item' : 'Delete item'}
                       onClick={() =>
-                        item.itemType === 'DOCUMENT'
-                          ? onRemoveDocument(item)
+                        isConfirmed(item)
+                          ? onRemoveContent(item)
                           : onItemsChange(items.filter((x) => x.id !== item.id))
                       }
                     >
@@ -247,6 +255,10 @@ export const SectionCard = ({
               <Button size="sm" variant="outline" onClick={onAddVideo}>
                 <Plus className="mr-1 h-3 w-3" />
                 Add video
+              </Button>
+              <Button size="sm" variant="outline" onClick={onAddAssignment}>
+                <Plus className="mr-1 h-3 w-3" />
+                Add assignment
               </Button>
               {itemTypes.map((type) => (
                 <Button key={type} size="sm" variant="outline" onClick={() => onAddItem(type)}>

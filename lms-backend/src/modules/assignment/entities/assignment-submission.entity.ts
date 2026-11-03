@@ -4,9 +4,17 @@ import {
   Column,
   ManyToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { Assignment } from './assignment.entity.js';
 import { Student } from '../../user/entities/student.entity.js';
+
+/** A student hands in once per assignment; editing the submission updates this row. */
+@Index(
+  'uq_assignment_submissions_assignment_student',
+  ['assignmentId', 'submittedBy'],
+  { unique: true },
+)
 
 @Entity('assignment_submissions')
 export class AssignmentSubmission {

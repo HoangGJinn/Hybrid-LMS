@@ -29,7 +29,7 @@ export class FileController {
   }
 
   @Post('upload-requests')
-  @Auth(Role.LECTURER)
+  @Auth(Role.LECTURER, Role.STUDENT) // Cho phép cả 2 role
   async requestUpload(
     @Body() dto: RequestUploadDto,
     @CurrentUser() user: AuthenticatedUser,
@@ -38,7 +38,7 @@ export class FileController {
   }
 
   @Post(':fileId/confirm')
-  @Auth(Role.LECTURER)
+  @Auth(Role.LECTURER, Role.STUDENT) // Cho phép cả 2 role confirm
   @HttpCode(HttpStatus.OK)
   async confirmUpload(
     @Param('fileId', ParseUUIDPipe) fileId: string,
