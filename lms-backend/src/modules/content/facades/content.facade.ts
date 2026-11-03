@@ -38,6 +38,7 @@ export class ContentFacade {
     return this.classDocumentService.isDocumentReferenced(documentId);
   }
 
+
   async isAssignmentInClass(classId: string, assignmentId: string): Promise<boolean> {
     return this.classAssignmentService.isAssignmentInClass(classId, assignmentId);
   }
@@ -49,4 +50,5 @@ export class ContentFacade {
   async isAssignmentReferenced(assignmentId: string): Promise<boolean> {
     return this.classAssignmentService.isAssignmentReferenced(assignmentId);
   }
+
 }
