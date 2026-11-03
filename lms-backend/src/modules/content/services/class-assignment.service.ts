@@ -1,5 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import { AssignmentItemRepository } from '../repositories/assignment-item.repository.js';
+import {
+  AssignmentItemRepository,
+  type ClassAssignmentLink,
+} from '../repositories/assignment-item.repository.js';
 
 /** Which assignments a class shows. */
 @Injectable()
@@ -14,6 +17,13 @@ export class ClassAssignmentService {
     assignmentId: string,
   ): Promise<boolean> {
     return this.assignmentItemRepository.existsInClass(classId, assignmentId);
+  }
+
+  /** The assignments shown by the given classes, as (assignment, class) pairs. */
+  async findAssignmentsByClasses(
+    classIds: string[],
+  ): Promise<ClassAssignmentLink[]> {
+    return this.assignmentItemRepository.findByClasses(classIds);
   }
 
   /** Removes the assignment from every section of the class; returns how many section items were removed. */

@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { Readable } from 'node:stream';
 import { FileService } from '../services/file.service.js';
 import { FileDownloadView } from '../types/file-download-view.type.js';
 
@@ -16,13 +17,17 @@ export class FileFacade {
   async assertOwnedReadyFile(fileId: string, ownerId: string): Promise<void> {
     return this.fileService.assertOwnedReadyFile(fileId, ownerId);
   }
-    /** Deletes the file from S3 and from the database. The caller must already have checked who may do it. */
+
+  /** Deletes the file from S3 and from the database. The caller must already have checked who may do it. */
   async deleteFile(fileId: string): Promise<void> {
     return this.fileService.deleteFile(fileId);
   }
 
-    /** Throws unless every file belongs to the owner and has been confirmed (READY). */
-  async assertOwnedReadyFiles(fileIds: string[], ownerId: string): Promise<void> {
+  /** Throws unless every file belongs to the owner and has been confirmed (READY). */
+  async assertOwnedReadyFiles(
+    fileIds: string[],
+    ownerId: string,
+  ): Promise<void> {
     return this.fileService.assertOwnedReadyFiles(fileIds, ownerId);
   }
 
@@ -34,5 +39,12 @@ export class FileFacade {
   /** Deletes the files from S3 and the database. The caller must already have checked who may do it. */
   async deleteFiles(fileIds: string[]): Promise<void> {
     return this.fileService.deleteFiles(fileIds);
+  }
+
+  /** Opens a READY file as a stream (used to zip submissions). The caller must already have checked who may read it. */
+  async openReadStream(
+    fileId: string,
+  ): Promise<{ fileName: string; stream: Readable }> {
+    return this.fileService.openReadStream(fileId);
   }
 }

@@ -38,7 +38,13 @@ export class ContentFacade {
     return this.classDocumentService.isDocumentReferenced(documentId);
   }
 
-
+    /** The assignments shown by the given classes, as (assignment, class) pairs. */
+  async findAssignmentsByClasses(
+    classIds: string[],
+  ): Promise<{ assignmentId: string; classId: string }[]> {
+    return this.classAssignmentService.findAssignmentsByClasses(classIds);
+  }
+  
   async isAssignmentInClass(classId: string, assignmentId: string): Promise<boolean> {
     return this.classAssignmentService.isAssignmentInClass(classId, assignmentId);
   }

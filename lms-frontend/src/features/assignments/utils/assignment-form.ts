@@ -1,4 +1,4 @@
-import { validateDocumentFile } from '@features/documents';
+import { validateAssignmentFile } from '@features/documents';
 
 export interface AssignmentFormValues {
   title: string;
@@ -40,7 +40,7 @@ export const validateAssignmentForm = (
   if (values.files.length > MAX_ATTACHMENTS)
     errors.files = `Attach at most ${MAX_ATTACHMENTS} files`;
   const invalidFile = values.files
-    .map((file) => ({ file, error: validateDocumentFile(file) }))
+    .map((file) => ({ file, error: validateAssignmentFile(file) }))
     .find((result) => result.error !== null);
   if (invalidFile && !errors.files)
     errors.files = `${invalidFile.file.name}: ${invalidFile.error}`;

@@ -15,6 +15,7 @@ import { FileConfirmView } from '../types/file-confirm-view.type.js';
 import { FileDownloadView } from '../types/file-download-view.type.js';
 import { UploadRequestView } from '../types/upload-request-view.type.js';
 import { FileStorageService } from './file-storage.service.js';
+import type { Readable } from 'node:stream';
 
 /** Business rules for uploading and reading stored files. */
 @Injectable()
@@ -116,6 +117,23 @@ export class FileService {
     if (!isValid) {
       throw new BadRequestException('One or more files are missing or not confirmed');
     }
+  }
+
+    /**
+   * Opens a READY file for reading. PENDING files are treated as missing, like in getDownloadLink.
+   * The caller must already have checked who may read it.
+   */
+  async openReadStream(
+    fileId: string,
+  ): Promise<{ fileName: string; stream: Readable }> {
+    const file = await this.fileRepository.findById(fileId);
+    if (!file || file.status !== FileStatus.READY) {
+      throw new NotFoundException('File not found');
+    }
+    return {
+      fileName: file.fileName,
+      stream: await this.fileStorageService.openReadStream(file.storageKey),
+    };
   }
 
   /** Signed download links for the given files, in the given order; files that are missing or not READY are skipped. */

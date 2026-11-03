@@ -8,6 +8,8 @@ export class SubmissionView {
   readonly submittedAt: Date;
   readonly score: number | null;
   readonly comment: string | null;
+  /** The answer typed online; null for file submissions. */
+  readonly answerText: string | null;
   readonly files: FileDownloadView[];
 
   private constructor(entity: AssignmentSubmission, files: FileDownloadView[]) {
@@ -16,6 +18,7 @@ export class SubmissionView {
     // `numeric` columns come back from Postgres as strings.
     this.score = entity.score === null ? null : Number(entity.score);
     this.comment = entity.comment;
+    this.answerText = entity.answerText;
     this.files = files;
   }
 

@@ -4,8 +4,13 @@ export { useDocuments } from './hooks/useDocuments';
 export { useUploadDocument } from './hooks/useUploadDocument';
 export { documentKeys } from './api/queryKeys';
 export {
+  ASSIGNMENT_ACCEPT,
   DOCUMENT_ACCEPT,
+  SUBMISSION_FORMATS,
+  acceptForFormats,
+  getExtension,
   resolveContentType,
+  validateAssignmentFile,
   validateDocumentFile,
 } from './utils/upload-rules';
 export type { LmsDocument, LmsDocumentSummary } from './types/documents.types';

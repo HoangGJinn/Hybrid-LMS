@@ -15,7 +15,6 @@ import { Student } from '../../user/entities/student.entity.js';
   ['assignmentId', 'submittedBy'],
   { unique: true },
 )
-
 @Entity('assignment_submissions')
 export class AssignmentSubmission {
   @PrimaryGeneratedColumn('uuid')
@@ -41,8 +40,16 @@ export class AssignmentSubmission {
   @Column({ type: 'text', nullable: true })
   comment: string | null;
 
+  /** The answer typed online (TEXT assignments); null for file submissions. */
+  @Column({ name: 'answer_text', type: 'text', nullable: true })
+  answerText: string | null;
+
   @Column({ name: 'submitted_at', type: 'timestamptz' })
   submittedAt: Date;
+
+  /** When the lecturer last graded this submission; null while it is ungraded. */
+  @Column({ name: 'graded_at', type: 'timestamptz', nullable: true })
+  gradedAt: Date | null;
 
   @Column({ name: 'graded_notified', default: false })
   gradedNotified: boolean;
