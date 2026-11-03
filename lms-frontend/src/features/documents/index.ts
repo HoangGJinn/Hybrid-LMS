@@ -3,6 +3,10 @@ export { useDocument } from './hooks/useDocument';
 export { useDocuments } from './hooks/useDocuments';
 export { useUploadDocument } from './hooks/useUploadDocument';
 export { documentKeys } from './api/queryKeys';
-export { DOCUMENT_ACCEPT, validateDocumentFile } from './utils/upload-rules';
+export {
+  DOCUMENT_ACCEPT,
+  resolveContentType,
+  validateDocumentFile,
+} from './utils/upload-rules';
 export type { LmsDocument, LmsDocumentSummary } from './types/documents.types';
 export { useRemoveDocument } from './hooks/useRemoveDocument';

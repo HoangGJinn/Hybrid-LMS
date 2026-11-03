@@ -8,6 +8,12 @@ import {
   useUploadDocument,
   validateDocumentFile,
 } from '@features/documents'
+import {
+  CreateAssignmentDialog,
+  useCreateAssignment,
+  useRemoveAssignment,
+  type NewAssignmentInput,
+} from '@features/assignments'
 import { AsyncView } from '@shared/components/AsyncView'
 import { EmptyState } from '@shared/components/EmptyState'
 import { ErrorState } from '@shared/components/ErrorState'
@@ -16,7 +22,7 @@ import { Input } from '@shared/components/ui/input'
 import { toAsyncState } from '@shared/utils/async-state'
 import { courseKeys } from '../api/queryKeys'
 import { AddVideoDialog } from '../components/AddVideoDialog'
-import { RemoveDocumentConfirm } from '../components/RemoveDocumentConfirm'
+import { RemoveContentConfirm } from '../components/RemoveContentConfirm'
 import { SectionCard } from '../components/SectionCard'
 import { useCourseSections } from '../hooks/useCourse'
 import { useCreateSection } from '../hooks/useCreateSection'
@@ -33,6 +39,8 @@ const CourseEditorPage = () => {
   const createSection = useCreateSection(courseId)
   const uploadDocument = useUploadDocument()
   const removeDocument = useRemoveDocument()
+  const createAssignment = useCreateAssignment()
+  const removeAssignment = useRemoveAssignment()
   const queryClient = useQueryClient()
   // `null` = no "new section" form open; otherwise the title being typed.
   const [newTitle, setNewTitle] = useState<string | null>(null)
@@ -44,6 +52,7 @@ const CourseEditorPage = () => {
   const [pendingRemoval, setPendingRemoval] = useState<SectionItem | null>(null)
   // Section the lecturer is adding a YouTube video to; `null` keeps the dialog closed.
   const [videoSectionId, setVideoSectionId] = useState<string | null>(null)
+  const [assignmentSectionId, setAssignmentSectionId] = useState<string | null>(null)
   const editing = draft !== null
 
   const setSections = (updater: (current: Section[]) => Section[]) =>
@@ -141,6 +150,45 @@ const CourseEditorPage = () => {
     toast.success('Video added. Save changes to publish it.')
   }
 
+    /** UC-33: creates the assignment (uploading its attachments), then adds it to the draft section. */
+  const handleCreateAssignment = (input: NewAssignmentInput) => {
+    const sectionId = assignmentSectionId
+    if (sectionId === null) return
+    createAssignment.mutate(
+      { classId: courseId, input },
+      {
+        onSuccess: (assignment) => {
+          setSections((current) =>
+            current.map((x) =>
+              x.id === sectionId
+                ? {
+                    ...x,
+                    items: [
+                      ...x.items,
+                      {
+                        id: crypto.randomUUID(),
+                        sectionId,
+                        itemType: 'ASSIGNMENT',
+                        title: assignment.title,
+                        externalUrl: null,
+                        orderIndex: x.items.length + 1,
+                        documentId: null,
+                        assignmentId: assignment.id,
+                        isCompleted: false,
+                      },
+                    ],
+                  }
+                : x,
+            ),
+          )
+          setAssignmentSectionId(null)
+          toast.success('Assignment created. Save changes to publish it.')
+        },
+        onError: (error) => toast.error(error.message),
+      },
+    )
+  }
+
   /** UC-30: after confirmation the document and its stored file are deleted right away. */
   const handleConfirmRemoval = () => {
     if (pendingRemoval === null) return
@@ -166,6 +214,7 @@ const CourseEditorPage = () => {
   const handleCancel = () => {
     setDraft(null)
     setPendingRemoval(null)
+    setAssignmentSectionId(null)
     setVideoSectionId(null)
     setNewTitle(null)
   }
@@ -253,7 +302,8 @@ const CourseEditorPage = () => {
                   onAddItem={(type) => addItem(sec, type)}
                   onAddDocument={(file) => addDocument(sec.id, file)}
                   onAddVideo={() => setVideoSectionId(sec.id)}
-                  onRemoveDocument={setPendingRemoval}
+                  onAddAssignment={() => setAssignmentSectionId(sec.id)}
+                  onRemoveContent={setPendingRemoval}
                   isUploadingDocument={uploadDocument.isPending}
                   onMoveUp={() => setSections((s) => moveItem(s, i, -1))}
                   onMoveDown={() => setSections((s) => moveItem(s, i, 1))}
@@ -305,9 +355,15 @@ const CourseEditorPage = () => {
         onClose={() => setVideoSectionId(null)}
         onSubmit={handleAddVideo}
       />
-      <RemoveDocumentConfirm
+      <CreateAssignmentDialog
+        open={assignmentSectionId !== null}
+        isSubmitting={createAssignment.isPending}
+        onClose={() => setAssignmentSectionId(null)}
+        onSubmit={handleCreateAssignment}
+      />
+      <RemoveContentConfirm
         item={pendingRemoval}
-        isRemoving={removeDocument.isPending}
+        isRemoving={removeDocument.isPending || removeAssignment.isPending}
         onConfirm={handleConfirmRemoval}
         onClose={() => setPendingRemoval(null)}
       />

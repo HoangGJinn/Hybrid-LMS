@@ -10,6 +10,8 @@ import { SectionService } from './services/section.service.js'
 import { ContentFacade } from './facades/content.facade.js';
 import { DocumentItemRepository } from './repositories/document-item.repository.js';
 import { ClassDocumentService } from './services/class-document.service.js';
+import { ClassAssignmentService } from './services/class-assignment.service.js';
+import { AssignmentItemRepository } from './repositories/assignment-item.repository.js';
 
 @Module({
   imports: [
@@ -17,7 +19,15 @@ import { ClassDocumentService } from './services/class-document.service.js';
     AcademicModule,
   ],
   controllers: [SectionController],
-  providers: [SectionRepository, SectionService, ContentFacade, DocumentItemRepository, ClassDocumentService],
+    providers: [
+    SectionRepository,
+    DocumentItemRepository,
+    AssignmentItemRepository,
+    SectionService,
+    ClassDocumentService,
+    ClassAssignmentService,
+    ContentFacade,
+  ],
   exports: [ContentFacade],
 })
 export class ContentModule {}

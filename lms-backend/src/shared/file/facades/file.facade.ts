@@ -20,4 +20,19 @@ export class FileFacade {
   async deleteFile(fileId: string): Promise<void> {
     return this.fileService.deleteFile(fileId);
   }
+
+    /** Throws unless every file belongs to the owner and has been confirmed (READY). */
+  async assertOwnedReadyFiles(fileIds: string[], ownerId: string): Promise<void> {
+    return this.fileService.assertOwnedReadyFiles(fileIds, ownerId);
+  }
+
+  /** Signed download links for the given files, in order. */
+  async getDownloadLinks(fileIds: string[]): Promise<FileDownloadView[]> {
+    return this.fileService.getDownloadLinks(fileIds);
+  }
+
+  /** Deletes the files from S3 and the database. The caller must already have checked who may do it. */
+  async deleteFiles(fileIds: string[]): Promise<void> {
+    return this.fileService.deleteFiles(fileIds);
+  }
 }

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { FileAttachment } from '../entities/file-attachment.entity.js';
 import { FileStatus } from '../enums/file-status.enum.js';
 
@@ -41,5 +41,11 @@ export class FileRepository {
     /** Removes the file record. */
   async deleteById(id: string): Promise<void> {
     await this.fileOrmRepository.delete({ id });
+  }
+
+    /** Finds the given files; ids that do not exist are skipped. */
+  async findByIds(ids: string[]): Promise<FileAttachment[]> {
+    if (ids.length === 0) return [];
+    return this.fileOrmRepository.find({ where: { id: In(ids) } });
   }
 }

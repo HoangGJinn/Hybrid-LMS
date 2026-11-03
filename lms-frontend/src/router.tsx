@@ -93,7 +93,7 @@ export const router = createBrowserRouter([
                   lecturerDashboardRoute,
                   createLecturerClassRoutes({
                     tabs: [lecturerMembersTabRoute],
-                    detailPages: [lecturerDocumentRoute],
+                    detailPages: [lecturerDocumentRoute, assignmentDetailRoute],
                   }),          
                   gradingDeskRoute,
                   studentRosterRoute,
