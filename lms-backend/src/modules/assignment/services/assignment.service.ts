@@ -10,6 +10,7 @@ import { AcademicFacade } from '../../academic/facades/academic.facade.js';
 import { ContentFacade } from '../../content/facades/content.facade.js';
 import type { CreateAssignmentDto } from '../dto/create-assignment.dto.js';
 import type { Assignment } from '../entities/assignment.entity.js';
+import { SubmissionType } from '../enums/submission-type.enum.js';
 import { AssignmentRepository } from '../repositories/assignment.repository.js';
 import { AssignmentView } from '../types/assignment-view.type.js';
 import { computeAssignmentStatus } from '../utils/assignment-status.util.js';
@@ -27,7 +28,7 @@ export class AssignmentService {
   ) {}
 
   /**
-   * UC-33: creates an assignment from the brief, the schedule and the confirmed attachments.
+   * UC-33: creates an assignment from the brief, the schedule, the submission rules and the confirmed attachments.
    * The lecturer then places it in a section and saves the editor, which is what shows it to students.
    */
   async create(
@@ -44,8 +45,18 @@ export class AssignmentService {
       );
     }
     await this.fileFacade.assertOwnedReadyFiles(dto.fileIds, user.id);
+    const isFileSubmission = dto.submissionType === SubmissionType.FILE;
     const assignment = await this.assignmentRepository.create(
-      { title: dto.title, instruction: dto.instruction, openAt, endAt },
+      {
+        title: dto.title,
+        instruction: dto.instruction,
+        openAt,
+        endAt,
+        submissionType: dto.submissionType,
+        // Online answers take no files, so the accepted formats only matter for file submissions.
+        acceptedExtensions: isFileSubmission ? dto.acceptedExtensions : [],
+        submissionNote: dto.submissionNote?.trim() || null,
+      },
       dto.fileIds,
     );
     return this.buildView(classId, assignment, user);

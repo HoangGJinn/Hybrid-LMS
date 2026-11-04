@@ -10,6 +10,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { buildAttachmentDisposition } from '../utils/content-disposition.util.js';
+import type { Readable } from 'node:stream';
 
 export interface DownloadUrlInput {
   readonly storageKey: string;
@@ -98,6 +99,14 @@ export class FileStorageService {
       if (error instanceof NotFound) return null;
       throw error;
     }
+  }
+
+    /** Opens the object as a stream, so large files can be zipped without loading them into memory. */
+  async openReadStream(storageKey: string): Promise<Readable> {
+    const response = await this.s3Client.send(
+      new GetObjectCommand({ Bucket: this.bucketName, Key: storageKey }),
+    );
+    return response.Body as Readable;
   }
     /** Permanently deletes one object from the bucket; deleting a missing key is not an error in S3. */
   async deleteObject(storageKey: string): Promise<void> {

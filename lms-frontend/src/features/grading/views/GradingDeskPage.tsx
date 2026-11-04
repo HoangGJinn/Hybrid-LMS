@@ -32,7 +32,7 @@ const GradeForm = ({ sub }: { sub: PendingSubmission }) => {
       return setValidationError('Score must be between 0 and 10.');
     setValidationError(null);
     gradeSubmission.mutate(
-      { submissionId: sub.id, score: n, comment: comment.trim() },
+      { submission: sub, score: n, comment: comment.trim() },
       { onSuccess: () => toast.success('Grade saved') },
     );
   };
@@ -45,17 +45,28 @@ const GradeForm = ({ sub }: { sub: PendingSubmission }) => {
       <p className="m-0 mt-1 text-xs text-muted-foreground">
         Submitted {new Date(sub.submittedAt).toLocaleString()}
       </p>
-      <ul className="m-0 my-4 list-none space-y-2 p-0">
-        {sub.fileNames.map((f) => (
+            <ul className="m-0 my-4 list-none space-y-2 p-0">
+        {sub.files.map((file) => (
           <li
-            key={f}
+            key={file.fileId}
             className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm"
           >
             <FileText className="h-4 w-4 text-brand" />
-            {f}
+            <a
+              href={file.downloadUrl}
+              download={file.fileName}
+              className="text-brand hover:underline"
+            >
+              {file.fileName}
+            </a>
           </li>
         ))}
       </ul>
+      {sub.answerText && (
+        <pre className="m-0 mb-4 max-h-64 overflow-auto whitespace-pre-wrap rounded-md bg-muted/50 p-3 text-sm">
+          {sub.answerText}
+        </pre>
+      )}
       <form onSubmit={handleSubmit} className="space-y-3">
         <div>
           <Label htmlFor="score">Score (0–10)</Label>

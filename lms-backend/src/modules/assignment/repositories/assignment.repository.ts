@@ -1,14 +1,18 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { AssignmentFile } from '../entities/assignment-file.entity.js';
 import { Assignment } from '../entities/assignment.entity.js';
+import { SubmissionType } from '../enums/submission-type.enum.js';
 
 export interface NewAssignment {
   readonly title: string;
   readonly instruction: string;
   readonly openAt: Date;
   readonly endAt: Date;
+  readonly submissionType: SubmissionType;
+  readonly acceptedExtensions: string[];
+  readonly submissionNote: string | null;
 }
 
 /** All TypeORM access for assignments and their attached files. */
@@ -37,6 +41,12 @@ export class AssignmentRepository {
 
   async findById(id: string): Promise<Assignment | null> {
     return this.assignmentOrmRepository.findOne({ where: { id } });
+  }
+
+  /** Assignments with the given ids; an empty list yields an empty result without a query. */
+  async findByIds(ids: string[]): Promise<Assignment[]> {
+    if (ids.length === 0) return [];
+    return this.assignmentOrmRepository.find({ where: { id: In(ids) } });
   }
 
   /** Ids of the files attached to the assignment's brief. */

@@ -35,6 +35,62 @@ const DOCUMENT_CONTENT_TYPES: Readonly<Record<string, string>> = {
   'application/x-7z-compressed': '7z',
 };
 
+/**
+ * Code and text files for assignments. The content type is fixed per extension on the frontend,
+ * because browsers report '' or different types for these files and S3 must see exactly the same type.
+ */
+const CODE_CONTENT_TYPES: Readonly<Record<string, string>> = {
+  'text/x-python': 'py',
+  'text/x-csrc': 'c',
+  'text/x-c++src': 'cpp',
+  'text/x-chdr': 'h',
+  'text/x-java-source': 'java',
+  'text/javascript': 'js',
+  'text/css': 'css',
+  'text/plain': 'txt',
+};
+
+/** What a lecturer's attachment or a student's submission may be: documents (incl. ppt/pptx), archives and code. */
+const WORK_CONTENT_TYPES: Readonly<Record<string, string>> = {
+  ...DOCUMENT_CONTENT_TYPES,
+  ...CODE_CONTENT_TYPES,
+};
+
+/** File types a lecturer can pick as "accepted" when creating an assignment. */
+export const SUBMISSION_FORMATS = [
+  'py',
+  'c',
+  'cpp',
+  'h',
+  'java',
+  'js',
+  'css',
+  'txt',
+  'zip',
+  'rar',
+  '7z',
+  'pdf',
+  'docx', // also covers .doc
+  'pptx', // also covers .ppt
+  'xlsx', // also covers .xls
+] as const;
+
+/** Extensions that count as the same format, so one choice covers both. */
+const EXTENSION_ALIASES: Readonly<Record<string, string>> = {
+  cc: 'cpp',
+  cxx: 'cpp',
+  hpp: 'h',
+  doc: 'docx',
+  ppt: 'pptx',
+  xls: 'xlsx',
+};
+
+/** Extension of a file name in lower case, with aliases folded (`a.PPT` → `pptx`). */
+export const normalizeExtension = (fileName: string): string => {
+  const extension = fileName.split('.').pop()?.toLowerCase() ?? '';
+  return EXTENSION_ALIASES[extension] ?? extension;
+};
+
 const MAX_SIZE_BYTES = MAX_UPLOAD_SIZE_MEGABYTES * BYTES_PER_MEGABYTE;
 
 export const UPLOAD_RULES: Readonly<Record<FilePurpose, UploadRule>> = {
@@ -51,7 +107,7 @@ export const UPLOAD_RULES: Readonly<Record<FilePurpose, UploadRule>> = {
     maxSizeBytes: MAX_SIZE_BYTES,
     keyPrefix: 'assignments',
     isScopedToAssignment: false,
-    extensionByContentType: DOCUMENT_CONTENT_TYPES,
+    extensionByContentType: WORK_CONTENT_TYPES,
   },
   /** Files a student hands in. */
   [FilePurpose.SUBMISSION]: {
@@ -59,6 +115,6 @@ export const UPLOAD_RULES: Readonly<Record<FilePurpose, UploadRule>> = {
     maxSizeBytes: MAX_SIZE_BYTES,
     keyPrefix: 'submissions',
     isScopedToAssignment: true,
-    extensionByContentType: DOCUMENT_CONTENT_TYPES,
+    extensionByContentType: WORK_CONTENT_TYPES,
   },
 };

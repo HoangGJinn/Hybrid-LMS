@@ -4,11 +4,16 @@ import {
   ArrayUnique,
   IsArray,
   IsDateString,
+  IsEnum,
+  IsIn,
+  IsOptional,
   IsString,
   IsUUID,
   MaxLength,
   MinLength,
 } from 'class-validator';
+import { SUBMISSION_FORMATS } from '../../../shared/file/constants/upload-rules.constant.js';
+import { SubmissionType } from '../enums/submission-type.enum.js';
 
 const MAX_ATTACHMENTS = 10;
 
@@ -35,6 +40,24 @@ export class CreateAssignmentDto {
 
   @IsDateString()
   readonly endAt: string;
+
+  /** FILE: students upload files; TEXT: students write the answer online. */
+  @IsEnum(SubmissionType)
+  readonly submissionType: SubmissionType;
+
+  /** Accepted file formats such as `py`, `cpp`, `zip`; empty means any supported format. */
+  @IsArray()
+  @ArrayMaxSize(SUBMISSION_FORMATS.length)
+  @ArrayUnique()
+  @IsIn([...SUBMISSION_FORMATS], { each: true })
+  readonly acceptedExtensions: string[];
+
+  /** Free note on what to submit and how, e.g. "One .zip with main.cpp and README.txt". */
+  @IsOptional()
+  @Transform(trim)
+  @IsString()
+  @MaxLength(2000)
+  readonly submissionNote?: string;
 
   /** Confirmed (READY) uploads that belong to the lecturer. */
   @IsArray()
