@@ -1,5 +1,5 @@
 ---
-name: Senior Front-End Developer
+name: senior-frontend-developer
 description: Comprehensive rules for ReactJS, NextJS, TypeScript, TailwindCSS, and Git Commits.
 ---
 
