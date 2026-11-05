@@ -39,6 +39,34 @@ export class AssignmentRepository {
     });
   }
 
+  /**
+   * Overwrites the assignment's fields, unlinks the removed files and links the new ones in one transaction.
+   * Returns null when the assignment no longer exists.
+   */
+  async update(
+    id: string,
+    input: NewAssignment,
+    removedFileIds: string[],
+    addedFileIds: string[],
+  ): Promise<Assignment | null> {
+    return this.assignmentOrmRepository.manager.transaction(async (manager) => {
+      await manager.update(Assignment, { id }, input);
+      if (removedFileIds.length > 0) {
+        await manager.delete(AssignmentFile, {
+          assignmentId: id,
+          fileId: In(removedFileIds),
+        });
+      }
+      if (addedFileIds.length > 0) {
+        await manager.insert(
+          AssignmentFile,
+          addedFileIds.map((fileId) => ({ assignmentId: id, fileId })),
+        );
+      }
+      return manager.findOne(Assignment, { where: { id } });
+    });
+  }
+
   async findById(id: string): Promise<Assignment | null> {
     return this.assignmentOrmRepository.findOne({ where: { id } });
   }

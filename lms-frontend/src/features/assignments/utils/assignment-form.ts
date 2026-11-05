@@ -7,6 +7,8 @@ export interface AssignmentFormValues {
   openAt: string;
   endAt: string;
   files: File[];
+  /** Attachments of an assignment being edited that stay; they count toward the limit. */
+  keptFileCount?: number;
 }
 
 export type AssignmentFormErrors = Partial<
@@ -37,7 +39,7 @@ export const validateAssignmentForm = (
   if (Number.isNaN(endAt)) errors.endAt = 'Choose a due time';
   if (!errors.openAt && !errors.endAt && endAt <= openAt)
     errors.endAt = 'The due time must be after the opening time';
-  if (values.files.length > MAX_ATTACHMENTS)
+  if (values.files.length + (values.keptFileCount ?? 0) > MAX_ATTACHMENTS)
     errors.files = `Attach at most ${MAX_ATTACHMENTS} files`;
   const invalidFile = values.files
     .map((file) => ({ file, error: validateAssignmentFile(file) }))

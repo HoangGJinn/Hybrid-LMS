@@ -11,6 +11,7 @@ import type {
   MySubmission,
   NewAssignmentInput,
   SubmissionInput,
+  UpdateAssignmentInput,
 } from '../types/assignments.types';
 
 const MOCK_STUDENT_ID = 'stu-001';
@@ -113,6 +114,48 @@ export const assignmentService = {
       submissionType: input.submissionType,
       acceptedExtensions: input.acceptedExtensions,
       submissionNote: input.submissionNote,
+      fileIds,
+    });
+  },
+  /** Lecturer: edits an assignment; uploads the new attachments to S3, then replaces the assignment's data. */
+  update: async (
+    classId: string,
+    assignmentId: string,
+    input: UpdateAssignmentInput,
+  ): Promise<AssignmentDetail> => {
+    if (USE_MOCK) {
+      const index = mockAssignments.findIndex((a) => a.id === assignmentId);
+      // Replace instead of mutating so cached copies of the assignment are not silently changed.
+      const updated: Assignment = {
+        ...mockAssignments[index],
+        title: input.title,
+        instruction: input.instruction,
+        openAt: input.openAt,
+        endAt: input.endAt,
+        submissionType: input.submissionType,
+        acceptedExtensions: input.acceptedExtensions,
+        submissionNote: input.submissionNote || null,
+      };
+      mockAssignments[index] = updated;
+      return delay(toMockDetail(updated));
+    }
+    const fileIds = await Promise.all(
+      input.files.map((file) =>
+        uploadFileToS3(file, {
+          purpose: 'ASSIGNMENT',
+          contentType: resolveContentType(file),
+        }),
+      ),
+    );
+    return put(`/api/classes/${classId}/assignments/${assignmentId}`, {
+      title: input.title,
+      instruction: input.instruction,
+      openAt: input.openAt,
+      endAt: input.endAt,
+      submissionType: input.submissionType,
+      acceptedExtensions: input.acceptedExtensions,
+      submissionNote: input.submissionNote,
+      keptFileIds: input.keptFileIds,
       fileIds,
     });
   },
@@ -222,7 +265,8 @@ export const assignmentService = {
     assignmentId: string,
     submissionId?: string,
   ): Promise<Blob> => {
-    if (USE_MOCK) return delay(new Blob(['mock zip'], { type: 'application/zip' }));
+    if (USE_MOCK)
+      return delay(new Blob(['mock zip'], { type: 'application/zip' }));
     const response = await apiClient.get<Blob>(
       `/api/classes/${classId}/assignments/${assignmentId}/submissions/download`,
       { params: { submissionId }, responseType: 'blob' },

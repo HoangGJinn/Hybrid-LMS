@@ -81,6 +81,12 @@ export interface NewAssignmentInput {
   files: File[];
 }
 
+/** What a lecturer submits to edit an assignment: the same fields as creation plus the attachments to keep. */
+export interface UpdateAssignmentInput extends NewAssignmentInput {
+  /** Ids of the existing attachments that stay; the others are removed. `files` holds the new ones. */
+  keptFileIds: string[];
+}
+
 /**
  * A student's submission. For a file assignment: files kept from the previous submission plus newly picked ones.
  * For an online assignment: the typed answer.

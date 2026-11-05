@@ -7,6 +7,8 @@ import { Button } from '@shared/components/ui/button';
 import { Input } from '@shared/components/ui/input';
 import { cn } from '@shared/utils/cn';
 import type {
+  AssignmentDetail,
+  AssignmentFileLink,
   NewAssignmentInput,
   SubmissionType,
 } from '../types/assignments.types';
@@ -32,27 +34,57 @@ interface CreateAssignmentDialogProps {
   open: boolean;
   isSubmitting: boolean;
   onClose: () => void;
-  onSubmit: (input: NewAssignmentInput) => void;
+  /** When given, the dialog edits this assignment instead of creating a new one. Mount it fresh per assignment. */
+  assignment?: AssignmentDetail;
+  /** `keptFileIds` are the existing attachments left in place; always empty when creating. */
+  onSubmit: (input: NewAssignmentInput, keptFileIds: string[]) => void;
 }
 
-/** UC-33: the lecturer enters the brief, the schedule, how students submit and optional attachments. */
+const toDate = (iso: string | undefined, fallback: () => Date): Date => {
+  const date = iso ? new Date(iso) : fallback();
+  return Number.isNaN(date.getTime()) ? fallback() : date;
+};
+
+/**
+ * UC-33: the lecturer enters the brief, the schedule, how students submit and optional attachments.
+ * With `assignment` it becomes the edit form, prefilled with the current values.
+ */
 export const CreateAssignmentDialog = ({
   open,
   isSubmitting,
   onClose,
+  assignment,
   onSubmit,
 }: CreateAssignmentDialogProps) => {
+  const isEdit = assignment !== undefined;
+  // Existing submissions were made under the current type, so it cannot change once someone has submitted.
+  const isTypeLocked = isEdit && assignment.submissionCount > 0;
   const fileInput = useRef<HTMLInputElement>(null);
-  const [title, setTitle] = useState('');
-  const [instruction, setInstruction] = useState('');
-  const [openAt, setOpenAt] = useState(() => toLocalInputValue(new Date()));
-  const [endAt, setEndAt] = useState(() =>
-    toLocalInputValue(new Date(Date.now() + DEFAULT_DURATION_MS)),
+  const [title, setTitle] = useState(assignment?.title ?? '');
+  const [instruction, setInstruction] = useState(assignment?.instruction ?? '');
+  const [openAt, setOpenAt] = useState(() =>
+    toLocalInputValue(toDate(assignment?.openAt, () => new Date())),
   );
-  const [submissionType, setSubmissionType] = useState<SubmissionType>('FILE');
-  const [formats, setFormats] = useState<string[]>([]);
-  const [note, setNote] = useState('');
+  const [endAt, setEndAt] = useState(() =>
+    toLocalInputValue(
+      toDate(
+        assignment?.endAt,
+        () => new Date(Date.now() + DEFAULT_DURATION_MS),
+      ),
+    ),
+  );
+  const [submissionType, setSubmissionType] = useState<SubmissionType>(
+    assignment?.submissionType ?? 'FILE',
+  );
+  const [formats, setFormats] = useState<string[]>(
+    assignment?.acceptedExtensions ?? [],
+  );
+  const [note, setNote] = useState(assignment?.submissionNote ?? '');
   const [files, setFiles] = useState<File[]>([]);
+  /** Attachments already on the assignment that the lecturer has not removed. */
+  const [keptFiles, setKeptFiles] = useState<AssignmentFileLink[]>(
+    assignment?.files ?? [],
+  );
   const [errors, setErrors] = useState<AssignmentFormErrors>({});
 
   const reset = () => {
@@ -64,6 +96,7 @@ export const CreateAssignmentDialog = ({
     setFormats([]);
     setNote('');
     setFiles([]);
+    setKeptFiles(assignment?.files ?? []);
     setErrors({});
   };
   const handleClose = () => {
@@ -78,19 +111,23 @@ export const CreateAssignmentDialog = ({
       openAt,
       endAt,
       files,
+      keptFileCount: keptFiles.length,
     });
     setErrors(found);
     if (Object.keys(found).length > 0) return;
-    onSubmit({
-      title: title.trim(),
-      instruction: instruction.trim(),
-      openAt: new Date(openAt).toISOString(),
-      endAt: new Date(endAt).toISOString(),
-      submissionType,
-      acceptedExtensions: submissionType === 'FILE' ? formats : [],
-      submissionNote: note.trim(),
-      files,
-    });
+    onSubmit(
+      {
+        title: title.trim(),
+        instruction: instruction.trim(),
+        openAt: new Date(openAt).toISOString(),
+        endAt: new Date(endAt).toISOString(),
+        submissionType,
+        acceptedExtensions: submissionType === 'FILE' ? formats : [],
+        submissionNote: note.trim(),
+        files,
+      },
+      keptFiles.map((file) => file.fileId),
+    );
   };
   const toggleFormat = (format: string) =>
     setFormats((current) =>
@@ -107,7 +144,7 @@ export const CreateAssignmentDialog = ({
   return (
     <Modal
       open={open}
-      title="Create assignment"
+      title={isEdit ? 'Edit assignment' : 'Create assignment'}
       size="lg"
       onClose={handleClose}
     >
@@ -173,6 +210,7 @@ export const CreateAssignmentDialog = ({
               icon={<FileUp className="h-5 w-5" />}
               title="Upload files"
               hint="Code, zip, slides, documents…"
+              disabled={isTypeLocked}
               onClick={() => setSubmissionType('FILE')}
             />
             <TypeCard
@@ -180,9 +218,16 @@ export const CreateAssignmentDialog = ({
               icon={<PencilLine className="h-5 w-5" />}
               title="Write online"
               hint="Students type the answer directly"
+              disabled={isTypeLocked}
               onClick={() => setSubmissionType('TEXT')}
             />
           </div>
+          {isTypeLocked && (
+            <p className="m-0 text-xs text-muted-foreground">
+              The submission type is locked because students have already
+              submitted.
+            </p>
+          )}
           {submissionType === 'FILE' && (
             <div>
               <p className="m-0 mb-2 text-xs text-muted-foreground">
@@ -245,6 +290,33 @@ export const CreateAssignmentDialog = ({
               Attach files
             </Button>
           </div>
+          {keptFiles.length > 0 && (
+            <ul className="m-0 list-none space-y-1 p-0">
+              {keptFiles.map((file) => (
+                <li
+                  key={file.fileId}
+                  className="flex items-center justify-between rounded-md border px-3 py-1.5 text-sm"
+                >
+                  <span className="flex items-center gap-2">
+                    <Paperclip className="h-4 w-4" />
+                    {file.fileName}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label={`Remove ${file.fileName}`}
+                    onClick={() =>
+                      setKeptFiles((current) =>
+                        current.filter((x) => x.fileId !== file.fileId),
+                      )
+                    }
+                    className="border-0 bg-transparent"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
           {files.length > 0 && (
             <ul className="m-0 list-none space-y-1 p-0">
               {files.map((file, index) => (
@@ -280,7 +352,13 @@ export const CreateAssignmentDialog = ({
           Cancel
         </Button>
         <Button disabled={isSubmitting} onClick={handleSubmit}>
-          {isSubmitting ? 'Creating…' : 'Create assignment'}
+          {isSubmitting
+            ? isEdit
+              ? 'Saving…'
+              : 'Creating…'
+            : isEdit
+              ? 'Save changes'
+              : 'Create assignment'}
         </Button>
       </div>
     </Modal>
@@ -305,17 +383,29 @@ interface TypeCardProps {
   icon: ReactNode;
   title: string;
   hint: string;
+  disabled?: boolean;
   onClick: () => void;
 }
 
-const TypeCard = ({ active, icon, title, hint, onClick }: TypeCardProps) => (
+const TypeCard = ({
+  active,
+  icon,
+  title,
+  hint,
+  disabled = false,
+  onClick,
+}: TypeCardProps) => (
   <button
     type="button"
     aria-pressed={active}
+    disabled={disabled}
     onClick={onClick}
     className={cn(
       'flex items-start gap-3 rounded-lg border p-3 text-left',
-      active ? 'border-primary bg-primary/10' : 'bg-card hover:border-primary/50',
+      active
+        ? 'border-primary bg-primary/10'
+        : 'bg-card hover:border-primary/50',
+      disabled && 'cursor-not-allowed opacity-60',
     )}
   >
     {icon}
