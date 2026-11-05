@@ -3,6 +3,7 @@ export { useAssignment } from './hooks/useAssignment';
 export { useMyAssignments, useMySubmissions } from './hooks/useAssignmentLists';
 export { useAssignmentDetail } from './hooks/useAssignmentDetail';
 export { useCreateAssignment } from './hooks/useCreateAssignment';
+export { useUpdateAssignment } from './hooks/useUpdateAssignment';
 export { useRemoveAssignment } from './hooks/useRemoveAssignment';
 export { CreateAssignmentDialog } from './components/CreateAssignmentDialog';
 
@@ -15,4 +16,5 @@ export type {
   AssignmentDetail,
   NewAssignmentInput,
   SubmissionType,
+  UpdateAssignmentInput,
 } from './types/assignments.types';

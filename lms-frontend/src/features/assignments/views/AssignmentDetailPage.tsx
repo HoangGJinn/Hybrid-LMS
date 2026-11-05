@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
+import { Pencil } from 'lucide-react';
 import { Link, useLocation, useParams } from 'react-router';
 import { toast } from 'sonner';
 import { AsyncView } from '@shared/components/AsyncView';
@@ -13,11 +14,13 @@ import { cn } from '@shared/utils/cn';
 import { formatDateTime } from '@shared/utils/format/date';
 import { pad } from '@shared/utils/format/number';
 import { Chip } from '../components/Chip';
+import { CreateAssignmentDialog } from '../components/CreateAssignmentDialog';
 import { FileList } from '../components/FileList';
 import { LecturerSubmissions } from '../components/LecturerSubmissions';
 import { SubmissionForm } from '../components/SubmissionForm';
 import { useAssignmentDetail } from '../hooks/useAssignmentDetail';
 import { useSubmitAssignment } from '../hooks/useSubmitAssignment';
+import { useUpdateAssignment } from '../hooks/useUpdateAssignment';
 import type { AssignmentDetail } from '../types/assignments.types';
 
 /** An assignment of a class. Students see their submission status and can submit; lecturers see the brief. */
@@ -29,6 +32,8 @@ const AssignmentDetailPage = () => {
     ? `/lecturer/classes/${courseId}`
     : `/student/courses/${courseId}`;
   const state = toAsyncState(useAssignmentDetail(courseId, assignmentId));
+  const updateAssignment = useUpdateAssignment();
+  const [isEditingAssignment, setIsEditingAssignment] = useState(false);
   return (
     <AsyncView
       state={state}
@@ -44,9 +49,44 @@ const AssignmentDetailPage = () => {
           <PageHeader
             title={assignment.title}
             actions={
-              isLecturer ? null : <StatusBadge status={assignment.status} />
+              isLecturer ? (
+                <Button
+                  variant="outline"
+                  onClick={() => setIsEditingAssignment(true)}
+                >
+                  <Pencil className="mr-1 h-4 w-4" />
+                  Edit
+                </Button>
+              ) : (
+                <StatusBadge status={assignment.status} />
+              )
             }
           />
+          {isLecturer && isEditingAssignment && (
+            <CreateAssignmentDialog
+              key={assignment.id}
+              open
+              assignment={assignment}
+              isSubmitting={updateAssignment.isPending}
+              onClose={() => setIsEditingAssignment(false)}
+              onSubmit={(input, keptFileIds) =>
+                updateAssignment.mutate(
+                  {
+                    classId: courseId,
+                    assignmentId: assignment.id,
+                    input: { ...input, keptFileIds },
+                  },
+                  {
+                    onSuccess: () => {
+                      setIsEditingAssignment(false);
+                      toast.success('Assignment updated');
+                    },
+                    onError: (error) => toast.error(error.message),
+                  },
+                )
+              }
+            />
+          )}
           <BriefBox assignment={assignment} />
           {isLecturer ? (
             <LecturerSubmissions classId={courseId} assignment={assignment} />
