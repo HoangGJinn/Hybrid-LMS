@@ -18,6 +18,7 @@ import { CurrentUser } from '../../../common/decorators/current-user.decorator.j
 import { Role } from '../../../common/enums/role.enum.js';
 import { AuthenticatedUser } from '../../../common/types/authenticated-user.type.js';
 import { CreateAssignmentDto } from '../dto/create-assignment.dto.js';
+import { UpdateAssignmentDto } from '../dto/update-assignment.dto.js';
 import { GradeSubmissionDto } from '../dto/grade-submission.dto.js';
 import { SubmitAssignmentDto } from '../dto/submit-assignment.dto.js';
 import { AssignmentService } from '../services/assignment.service.js';
@@ -27,7 +28,7 @@ import { AssignmentView } from '../types/assignment-view.type.js';
 import { SubmissionListItemView } from '../types/submission-list-item-view.type.js';
 import { SubmissionView } from '../types/submission-view.type.js';
 
-/** Assignments of one class: created and removed by its lecturer, viewed and submitted by its members. */
+/** Assignments of one class: created, edited and removed by its lecturer, viewed and submitted by its members. */
 @Controller('classes/:classId/assignments')
 export class AssignmentController {
   constructor(
@@ -60,6 +61,18 @@ export class AssignmentController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<AssignmentView> {
     return this.assignmentService.findOne(classId, assignmentId, user);
+  }
+
+  /** Replaces the brief, schedule, submission rules and attachments of an assignment. */
+  @Put(':assignmentId')
+  @Auth(Role.LECTURER)
+  async update(
+    @Param('classId', ParseUUIDPipe) classId: string,
+    @Param('assignmentId', ParseUUIDPipe) assignmentId: string,
+    @Body() dto: UpdateAssignmentDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<AssignmentView> {
+    return this.assignmentService.update(classId, assignmentId, dto, user);
   }
 
   @Delete(':assignmentId')

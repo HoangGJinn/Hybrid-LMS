@@ -8,7 +8,11 @@ import type { AuthenticatedUser } from '../../../common/types/authenticated-user
 import { FileFacade } from '../../../shared/file/facades/file.facade.js';
 import { AcademicFacade } from '../../academic/facades/academic.facade.js';
 import { ContentFacade } from '../../content/facades/content.facade.js';
-import type { CreateAssignmentDto } from '../dto/create-assignment.dto.js';
+import {
+  MAX_ATTACHMENTS,
+  type CreateAssignmentDto,
+} from '../dto/create-assignment.dto.js';
+import type { UpdateAssignmentDto } from '../dto/update-assignment.dto.js';
 import type { Assignment } from '../entities/assignment.entity.js';
 import { SubmissionType } from '../enums/submission-type.enum.js';
 import { AssignmentRepository } from '../repositories/assignment.repository.js';
@@ -16,7 +20,7 @@ import { AssignmentView } from '../types/assignment-view.type.js';
 import { computeAssignmentStatus } from '../utils/assignment-status.util.js';
 import { SubmissionService } from './submission.service.js';
 
-/** Business rules for creating, viewing and removing assignments of a class. */
+/** Business rules for creating, viewing, editing and removing assignments of a class. */
 @Injectable()
 export class AssignmentService {
   constructor(
@@ -60,6 +64,87 @@ export class AssignmentService {
       dto.fileIds,
     );
     return this.buildView(classId, assignment, user);
+  }
+
+  /**
+   * Edits an assignment of the class: brief, schedule, submission rules and attachments.
+   * The submission type is locked once somebody has submitted, because existing submissions
+   * (files vs. typed answers) would no longer match it. Attachments left out of `keptFileIds`
+   * are unlinked and deleted; `fileIds` are new uploads.
+   */
+  async update(
+    classId: string,
+    assignmentId: string,
+    dto: UpdateAssignmentDto,
+    user: AuthenticatedUser,
+  ): Promise<AssignmentView> {
+    await this.academicFacade.assertCanManageClass(classId, user);
+    const isInClass = await this.contentFacade.isAssignmentInClass(
+      classId,
+      assignmentId,
+    );
+    const current = isInClass
+      ? await this.assignmentRepository.findById(assignmentId)
+      : null;
+    if (!current) {
+      throw new NotFoundException('Assignment not found');
+    }
+    const openAt = new Date(dto.openAt);
+    const endAt = new Date(dto.endAt);
+    if (endAt <= openAt) {
+      throw new BadRequestException(
+        'The due date must be after the opening date',
+      );
+    }
+    const hasSubmissions =
+      (await this.submissionService.count(assignmentId)) > 0;
+    if (hasSubmissions && dto.submissionType !== current.submissionType) {
+      throw new BadRequestException(
+        'The submission type cannot be changed once students have submitted',
+      );
+    }
+    const currentFileIds =
+      await this.assignmentRepository.findFileIds(assignmentId);
+    if (dto.keptFileIds.some((id) => !currentFileIds.includes(id))) {
+      throw new BadRequestException(
+        'Kept files must be attached to this assignment',
+      );
+    }
+    if (dto.fileIds.some((id) => currentFileIds.includes(id))) {
+      throw new BadRequestException('Those files are already attached');
+    }
+    if (dto.keptFileIds.length + dto.fileIds.length > MAX_ATTACHMENTS) {
+      throw new BadRequestException(
+        `At most ${MAX_ATTACHMENTS} files can be attached`,
+      );
+    }
+    await this.fileFacade.assertOwnedReadyFiles(dto.fileIds, user.id);
+    const removedFileIds = currentFileIds.filter(
+      (id) => !dto.keptFileIds.includes(id),
+    );
+    const isFileSubmission = dto.submissionType === SubmissionType.FILE;
+    const updated = await this.assignmentRepository.update(
+      assignmentId,
+      {
+        title: dto.title,
+        instruction: dto.instruction,
+        openAt,
+        endAt,
+        submissionType: dto.submissionType,
+        acceptedExtensions: isFileSubmission ? dto.acceptedExtensions : [],
+        submissionNote: dto.submissionNote?.trim() || null,
+      },
+      removedFileIds,
+      dto.fileIds,
+    );
+    if (!updated) {
+      throw new NotFoundException('Assignment not found');
+    }
+    // Only after the links are gone, so a failed update never leaves an assignment pointing at deleted files.
+    if (removedFileIds.length > 0) {
+      await this.fileFacade.deleteFiles(removedFileIds);
+    }
+    return this.buildView(classId, updated, user);
   }
 
   /** UC-12: one assignment of a class, with its files and (for a student) their own submission. */

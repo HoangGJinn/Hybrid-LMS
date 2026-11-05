@@ -15,7 +15,7 @@ import {
 import { SUBMISSION_FORMATS } from '../../../shared/file/constants/upload-rules.constant.js';
 import { SubmissionType } from '../enums/submission-type.enum.js';
 
-const MAX_ATTACHMENTS = 10;
+export const MAX_ATTACHMENTS = 10;
 
 const trim = ({ value }: { value: unknown }): unknown =>
   typeof value === 'string' ? value.trim() : value;
