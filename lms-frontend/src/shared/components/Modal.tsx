@@ -5,10 +5,16 @@ interface ModalProps {
   open: boolean;
   title: string;
   onClose: () => void;
-  /** Width of the dialog; `lg` suits tables and previews. */
-  size?: 'md' | 'lg';
+  /** Width of the dialog; `lg` suits tables and previews, `xl` suits two-column builders. */
+  size?: 'md' | 'lg' | 'xl';
   children: ReactNode;
 }
+
+const SIZE_CLASS: Record<NonNullable<ModalProps['size']>, string> = {
+  md: 'max-w-md',
+  lg: 'max-w-2xl',
+  xl: 'max-w-5xl',
+};
 
 /** Accessible modal built on the native <dialog>: focus trap, Esc to close and backdrop come from the browser. */
 export const Modal = ({ open, title, onClose, size = 'md', children }: ModalProps) => {
@@ -34,7 +40,7 @@ export const Modal = ({ open, title, onClose, size = 'md', children }: ModalProp
       onClick={handleBackdropClick}
       className={cn(
         'm-auto w-[calc(100%-2rem)] rounded-2xl border bg-card p-0 text-card-foreground shadow-xl backdrop:bg-black/50',
-        size === 'lg' ? 'max-w-2xl' : 'max-w-md',
+        SIZE_CLASS[size],
       )}
     >
       <div className="p-6">

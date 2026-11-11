@@ -1,7 +1,7 @@
 import { post } from './http';
 
 /** What an uploaded file is for; the backend applies different rules and keys to each. */
-export type UploadPurpose = 'DOCUMENT' | 'ASSIGNMENT' | 'SUBMISSION';
+export type UploadPurpose = 'DOCUMENT' | 'ASSIGNMENT' | 'SUBMISSION' | 'EXAM';
 
 export interface S3UploadOptions {
   purpose: UploadPurpose;

@@ -3,6 +3,7 @@ import {
   DOCUMENT_MAX_SIZE_BYTES,
   titleFromFileName,
   validateDocumentFile,
+  validateExamFile,
 } from './upload-rules';
 
 const buildFile = (type: string, size: number): File => {
@@ -41,6 +42,31 @@ describe('validateDocumentFile', () => {
       validateDocumentFile(
         buildFile('application/pdf', DOCUMENT_MAX_SIZE_BYTES + 1),
       ),
+    ).toMatch(/too large/);
+  });
+});
+
+describe('validateExamFile', () => {
+  it.each([
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  ])('should accept %s', (type) => {
+    expect(validateExamFile(buildFile(type, 1000))).toBeNull();
+  });
+
+  it('should reject other document formats that a course document allows', () => {
+    expect(validateExamFile(buildFile('video/mp4', 1000))).toMatch(/PDF/);
+    expect(validateExamFile(buildFile('application/zip', 1000))).toMatch(/PDF/);
+  });
+
+  it('should reject an empty file', () => {
+    expect(validateExamFile(buildFile('application/pdf', 0))).toMatch(/empty/);
+  });
+
+  it('should reject a file above the size limit', () => {
+    expect(
+      validateExamFile(buildFile('application/pdf', DOCUMENT_MAX_SIZE_BYTES + 1)),
     ).toMatch(/too large/);
   });
 });

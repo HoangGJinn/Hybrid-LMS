@@ -6,12 +6,14 @@ export { documentKeys } from './api/queryKeys';
 export {
   ASSIGNMENT_ACCEPT,
   DOCUMENT_ACCEPT,
+  EXAM_ACCEPT,
   SUBMISSION_FORMATS,
   acceptForFormats,
   getExtension,
   resolveContentType,
   validateAssignmentFile,
   validateDocumentFile,
+  validateExamFile,
 } from './utils/upload-rules';
 export type { LmsDocument, LmsDocumentSummary } from './types/documents.types';
 export { useRemoveDocument } from './hooks/useRemoveDocument';
