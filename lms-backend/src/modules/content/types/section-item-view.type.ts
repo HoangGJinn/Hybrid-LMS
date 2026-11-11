@@ -11,6 +11,7 @@ export class SectionItemView {
   readonly orderIndex: number
   readonly documentId: string | null
   readonly assignmentId: string | null
+  readonly examId: string | null
   /** Completion is a per-student concept, so the lecturer view is always false. */
   readonly isCompleted = false
 
@@ -23,6 +24,7 @@ export class SectionItemView {
     this.orderIndex = entity.orderIndex
     this.documentId = entity.documentId
     this.assignmentId = entity.assignmentId
+    this.examId = entity.examId
   }
 
   /** Maps an entity to its view without leaking the entity itself. */

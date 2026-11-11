@@ -144,6 +144,49 @@ describe('FileService', () => {
         service.requestUpload(buildUploadDto(), student),
       ).rejects.toBeInstanceOf(ForbiddenException);
     });
+
+    describe('exam question files', () => {
+      it('should store a lecturer\'s DOCX under the exams prefix', async () => {
+        mockStorage.createUploadForm.mockResolvedValue({ url: 'u', fields: {} });
+
+        const actualView = await service.requestUpload(
+          buildUploadDto({
+            purpose: FilePurpose.EXAM,
+            fileName: 'de-thi.docx',
+            contentType:
+              'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          }),
+          lecturer,
+        );
+
+        const [mockPending] = mockRepository.createPending.mock.calls[0];
+        expect(mockPending.storageKey).toBe(
+          `exams/lec-1/${actualView.fileId}.docx`,
+        );
+      });
+
+      it.each(['application/zip', 'video/mp4', 'text/plain'])(
+        'should reject %s, which is not an exam format',
+        async (contentType) => {
+          await expect(
+            service.requestUpload(
+              buildUploadDto({ purpose: FilePurpose.EXAM, contentType }),
+              lecturer,
+            ),
+          ).rejects.toBeInstanceOf(BadRequestException);
+          expect(mockRepository.createPending).not.toHaveBeenCalled();
+        },
+      );
+
+      it('should not let a student upload an exam file', async () => {
+        await expect(
+          service.requestUpload(
+            buildUploadDto({ purpose: FilePurpose.EXAM }),
+            student,
+          ),
+        ).rejects.toBeInstanceOf(ForbiddenException);
+      });
+    });
   });
 
   describe('confirmUpload', () => {
@@ -248,6 +291,57 @@ describe('FileService', () => {
       );
       await expect(
         service.assertOwnedReadyFile('file-1', 'lec-1'),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  describe('assertOwnedReadyFileOfPurpose', () => {
+    const buildExamFile = (
+      status: FileStatus,
+      storageKey = 'exams/lec-1/file-1.pdf',
+    ): FileAttachment => ({ ...buildFile(status), storageKey }) as FileAttachment;
+
+    it('should pass for a READY file of the owner uploaded for that purpose', async () => {
+      mockRepository.findById.mockResolvedValue(buildExamFile(FileStatus.READY));
+
+      await expect(
+        service.assertOwnedReadyFileOfPurpose('file-1', 'lec-1', FilePurpose.EXAM),
+      ).resolves.toBeUndefined();
+    });
+
+    it('should reject a file uploaded for another purpose', async () => {
+      mockRepository.findById.mockResolvedValue(
+        buildExamFile(FileStatus.READY, 'documents/lec-1/file-1.pdf'),
+      );
+
+      await expect(
+        service.assertOwnedReadyFileOfPurpose('file-1', 'lec-1', FilePurpose.EXAM),
+      ).rejects.toThrow('This file cannot be used here');
+    });
+
+    it('should reject a key that only looks like the prefix', async () => {
+      mockRepository.findById.mockResolvedValue(
+        buildExamFile(FileStatus.READY, 'exams-old/lec-1/file-1.pdf'),
+      );
+
+      await expect(
+        service.assertOwnedReadyFileOfPurpose('file-1', 'lec-1', FilePurpose.EXAM),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('should reject a PENDING file', async () => {
+      mockRepository.findById.mockResolvedValue(buildExamFile(FileStatus.PENDING));
+
+      await expect(
+        service.assertOwnedReadyFileOfPurpose('file-1', 'lec-1', FilePurpose.EXAM),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('should treat a file of another owner as missing', async () => {
+      mockRepository.findById.mockResolvedValue(buildExamFile(FileStatus.READY));
+
+      await expect(
+        service.assertOwnedReadyFileOfPurpose('file-1', 'someone-else', FilePurpose.EXAM),
       ).rejects.toBeInstanceOf(NotFoundException);
     });
   });

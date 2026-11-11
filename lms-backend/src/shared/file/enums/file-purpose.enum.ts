@@ -3,4 +3,5 @@ export enum FilePurpose {
   DOCUMENT = 'DOCUMENT',
   ASSIGNMENT = 'ASSIGNMENT',
   SUBMISSION = 'SUBMISSION',
+  EXAM = 'EXAM',
 }

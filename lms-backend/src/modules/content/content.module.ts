@@ -12,10 +12,18 @@ import { DocumentItemRepository } from './repositories/document-item.repository.
 import { ClassDocumentService } from './services/class-document.service.js';
 import { ClassAssignmentService } from './services/class-assignment.service.js';
 import { AssignmentItemRepository } from './repositories/assignment-item.repository.js';
+import { ExamItemRepository } from './repositories/exam-item.repository.js';
+import { ClassExamService } from './services/class-exam.service.js';
+import { ExamSchedule } from '../exam/entities/exam-schedule.entity.js';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([ItemCompletion, SectionItem, Section]),
+    TypeOrmModule.forFeature([
+          ItemCompletion,
+          SectionItem,
+          Section,
+          ExamSchedule,
+        ]),
     AcademicModule,
   ],
   controllers: [SectionController],
@@ -23,9 +31,11 @@ import { AssignmentItemRepository } from './repositories/assignment-item.reposit
     SectionRepository,
     DocumentItemRepository,
     AssignmentItemRepository,
+    ExamItemRepository,
     SectionService,
     ClassDocumentService,
     ClassAssignmentService,
+    ClassExamService,
     ContentFacade,
   ],
   exports: [ContentFacade],
