@@ -1,0 +1,6 @@
+export enum ImportBatchStatus {
+  PROCESSING = 'PROCESSING',
+  COMPLETED = 'COMPLETED',
+  PARTIAL = 'PARTIAL',
+  FAILED = 'FAILED',
+}

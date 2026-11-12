@@ -1,6 +1,6 @@
 export enum GenerationJobStatus {
   PENDING = 'PENDING',
-  PROCESSING = 'PROCESSING',
+  RUNNING = 'RUNNING',
   COMPLETED = 'COMPLETED',
   FAILED = 'FAILED',
 }

@@ -1,0 +1,5 @@
+export enum QuestionSource {
+  LECTURER_UPLOAD = 'LECTURER_UPLOAD',
+  AI_GENERATED = 'AI_GENERATED',
+  MANUAL = 'MANUAL',
+}

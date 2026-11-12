@@ -4,11 +4,18 @@ import {
   Column,
   ManyToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { QuizInstance } from './quiz-instance.entity.js';
-import { DocumentTextSegment } from '../../document/entities/document-text-segment.entity.js';
+import { Question } from './question.entity.js';
 
 @Entity('quiz_instance_questions')
+@Index('uq_quiz_instance_questions_order', ['quizInstanceId', 'orderIndex'], {
+  unique: true,
+})
+@Index('uq_quiz_instance_questions_question', ['quizInstanceId', 'questionId'], {
+  unique: true,
+})
 export class QuizInstanceQuestion {
   @PrimaryGeneratedColumn('uuid')
   readonly id: string;
@@ -20,27 +27,27 @@ export class QuizInstanceQuestion {
   @JoinColumn({ name: 'quiz_instance_id' })
   quizInstance: QuizInstance;
 
-  @Column({ name: 'segment_id' })
-  segmentId: string;
+  @Column({ name: 'question_id' })
+  questionId: string;
 
-  @ManyToOne(() => DocumentTextSegment)
-  @JoinColumn({ name: 'segment_id' })
-  segment: DocumentTextSegment;
-
-  @Column({ name: 'question_text', type: 'text' })
-  questionText: string;
-
-  @Column({ name: 'correct_answer', type: 'text' })
-  correctAnswer: string;
-
-  @Column({
-    name: 'estimate_difficulty',
-    type: 'varchar',
-    length: 20,
-    nullable: true,
-  })
-  estimateDifficulty: string | null;
+  @ManyToOne(() => Question)
+  @JoinColumn({ name: 'question_id' })
+  question: Question;
 
   @Column({ name: 'order_index', type: 'int' })
   orderIndex: number;
+
+  /** Thứ tự hiển thị đã xáo trộn của các phương án (mảng id QuestionOption). */
+  @Column({ name: 'option_order', type: 'jsonb', nullable: true })
+  optionOrder: string[] | null;
+
+  /** Xác suất trả lời đúng do ENAS-KT dự đoán tại thời điểm chọn câu hỏi. */
+  @Column({
+    name: 'p_correct_predicted',
+    type: 'numeric',
+    precision: 4,
+    scale: 3,
+    nullable: true,
+  })
+  pCorrectPredicted: number | null;
 }
