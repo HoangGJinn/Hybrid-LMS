@@ -1,4 +1,5 @@
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { QueryFailedError } from 'typeorm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Role } from '../../../common/enums/role.enum.js';
 import type { AuthenticatedUser } from '../../../common/types/authenticated-user.type.js';
@@ -32,19 +33,35 @@ const buildDocument = (id: string): Document =>
   }) as unknown as Document;
 
 describe('DocumentService', () => {
-  let mockRepository: { findByIds: Mock; findById: Mock; create: Mock };
+  let mockRepository: {
+    findByIds: Mock;
+    findById: Mock;
+    create: Mock;
+    deleteById: Mock;
+  };
   let mockAcademic: { assertCanViewClass: Mock; assertCanManageClass: Mock };
   let mockContent: {
     getDocumentIdsInClass: Mock;
     isDocumentInClass: Mock;
     getSeenDocumentIds: Mock;
     markDocumentSeen: Mock;
+    removeDocumentFromClass: Mock;
+    isDocumentReferenced: Mock;
   };
-  let mockFile: { getDownloadLink: Mock; assertOwnedReadyFile: Mock };
+  let mockFile: {
+    getDownloadLink: Mock;
+    assertOwnedReadyFile: Mock;
+    deleteFile: Mock;
+  };
   let service: DocumentService;
 
   beforeEach(() => {
-    mockRepository = { findByIds: vi.fn(), findById: vi.fn(), create: vi.fn() };
+    mockRepository = {
+      findByIds: vi.fn(),
+      findById: vi.fn(),
+      create: vi.fn(),
+      deleteById: vi.fn().mockResolvedValue(undefined),
+    };
     mockAcademic = {
       assertCanViewClass: vi.fn().mockResolvedValue(undefined),
       assertCanManageClass: vi.fn().mockResolvedValue(undefined),
@@ -54,10 +71,13 @@ describe('DocumentService', () => {
       isDocumentInClass: vi.fn(),
       getSeenDocumentIds: vi.fn().mockResolvedValue(new Set<string>()),
       markDocumentSeen: vi.fn(),
+      removeDocumentFromClass: vi.fn().mockResolvedValue(1),
+      isDocumentReferenced: vi.fn().mockResolvedValue(false),
     };
     mockFile = {
       getDownloadLink: vi.fn(),
       assertOwnedReadyFile: vi.fn().mockResolvedValue(undefined),
+      deleteFile: vi.fn().mockResolvedValue(undefined),
     };
     service = new DocumentService(
       mockRepository as unknown as DocumentRepository,
@@ -247,6 +267,57 @@ describe('DocumentService', () => {
         service.markSeen(CLASS_ID, DOCUMENT_ID, student),
       ).rejects.toBeInstanceOf(ForbiddenException);
       expect(mockContent.markDocumentSeen).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('remove', () => {
+    it('throws NotFoundException when document does not exist or is only shown in other classes', async () => {
+      mockRepository.findById.mockResolvedValueOnce(null);
+      await expect(
+        service.remove(CLASS_ID, DOCUMENT_ID, lecturer),
+      ).rejects.toBeInstanceOf(NotFoundException);
+
+      mockRepository.findById.mockResolvedValueOnce(buildDocument(DOCUMENT_ID));
+      mockContent.removeDocumentFromClass.mockResolvedValueOnce(0);
+      mockContent.isDocumentReferenced.mockResolvedValueOnce(true);
+      await expect(
+        service.remove(CLASS_ID, DOCUMENT_ID, lecturer),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('keeps document and file when still referenced elsewhere or owned by another user', async () => {
+      mockRepository.findById.mockResolvedValueOnce(buildDocument(DOCUMENT_ID));
+      mockContent.isDocumentReferenced.mockResolvedValueOnce(true);
+      await service.remove(CLASS_ID, DOCUMENT_ID, lecturer);
+      expect(mockRepository.deleteById).not.toHaveBeenCalled();
+
+      mockRepository.findById.mockResolvedValueOnce({
+        ...buildDocument(DOCUMENT_ID),
+        uploadedBy: 'other-lec',
+      });
+      await service.remove(CLASS_ID, DOCUMENT_ID, lecturer);
+      expect(mockRepository.deleteById).not.toHaveBeenCalled();
+    });
+
+    it('keeps file when deleteById hits a foreign-key violation, rethrows other errors, and deletes file on success', async () => {
+      mockRepository.findById.mockResolvedValue(buildDocument(DOCUMENT_ID));
+
+      const fkError = new QueryFailedError('DELETE', [], { code: '23503' } as never);
+      mockRepository.deleteById.mockRejectedValueOnce(fkError);
+      await expect(
+        service.remove(CLASS_ID, DOCUMENT_ID, lecturer),
+      ).resolves.toBeUndefined();
+      expect(mockFile.deleteFile).not.toHaveBeenCalled();
+
+      const unexpected = new Error('DB connection lost');
+      mockRepository.deleteById.mockRejectedValueOnce(unexpected);
+      await expect(
+        service.remove(CLASS_ID, DOCUMENT_ID, lecturer),
+      ).rejects.toThrow('DB connection lost');
+
+      mockRepository.deleteById.mockResolvedValueOnce(undefined);
+      await service.remove(CLASS_ID, DOCUMENT_ID, lecturer);
+      expect(mockFile.deleteFile).toHaveBeenCalledWith(`file-${DOCUMENT_ID}`);
     });
   });
 });

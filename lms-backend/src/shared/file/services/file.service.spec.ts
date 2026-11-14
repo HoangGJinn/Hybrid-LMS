@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { Readable } from 'node:stream';
 import { Role } from '../../../common/enums/role.enum.js';
 import type { AuthenticatedUser } from '../../../common/types/authenticated-user.type.js';
 import type { RequestUploadDto } from '../dto/request-upload.dto.js';
@@ -50,24 +51,36 @@ const buildUploadDto = (
 });
 
 describe('FileService', () => {
-  let mockRepository: { findById: Mock; createPending: Mock; markReady: Mock };
+  let mockRepository: {
+    findById: Mock;
+    findByIds: Mock;
+    createPending: Mock;
+    markReady: Mock;
+    deleteById: Mock;
+  };
   let mockStorage: {
     createDownloadUrl: Mock;
     createUploadForm: Mock;
     findObjectInfo: Mock;
+    openReadStream: Mock;
+    deleteObject: Mock;
   };
   let service: FileService;
 
   beforeEach(() => {
     mockRepository = {
       findById: vi.fn(),
+      findByIds: vi.fn(),
       createPending: vi.fn(),
       markReady: vi.fn(),
+      deleteById: vi.fn(),
     };
     mockStorage = {
       createDownloadUrl: vi.fn(),
       createUploadForm: vi.fn(),
       findObjectInfo: vi.fn(),
+      openReadStream: vi.fn(),
+      deleteObject: vi.fn(),
     };
     service = new FileService(
       mockRepository as unknown as FileRepository,
@@ -379,6 +392,84 @@ describe('FileService', () => {
       await expect(service.getDownloadLink('missing')).rejects.toBeInstanceOf(
         NotFoundException,
       );
+    });
+  });
+
+  describe('assertOwnedReadyFiles', () => {
+    it('passes when every file exists, is owned by the user, and is READY', async () => {
+      mockRepository.findByIds.mockResolvedValue([
+        buildFile(FileStatus.READY, 'lec-1'),
+      ]);
+
+      await expect(
+        service.assertOwnedReadyFiles(['file-1'], 'lec-1'),
+      ).resolves.toBeUndefined();
+    });
+
+    it('rejects missing, unconfirmed, or unowned files', async () => {
+      mockRepository.findByIds.mockResolvedValue([]);
+      await expect(
+        service.assertOwnedReadyFiles(['file-1'], 'lec-1'),
+      ).rejects.toBeInstanceOf(BadRequestException);
+
+      mockRepository.findByIds.mockResolvedValue([
+        buildFile(FileStatus.PENDING, 'lec-1'),
+      ]);
+      await expect(
+        service.assertOwnedReadyFiles(['file-1'], 'lec-1'),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+  });
+
+  describe('openReadStream', () => {
+    it('opens a stream for a READY file and throws NotFoundException for missing or PENDING files', async () => {
+      mockRepository.findById.mockResolvedValueOnce(null);
+      await expect(service.openReadStream('missing')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+
+      mockRepository.findById.mockResolvedValueOnce(
+        buildFile(FileStatus.PENDING),
+      );
+      await expect(service.openReadStream('file-1')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+
+      const fakeStream = Readable.from(['hello']);
+      mockStorage.openReadStream = vi.fn().mockResolvedValue(fakeStream);
+      mockRepository.findById.mockResolvedValueOnce(buildFile(FileStatus.READY));
+
+      const result = await service.openReadStream('file-1');
+      expect(result.fileName).toBe('chuong1.pdf');
+      expect(result.stream).toBe(fakeStream);
+    });
+  });
+
+  describe('getDownloadLinks', () => {
+    it('returns signed links in requested order and skips non-READY files', async () => {
+      const f1 = { ...buildFile(FileStatus.READY), id: 'f-1' };
+      const f2 = { ...buildFile(FileStatus.PENDING), id: 'f-2' };
+      mockRepository.findByIds.mockResolvedValue([f1, f2]);
+      mockStorage.createDownloadUrl.mockResolvedValue('https://signed/f1');
+
+      const links = await service.getDownloadLinks(['f-2', 'f-1', 'f-missing']);
+      expect(links).toHaveLength(1);
+      expect(links[0].fileId).toBe('f-1');
+    });
+  });
+
+  describe('deleteFile and deleteFiles', () => {
+    it('deletes object before DB record and ignores missing files', async () => {
+      mockRepository.findById.mockResolvedValueOnce(null);
+      await service.deleteFile('missing');
+      expect(mockStorage.deleteObject).not.toHaveBeenCalled();
+
+      mockRepository.findById.mockResolvedValueOnce(buildFile(FileStatus.READY));
+      await service.deleteFiles(['file-1']);
+      expect(mockStorage.deleteObject).toHaveBeenCalledWith(
+        'documents/lec-1/file-1.pdf',
+      );
+      expect(mockRepository.deleteById).toHaveBeenCalledWith('file-1');
     });
   });
 });
