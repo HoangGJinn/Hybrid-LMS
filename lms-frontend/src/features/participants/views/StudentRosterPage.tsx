@@ -21,7 +21,6 @@ const StudentRosterPage = () => {
     <div>
       <PageHeader
         title="Students"
-        subtitle="Roster, performance and at-risk learners"
         actions={
           classes.data && (
             <ClassSelect

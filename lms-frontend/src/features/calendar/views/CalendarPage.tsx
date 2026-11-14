@@ -67,7 +67,6 @@ const CalendarPage = () => {
     <div>
       <PageHeader
         title="Calendar"
-        subtitle="Assignment deadlines, exams and scheduled reviews"
         actions={
           <div className="flex items-center gap-2">
             <Button

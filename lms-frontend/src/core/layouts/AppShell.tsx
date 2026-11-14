@@ -26,7 +26,7 @@ const SidebarBody = ({
   onNavigate?: () => void;
 }) => (
   <>
-    <div className="flex h-16 items-center gap-3 px-5">
+    <div className="flex h-14 items-center gap-3 px-5">
       <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-card text-brand shadow-sm">
         <GraduationCap className="h-5 w-5" />
       </div>
@@ -95,7 +95,7 @@ const AppShell = () => {
       )}
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b bg-card/90 px-4 backdrop-blur sm:px-6">
+        <header className="sticky top-0 z-10 flex h-14 items-center justify-between border-b bg-card/90 px-4 backdrop-blur sm:px-6">
           <div className="flex items-center gap-3">
             <button
               type="button"
@@ -143,7 +143,7 @@ const AppShell = () => {
             className="fixed inset-x-0 top-0 z-50 h-0.5 animate-pulse bg-primary"
           />
         )}
-        <main className="flex-1 p-4 sm:p-6">
+        <main className="min-w-0 flex-1 overflow-x-hidden px-4 py-3 sm:px-6 sm:py-4">
           <Breadcrumbs />
           <Outlet />
         </main>

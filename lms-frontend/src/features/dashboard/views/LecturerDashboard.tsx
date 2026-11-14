@@ -21,7 +21,6 @@ const LecturerDashboard = () => {
     <div>
       <HeroHeader
         title={`Welcome back, ${name}`}
-        subtitle="Overview of your classes, pending grading and analytics"
         actions={
           <Button
             asChild
@@ -46,7 +45,19 @@ const LecturerDashboard = () => {
         }
       >
         {({ classes, pending }) => {
-          const toGrade = pending.filter((p) => p.score === null);
+          const toGrade = pending
+            .filter((p) => p.score === null)
+            .sort((a, b) => {
+              if (a.kind !== b.kind) return a.kind === 'exam' ? -1 : 1;
+              return (
+                new Date(b.submittedAt).getTime() -
+                new Date(a.submittedAt).getTime()
+              );
+            });
+          const pendingAssignments = toGrade.filter(
+            (p) => p.kind === 'assignment',
+          ).length;
+          const pendingExams = toGrade.filter((p) => p.kind === 'exam').length;
           const students = classes.reduce((n, c) => n + c.studentCount, 0);
           return (
             <div className="space-y-6">
@@ -64,7 +75,11 @@ const LecturerDashboard = () => {
                 <StatCard
                   label="Pending grading"
                   value={toGrade.length}
-                  hint="Submissions awaiting a score"
+                  hint={
+                    toGrade.length > 0
+                      ? `${pendingExams} exams · ${pendingAssignments} assignments`
+                      : 'Submissions awaiting a score'
+                  }
                   icon={<ClipboardList className="h-4 w-4" />}
                 />
                 <StatCard
@@ -117,12 +132,22 @@ const LecturerDashboard = () => {
                   ) : (
                     <ul className="m-0 list-none space-y-3 p-0">
                       {toGrade.slice(0, 5).map((s) => (
-                        <li key={s.id} className="text-sm">
-                          <p className="m-0 font-medium">{s.studentName}</p>
-                          <p className="m-0 text-xs text-muted-foreground">
-                            {s.assignment.title} ·{' '}
-                            {new Date(s.submittedAt).toLocaleDateString()}
-                          </p>
+                        <li key={s.queueId} className="text-sm">
+                          <Link
+                            to={`/lecturer/grading?type=${s.kind}`}
+                            className="block text-foreground no-underline hover:text-brand"
+                          >
+                            <p className="m-0 font-medium">
+                              {s.studentName}{' '}
+                              <span className="ml-1 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                                {s.kind === 'exam' ? 'Exam' : 'Assignment'}
+                              </span>
+                            </p>
+                            <p className="m-0 text-xs text-muted-foreground">
+                              {s.title} ·{' '}
+                              {new Date(s.submittedAt).toLocaleDateString()}
+                            </p>
+                          </Link>
                         </li>
                       ))}
                     </ul>
