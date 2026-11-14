@@ -153,6 +153,7 @@ export class SectionRepository {
         orderIndex: item.orderIndex,
         documentId: item.documentId ?? null,
         assignmentId: item.assignmentId ?? null,
+        examId: item.examId ?? null,
       })),
     )
     if (rows.length === 0) return

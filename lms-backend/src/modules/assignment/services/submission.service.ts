@@ -48,7 +48,8 @@ export class SubmissionService {
       assignmentId,
       user.id,
     );
-    if (existing && existing.score !== null) {
+    const existingScore = existing?.score ?? null;
+    if (existingScore !== null) {
       throw new BadRequestException(
         'This submission is already graded and can no longer be edited',
       );

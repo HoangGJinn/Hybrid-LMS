@@ -6,6 +6,8 @@ export { useCreateAssignment } from './hooks/useCreateAssignment';
 export { useUpdateAssignment } from './hooks/useUpdateAssignment';
 export { useRemoveAssignment } from './hooks/useRemoveAssignment';
 export { CreateAssignmentDialog } from './components/CreateAssignmentDialog';
+export { DateTimeField } from './components/DateTimeField';
+export { toLocalInputValue } from './utils/assignment-form';
 
 export { assignmentKeys } from './api/queryKeys';
 export type {

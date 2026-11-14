@@ -11,6 +11,7 @@ const buildItem = (id: string, sectionId: string): SectionItem => ({
   orderIndex: 1,
   documentId: `doc-${id}`,
   assignmentId: null,
+  examId: null,
   isCompleted: false,
 })
 

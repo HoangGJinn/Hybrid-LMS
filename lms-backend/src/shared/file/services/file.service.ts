@@ -9,6 +9,7 @@ import type { AuthenticatedUser } from '../../../common/types/authenticated-user
 import { UPLOAD_RULES } from '../constants/upload-rules.constant.js';
 import type { RequestUploadDto } from '../dto/request-upload.dto.js';
 import type { FileAttachment } from '../entities/file-attachment.entity.js';
+import type { FilePurpose } from '../enums/file-purpose.enum.js';
 import { FileStatus } from '../enums/file-status.enum.js';
 import { FileRepository } from '../repositories/file.repository.js';
 import { FileConfirmView } from '../types/file-confirm-view.type.js';
@@ -103,6 +104,25 @@ export class FileService {
     const file = await this.findOwnedFile(fileId, ownerId);
     if (file.status !== FileStatus.READY) {
       throw new BadRequestException('The file upload has not been confirmed');
+    }
+  }
+
+  /**
+   * Like assertOwnedReadyFile, and the file must also have been uploaded for the given purpose, so a
+   * submission or a course document cannot be passed off as an exam's question file.
+   * The purpose is read from the S3 key prefix, which the backend itself chose at upload time.
+   */
+  async assertOwnedReadyFileOfPurpose(
+    fileId: string,
+    ownerId: string,
+    purpose: FilePurpose,
+  ): Promise<void> {
+    const file = await this.findOwnedFile(fileId, ownerId);
+    if (file.status !== FileStatus.READY) {
+      throw new BadRequestException('The file upload has not been confirmed');
+    }
+    if (!file.storageKey.startsWith(`${UPLOAD_RULES[purpose].keyPrefix}/`)) {
+      throw new BadRequestException('This file cannot be used here');
     }
   }
 

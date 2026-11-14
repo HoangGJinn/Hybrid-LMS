@@ -1,5 +1,5 @@
 ---
-name: Tailwind CSS Guidelines
+name: tailwind-guidelines
 description: "Tailwind CSS and UI component best practices for modern web applications"
 ---
 # Tailwind CSS Best Practices

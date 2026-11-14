@@ -1,5 +1,5 @@
 ---
-name: Zustand Guidelines
+name: zustand-guidelines
 description: "React and TypeScript state management guidance for Zustand stores, selectors, middleware, persistence, and testing."
 ---
 You are an expert in React, TypeScript, and Zustand state management.

@@ -1,4 +1,8 @@
-import type { ExamSchedule, ExamSession } from '@features/exams';
+import type {
+  ExamSchedule,
+  ExamSession,
+  LecturerExam,
+} from '@features/exams';
 
 export const mockExamSchedules: ExamSchedule[] = [
   {
@@ -18,3 +22,6 @@ export const mockExamSchedules: ExamSchedule[] = [
 ];
 
 export const mockExamSessions: ExamSession[] = [];
+
+/** Exams a lecturer created in mock mode, with their answers; the lecturer's exam page reads them. */
+export const mockLecturerExams: LecturerExam[] = [];

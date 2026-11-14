@@ -17,6 +17,13 @@ export const DOCUMENT_CONTENT_TYPES = [
   'application/x-7z-compressed',
 ] as const;
 
+/** Question files of an exam. Keep in sync with EXAM_CONTENT_TYPES in the backend's upload-rules.constant.ts. */
+export const EXAM_CONTENT_TYPES = [
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+] as const;
+
 /**
  * Browsers often report an empty type for these files (Windows without Office reports '' for .pptx),
  * so the extension decides in that case.
@@ -121,6 +128,11 @@ export const DOCUMENT_ACCEPT = [
   '.7z',
 ].join(',');
 
+/** Value for `<input accept>` of an exam's question file. */
+export const EXAM_ACCEPT = [...EXAM_CONTENT_TYPES, '.pdf', '.doc', '.docx'].join(
+  ',',
+);
+
 /** Value for `<input accept>` of assignment attachments: documents plus code and text files. */
 export const ASSIGNMENT_ACCEPT = [
   DOCUMENT_ACCEPT,
@@ -146,6 +158,20 @@ export const validateDocumentFile = (file: File): string | null => {
     )
   ) {
     return 'This file format is not supported';
+  }
+  if (file.size === 0) return 'This file is empty';
+  if (file.size > DOCUMENT_MAX_SIZE_BYTES) {
+    return 'This file is too large (maximum 100 MB)';
+  }
+  return null;
+};
+
+/** Like validateDocumentFile, for an exam's question file: PDF, DOC or DOCX only. */
+export const validateExamFile = (file: File): string | null => {
+  if (
+    !(EXAM_CONTENT_TYPES as readonly string[]).includes(resolveContentType(file))
+  ) {
+    return 'Only PDF, DOC or DOCX files are accepted';
   }
   if (file.size === 0) return 'This file is empty';
   if (file.size > DOCUMENT_MAX_SIZE_BYTES) {

@@ -21,10 +21,7 @@ const StudentDashboard = () => {
   const state = toAsyncState(useStudentDashboard());
   return (
     <div>
-      <HeroHeader
-        title={`Welcome back, ${name}`}
-        subtitle="Here is your learning overview"
-      />
+      <HeroHeader title={`Welcome back, ${name}`} />
       <AsyncView state={state}>
         {({ classes, assignments, kcs }) => {
           const pending = assignments.filter((a) => a.status === 'OPEN');

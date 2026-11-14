@@ -1,0 +1,32 @@
+Question,Option A,Option B,Option C,Option D,Option E,Option F,Correct
+"Giao thức HTTP hoạt động ở tầng nào trong mô hình OSI?","Tầng mạng (Network Layer)","Tầng giao vận (Transport Layer)","Tầng ứng dụng (Application Layer)","Tầng liên kết dữ liệu (Data Link Layer)","","",C
+"Trong JavaScript, hàm nào dùng để thực thi định kỳ một đoạn mã sau mỗi khoảng thời gian?","setTimeout","setInterval","setImmediate","requestAnimationFrame","","",B
+"Đặc điểm chính của phương thức HTTP GET là gì?","Gửi dữ liệu nhạy cảm an toàn trong request body","Thường có tính idempotent và dùng để lấy dữ liệu","Thay đổi trạng thái tài nguyên trên server","Bắt buộc phải có token trong header","","",B
+"Trong CSS Flexbox, thuộc tính nào dùng để căn chỉnh các phần tử theo trục chính (main axis)?","align-items","justify-content","flex-direction","align-content","","",B
+"Trong React, Hook nào được dùng để quản lý side-effects như fetch API hay subscription?","useState","useMemo","useEffect","useCallback","","",C
+"Trong cơ sở dữ liệu quan hệ, chỉ mục (Index) chủ yếu được sử dụng để làm gì?","Tăng tính toàn vẹn dữ liệu","Tăng tốc độ truy vấn tìm kiếm dữ liệu","Giảm dung lượng lưu trữ của bảng","Mã hóa dữ liệu nhạy cảm","","",B
+"Trạng thái HTTP status code 404 có ý nghĩa là gì?","Internal Server Error","Unauthorized","Not Found","Forbidden","","",C
+"Trong mô hình MVC, chữ C đại diện cho thành phần nào?","Component","Controller","Consumer","Connection","","",B
+"Thuật toán sắp xếp nào sau đây có độ phức tạp trung bình là O(n log n)?","Bubble Sort","Insertion Sort","Quick Sort","Selection Sort","","",C
+"Mục đích chính của việc sử dụng JSON Web Token (JWT) là gì?","Lưu trữ file dung lượng lớn trên máy khách","Xác thực không trạng thái (stateless authentication) giữa client và server","Tự động mã hóa đường truyền mạng thay cho SSL/TLS","Thay thế hoàn toàn cơ sở dữ liệu người dùng","","",B
+"Trong Git, lệnh nào dùng để tạo và chuyển ngay sang một nhánh mới?","git branch -m <name>","git checkout -b <name>","git merge <name>","git init <name>","","",B
+"Trong cơ sở dữ liệu quan hệ, khóa chính (Primary Key) có đặc điểm nào sau đây?","Có thể chứa giá trị NULL","Chỉ được tạo từ một cột duy nhất","Giá trị là duy nhất và không được chứa NULL","Tự động xóa khi dữ liệu bị trùng lặp","","",C
+"Trong JavaScript, từ khóa 'const' dùng để làm gì?","Khai báo biến toàn cục (global scope)","Khai báo biến có thể gán lại giá trị bất kỳ lúc nào","Khai báo biến phạm vi khối (block-scoped) không thể gán lại giá trị","Khai báo một hàm ẩn danh","","",C
+"Mã trạng thái HTTP nào biểu thị yêu cầu thành công nhưng không có nội dung trả về trong body?","200 OK","201 Created","204 No Content","304 Not Modified","","",C
+"Trong kiến trúc RESTful API, phương thức HTTP nào thường dùng để cập nhật một phần tài nguyên?","PUT","POST","PATCH","DELETE","","",C
+"Cấu trúc dữ liệu nào hoạt động theo nguyên lý LIFO (Last In First Out)?","Queue (Hàng đợi)","Stack (Ngăn xếp)","Linked List (Danh sách liên kết)","Binary Tree (Cây nhị phân)","","",B
+"Trong TypeScript, kiểu dữ liệu 'any' có đặc điểm gì?","Chỉ chấp nhận kiểu chuỗi hoặc số","Bắt buộc kiểm tra kiểu khi biên dịch","Bỏ qua việc kiểm tra kiểu dữ liệu tĩnh cho biến đó","Tương đương với kiểu never","","",C
+"Cơ chế CORS (Cross-Origin Resource Sharing) được thực thi chủ yếu ở đâu?","Trên trình duyệt của người dùng","Trên hệ điều hành của máy chủ","Tại bộ định tuyến mạng (Router)","Tại máy chủ phân giải tên miền (DNS)","","",A
+"Trong Docker, tệp tin nào dùng để định nghĩa cấu hình build một container image?","docker-compose.yml","Dockerfile","package.json","nginx.conf","","",B
+"Trong SQL, mệnh đề nào được sử dụng để nhóm các hàng có cùng giá trị lại với nhau?","ORDER BY","WHERE","GROUP BY","HAVING","","",C
+"Trong HTML5, thẻ ngữ nghĩa (semantic tag) nào đại diện cho phần chân trang?","<bottom>","<footer>","<foot>","<section>","","",B
+"Độ phức tạp thời gian tốt nhất (Best-case time complexity) của thuật toán Binary Search trên mảng đã sắp xếp là gì?","O(1)","O(log n)","O(n)","O(n^2)","","",A
+"Thuộc tính 'z-index' trong CSS chỉ có tác dụng khi phần tử có thuộc tính position khác với giá trị nào?","relative","absolute","static","fixed","","",C
+"Giao thức nào cung cấp tính năng truyền tải dữ liệu hai chiều liên tục (full-duplex) qua một kết nối TCP duy nhất?","HTTP/1.1","FTP","WebSocket","SMTP","","",C
+"Trong Linux, lệnh nào dùng để xem dung lượng bộ nhớ RAM đang được sử dụng?","df -h","free -m","ls -la","pwd","","",B
+"Nguyên lý ACID trong hệ quản trị cơ sở dữ liệu quan hệ gồm những thuộc tính nào?","Atomicity, Consistency, Isolation, Durability","Accuracy, Consistency, Integrity, Durability","Atomicity, Concurrency, Isolation, Dependability","Access, Control, Isolation, Distribution","","",A
+"Trong JavaScript ES6, phương thức mảng nào trả về một mảng mới chỉ chứa các phần tử thỏa mãn điều kiện lọc?","map()","filter()","reduce()","forEach()","","",B
+"Mã trạng thái HTTP 401 (Unauthorized) có ý nghĩa là gì?","Người dùng không có quyền truy cập dù đã đăng nhập","Yêu cầu thiếu thông tin xác thực hoặc xác thực không hợp lệ","Máy chủ từ chối xử lý do quá tải","Tài nguyên yêu cầu không tồn tại trên hệ thống","","",B
+"Trong Node.js, Event Loop đóng vai trò gì?","Tạo thêm CPU core vật lý để xử lý đa luồng","Xử lý các tác vụ bất đồng bộ non-blocking bằng một luồng duy nhất","Mã hóa các request gửi đến server","Tự động dọn dẹp bộ nhớ RAM khi đầy","","",B
+"Trong Git, lệnh nào dùng để hủy bỏ các thay đổi chưa được commit và đưa thư mục làm việc về trạng thái commit gần nhất?","git status","git push --force","git restore .","git tag -a","","",C
+

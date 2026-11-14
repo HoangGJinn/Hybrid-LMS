@@ -225,6 +225,7 @@ describe('SectionRepository', () => {
             orderIndex: 1,
             documentId: null,
             assignmentId: null,
+            examId: null,
           },
           {
             id: 'item-2',
@@ -235,6 +236,7 @@ describe('SectionRepository', () => {
             orderIndex: 2,
             documentId: 'doc-1',
             assignmentId: null,
+            examId: null,
           },
         ],
         ['id'],

@@ -23,8 +23,8 @@ const Breadcrumbs = () => {
   if (crumbs.length < 2) return null;
 
   return (
-    <nav aria-label="Breadcrumb" className="mb-4">
-      <ol className="m-0 flex list-none flex-wrap items-center gap-1 p-0 text-sm text-muted-foreground">
+    <nav aria-label="Breadcrumb" className="mb-2">
+      <ol className="m-0 flex list-none flex-wrap items-center gap-1 p-0 text-xs text-muted-foreground">
         {crumbs.map(({ id, pathname, params, crumb: Crumb }, index) => {
           const isLast = index === crumbs.length - 1;
           const label =

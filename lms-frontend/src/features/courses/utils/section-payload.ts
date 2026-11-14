@@ -14,6 +14,7 @@ export const toSectionsPayload = (sections: Section[]) =>
       externalUrl: item.externalUrl,
       documentId: item.documentId,
       assignmentId: item.assignmentId,
+      examId: item.examId,
       orderIndex: itemIndex,
     })),
   }))
