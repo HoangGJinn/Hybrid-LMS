@@ -73,6 +73,10 @@ const buildExam = (overrides: Partial<ExamSchedule> = {}): ExamSchedule =>
     durationMinutes: 60,
     format: ExamFormat.MULTIPLE_CHOICE,
     fileQuestionId: null,
+    maxAttempts: 1,
+    showResults: true,
+    shuffleQuestions: false,
+    shuffleOptions: false,
     ...overrides,
   }) as ExamSchedule;
 
@@ -134,9 +138,13 @@ describe('ExamService', () => {
                 startTime: change.startTime,
                 endTime: change.endTime,
                 durationMinutes: change.durationMinutes,
+                maxAttempts: change.maxAttempts,
+                showResults: change.showResults,
                 ...(change.content && {
                   format: change.content.format,
                   fileQuestionId: change.content.fileQuestionId,
+                  shuffleQuestions: change.content.shuffleQuestions,
+                  shuffleOptions: change.content.shuffleOptions,
                 }),
               }),
               previousFileId: lockedExam.fileQuestionId,
@@ -805,6 +813,32 @@ describe('ExamService', () => {
           'The duration cannot be longer',
         );
       });
+
+      it('should allow increasing maxAttempts or setting it to unlimited (null), and toggling showResults', async () => {
+        lockedExam = buildExam({ ...build(), maxAttempts: 2, showResults: true });
+
+        const more = await run({ maxAttempts: 5, showResults: false });
+        expect(more).toMatchObject({ maxAttempts: 5, showResults: false });
+
+        const unlimited = await run({ maxAttempts: null });
+        expect(unlimited).toMatchObject({ maxAttempts: null });
+      });
+
+      it('should refuse reducing maxAttempts once locked', async () => {
+        lockedExam = buildExam({ ...build(), maxAttempts: 3 });
+
+        await expect(run({ maxAttempts: 2 })).rejects.toThrow(
+          'Allowed attempts can only be increased',
+        );
+      });
+
+      it('should refuse changing unlimited attempts to a finite limit once locked', async () => {
+        lockedExam = buildExam({ ...build(), maxAttempts: null });
+
+        await expect(run({ maxAttempts: 5 })).rejects.toThrow(
+          'Allowed attempts can only be increased',
+        );
+      });
     });
 
     describe('when the exam is closed', () => {
@@ -812,9 +846,12 @@ describe('ExamService', () => {
         lockedExam = buildExam(CLOSED_WINDOW);
       });
 
-      it('should still allow a new name', async () => {
-        await expect(run({ examName: 'Renamed' })).resolves.toMatchObject({
+      it('should still allow a new name and toggling showResults', async () => {
+        await expect(
+          run({ examName: 'Renamed', showResults: false }),
+        ).resolves.toMatchObject({
           examName: 'Renamed',
+          showResults: false,
         });
       });
 

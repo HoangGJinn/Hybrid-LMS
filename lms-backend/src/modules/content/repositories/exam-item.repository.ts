@@ -5,6 +5,12 @@ import { ExamSchedule } from '../../exam/entities/exam-schedule.entity.js'
 import { SectionItem } from '../entities/section-item.entity.js'
 import { ItemType } from '../enums/item-type.enum.js'
 
+/** One exam shown by one class. */
+export interface ClassExamLink {
+  readonly examId: string
+  readonly classId: string
+}
+
 /** TypeORM access for the EXAM items of a class. */
 @Injectable()
 export class ExamItemRepository {
@@ -13,7 +19,7 @@ export class ExamItemRepository {
     private readonly itemOrmRepository: Repository<SectionItem>,
     @InjectRepository(ExamSchedule)
     private readonly examOrmRepository: Repository<ExamSchedule>,
-  ) {}
+  ) { }
 
   /** Tells whether a section of the class shows the exam. */
   async existsInClass(classId: string, examId: string): Promise<boolean> {
@@ -24,6 +30,21 @@ export class ExamItemRepository {
       .andWhere('item.itemType = :itemType', { itemType: ItemType.EXAM })
       .andWhere('item.examId = :examId', { examId })
       .getExists()
+  }
+
+  /** Every (exam, class) pair shown by the given classes, each pair once. */
+  async findByClasses(classIds: string[]): Promise<ClassExamLink[]> {
+    if (classIds.length === 0) return []
+    return this.itemOrmRepository
+      .createQueryBuilder('item')
+      .innerJoin('item.section', 'section')
+      .select('item.examId', 'examId')
+      .addSelect('section.classId', 'classId')
+      .where('section.classId IN (:...classIds)', { classIds })
+      .andWhere('item.itemType = :itemType', { itemType: ItemType.EXAM })
+      .andWhere('item.examId IS NOT NULL')
+      .distinct(true)
+      .getRawMany<ClassExamLink>()
   }
 
   /** Removes the class's section items that show the exam and returns how many were removed. */

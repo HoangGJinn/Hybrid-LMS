@@ -60,6 +60,18 @@ export class ExamSession {
   @Column({ name: 'ended_at', type: 'timestamptz', nullable: true })
   endedAt: Date | null;
 
+  /** When the student last submitted/updated their file submission; null until first hand-in. */
+  @Column({ name: 'submitted_at', type: 'timestamptz', nullable: true })
+  submittedAt: Date | null;
+
+  /** Lecturer feedback comment for graded FILE exam attempts. */
+  @Column({ type: 'text', nullable: true })
+  comment: string | null;
+
+  /** When the lecturer last graded this attempt; null while ungraded. */
+  @Column({ name: 'graded_at', type: 'timestamptz', nullable: true })
+  gradedAt: Date | null;
+
   @Column({ name: 'result_notified', default: false })
   resultNotified: boolean;
 }

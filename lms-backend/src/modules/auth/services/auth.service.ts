@@ -48,7 +48,7 @@ export class AuthService {
   async loginWithCredentials(dto: LoginDto): Promise<AuthSession> {
     this.logger.log(`Attempting password login for: ${dto.username}`);
     const account = await this.userFacade.findForPasswordAuth(dto.username);
-    if (!account || !account.passwordHash) {
+    if (!account?.passwordHash) {
       this.logger.warn(
         `Login failed: user not found or has no password set: ${dto.username}`,
       );

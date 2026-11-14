@@ -59,6 +59,13 @@ export class ContentFacade {
     return this.classAssignmentService.isAssignmentReferenced(assignmentId);
   }
 
+  /** The exams shown by the given classes, as (exam, class) pairs. */
+  async findExamsByClasses(
+    classIds: string[],
+  ): Promise<{ examId: string; classId: string }[]> {
+    return this.classExamService.findExamsByClasses(classIds);
+  }
+
   /** Tells whether a section of the class shows the exam. */
   async isExamInClass(classId: string, examId: string): Promise<boolean> {
     return this.classExamService.isExamInClass(classId, examId);

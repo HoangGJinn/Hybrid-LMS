@@ -123,12 +123,21 @@ export class ExamService {
       if (isContentLocked(status, startedCount)) {
         throw new ConflictException(CONTENT_LOCKED_MESSAGE);
       }
+      const isMcq = dto.format === ExamFormat.MULTIPLE_CHOICE;
       return {
         examName: dto.examName,
         startTime,
         endTime,
         durationMinutes: dto.durationMinutes,
-        content: { format: dto.format, fileQuestionId: fileId, questions },
+        maxAttempts: dto.maxAttempts === undefined ? 1 : dto.maxAttempts,
+        showResults: dto.showResults ?? true,
+        content: {
+          format: dto.format,
+          fileQuestionId: fileId,
+          shuffleQuestions: isMcq ? (dto.shuffleQuestions ?? false) : false,
+          shuffleOptions: isMcq ? (dto.shuffleOptions ?? false) : false,
+          questions,
+        },
       };
     });
     await this.discardReplacedFile(result.previousFileId, result.exam.fileQuestionId);
@@ -153,10 +162,15 @@ export class ExamService {
     const result = await this.saveChange(examId, (current, startedCount) => {
       const endTime = dto.endTime ? new Date(dto.endTime) : current.endTime;
       const durationMinutes = dto.durationMinutes ?? current.durationMinutes;
+      const currentMaxAttempts =
+        current.maxAttempts === undefined ? 1 : current.maxAttempts;
+      const maxAttempts =
+        dto.maxAttempts !== undefined ? dto.maxAttempts : currentMaxAttempts;
       this.assertScheduleChangeAllowed(
         current,
         endTime,
         durationMinutes,
+        maxAttempts,
         startedCount,
         now,
       );
@@ -165,6 +179,8 @@ export class ExamService {
         startTime: current.startTime,
         endTime,
         durationMinutes,
+        maxAttempts,
+        showResults: dto.showResults ?? (current.showResults ?? true),
       };
     });
     return this.buildView(result.exam, now);
@@ -216,6 +232,7 @@ export class ExamService {
     endTime: Date,
     questions: CreateExamQuestionDto[],
   ): Promise<ExamSchedule> {
+    const isMcq = dto.format === ExamFormat.MULTIPLE_CHOICE;
     try {
       return await this.examRepository.create({
         classId,
@@ -225,6 +242,10 @@ export class ExamService {
         durationMinutes: dto.durationMinutes,
         format: dto.format,
         fileQuestionId: dto.format === ExamFormat.FILE ? (dto.fileId ?? null) : null,
+        maxAttempts: dto.maxAttempts === undefined ? 1 : dto.maxAttempts,
+        showResults: dto.showResults ?? true,
+        shuffleQuestions: isMcq ? (dto.shuffleQuestions ?? false) : false,
+        shuffleOptions: isMcq ? (dto.shuffleOptions ?? false) : false,
         questions,
       });
     } catch (error) {
@@ -271,17 +292,21 @@ export class ExamService {
     current: ExamSchedule,
     endTime: Date,
     durationMinutes: number,
+    maxAttempts: number | null,
     startedCount: number,
     now: Date,
   ): void {
+    const currentMaxAttempts =
+      current.maxAttempts === undefined ? 1 : current.maxAttempts;
     const status = resolveExamStatus(current, now);
     if (status === ExamStatus.CLOSED) {
       const isUnchanged =
         endTime.getTime() === current.endTime.getTime() &&
-        durationMinutes === current.durationMinutes;
+        durationMinutes === current.durationMinutes &&
+        maxAttempts === currentMaxAttempts;
       if (!isUnchanged) {
         throw new ConflictException(
-          'This exam is closed; only its name can be changed',
+          'This exam is closed; only its name and result visibility can be changed',
         );
       }
       return;
@@ -298,6 +323,16 @@ export class ExamService {
     if (durationMinutes < current.durationMinutes) {
       throw new BadRequestException(
         'The duration can only be made longer once the exam has opened',
+      );
+    }
+    const isAttemptsReduced =
+      (currentMaxAttempts === null && maxAttempts !== null) ||
+      (currentMaxAttempts !== null &&
+        maxAttempts !== null &&
+        maxAttempts < currentMaxAttempts);
+    if (isAttemptsReduced) {
+      throw new BadRequestException(
+        'Allowed attempts can only be increased once the exam has opened',
       );
     }
     this.assertDurationFitsWindow(current.startTime, endTime, durationMinutes);

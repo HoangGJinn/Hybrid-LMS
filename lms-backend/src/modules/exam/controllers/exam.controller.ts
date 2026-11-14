@@ -10,7 +10,10 @@ import {
   Patch,
   Post,
   Put,
+  Query,
+  Res,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { Auth } from '../../../common/decorators/auth.decorator.js';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator.js';
 import { Role } from '../../../common/enums/role.enum.js';
@@ -20,16 +23,25 @@ import {
   UpdateExamDto,
   UpdateExamScheduleDto,
 } from '../dto/create-exam.dto.js';
+import { GradeExamSessionDto } from '../dto/grade-exam-session.dto.js';
+import { ExamGradingService } from '../services/exam-grading.service.js';
 import { ExamService } from '../services/exam.service.js';
+import type {
+  LecturerExamAttemptItemView,
+  LecturerExamResultsView,
+} from '../types/exam-results-view.type.js';
 import { ExamView } from '../types/exam-view.type.js';
+import type { ExamAttemptReviewView } from '../types/student-exam-view.type.js';
 
 /**
- * Exams of one class: created, changed and removed by its lecturer. The view carries the correct answers,
- * so students get no route here; taking an exam is a separate, later feature.
+ * Exams of one class: created, changed, graded, exported and removed by its lecturer.
  */
 @Controller('classes/:classId/exams')
 export class ExamController {
-  constructor(private readonly examService: ExamService) {}
+  constructor(
+    private readonly examService: ExamService,
+    private readonly examGradingService: ExamGradingService,
+  ) {}
 
   @Post()
   @Auth(Role.LECTURER)
@@ -39,6 +51,69 @@ export class ExamController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<ExamView> {
     return this.examService.create(classId, dto, user);
+  }
+
+  @Get(':examId/results')
+  @Auth(Role.LECTURER, Role.ADMIN)
+  async getResults(
+    @Param('classId', ParseUUIDPipe) classId: string,
+    @Param('examId', ParseUUIDPipe) examId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<LecturerExamResultsView> {
+    return this.examGradingService.getResults(classId, examId, user);
+  }
+
+  @Get(':examId/submissions/download')
+  @Auth(Role.LECTURER, Role.ADMIN)
+  async downloadSubmissions(
+    @Param('classId', ParseUUIDPipe) classId: string,
+    @Param('examId', ParseUUIDPipe) examId: string,
+    @Query('sessionId', new ParseUUIDPipe({ optional: true }))
+    sessionId: string | undefined,
+    @CurrentUser() user: AuthenticatedUser,
+    @Res() response: Response,
+  ): Promise<void> {
+    await this.examGradingService.streamSubmissionsZip(
+      classId,
+      examId,
+      sessionId,
+      user,
+      response,
+    );
+  }
+
+  @Get(':examId/sessions/:sessionId/review')
+  @Auth(Role.LECTURER, Role.ADMIN)
+  async reviewSession(
+    @Param('classId', ParseUUIDPipe) classId: string,
+    @Param('examId', ParseUUIDPipe) examId: string,
+    @Param('sessionId', ParseUUIDPipe) sessionId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<ExamAttemptReviewView> {
+    return this.examGradingService.reviewSession(
+      classId,
+      examId,
+      sessionId,
+      user,
+    );
+  }
+
+  @Put(':examId/sessions/:sessionId/grade')
+  @Auth(Role.LECTURER, Role.ADMIN)
+  async gradeSession(
+    @Param('classId', ParseUUIDPipe) classId: string,
+    @Param('examId', ParseUUIDPipe) examId: string,
+    @Param('sessionId', ParseUUIDPipe) sessionId: string,
+    @Body() dto: GradeExamSessionDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<LecturerExamAttemptItemView> {
+    return this.examGradingService.gradeSession(
+      classId,
+      examId,
+      sessionId,
+      dto,
+      user,
+    );
   }
 
   @Get(':examId')

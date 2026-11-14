@@ -133,4 +133,12 @@ export const UPLOAD_RULES: Readonly<Record<FilePurpose, UploadRule>> = {
     isScopedToAssignment: false,
     extensionByContentType: EXAM_CONTENT_TYPES,
   },
+  /** Files a student hands in for a FILE-format exam attempt. */
+  [FilePurpose.EXAM_SUBMISSION]: {
+    allowedRoles: [Role.STUDENT],
+    maxSizeBytes: MAX_SIZE_BYTES,
+    keyPrefix: 'exam-submissions',
+    isScopedToAssignment: false,
+    extensionByContentType: WORK_CONTENT_TYPES,
+  },
 };

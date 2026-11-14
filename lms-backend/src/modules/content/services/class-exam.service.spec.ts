@@ -6,6 +6,7 @@ type Mock = ReturnType<typeof vi.fn>
 
 describe('ClassExamService', () => {
   let repository: {
+    findByClasses: Mock
     existsInClass: Mock
     deleteItemsByExam: Mock
     isExamReferenced: Mock
@@ -15,12 +16,21 @@ describe('ClassExamService', () => {
 
   beforeEach(() => {
     repository = {
+      findByClasses: vi.fn(),
       existsInClass: vi.fn(),
       deleteItemsByExam: vi.fn(),
       isExamReferenced: vi.fn(),
       findExamIdsOfClass: vi.fn(),
     }
     service = new ClassExamService(repository as unknown as ExamItemRepository)
+  })
+
+  it('lists the exams shown by the given classes', async () => {
+    const links = [{ examId: 'exam-1', classId: 'class-1' }]
+    repository.findByClasses.mockResolvedValue(links)
+
+    await expect(service.findExamsByClasses(['class-1'])).resolves.toEqual(links)
+    expect(repository.findByClasses).toHaveBeenCalledWith(['class-1'])
   })
 
   it('tells whether the class shows the exam', async () => {

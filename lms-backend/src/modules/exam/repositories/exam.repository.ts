@@ -26,6 +26,10 @@ export interface NewExam {
   readonly durationMinutes: number;
   readonly format: ExamFormat;
   readonly fileQuestionId: string | null;
+  readonly maxAttempts: number | null;
+  readonly showResults: boolean;
+  readonly shuffleQuestions: boolean;
+  readonly shuffleOptions: boolean;
   readonly questions: readonly NewExamQuestion[];
 }
 
@@ -41,9 +45,13 @@ export interface ExamUpdate {
   readonly startTime: Date;
   readonly endTime: Date;
   readonly durationMinutes: number;
+  readonly maxAttempts: number | null;
+  readonly showResults: boolean;
   readonly content?: {
     readonly format: ExamFormat;
     readonly fileQuestionId: string | null;
+    readonly shuffleQuestions: boolean;
+    readonly shuffleOptions: boolean;
     readonly questions: readonly NewExamQuestion[];
   };
 }
@@ -80,6 +88,10 @@ export class ExamRepository {
           durationMinutes: input.durationMinutes,
           format: input.format,
           fileQuestionId: input.fileQuestionId,
+          maxAttempts: input.maxAttempts,
+          showResults: input.showResults,
+          shuffleQuestions: input.shuffleQuestions,
+          shuffleOptions: input.shuffleOptions,
         }),
       );
       await this.insertQuestions(manager, exam.id, input.questions);
@@ -114,9 +126,13 @@ export class ExamRepository {
           startTime: change.startTime,
           endTime: change.endTime,
           durationMinutes: change.durationMinutes,
+          maxAttempts: change.maxAttempts,
+          showResults: change.showResults,
           ...(change.content && {
             format: change.content.format,
             fileQuestionId: change.content.fileQuestionId,
+            shuffleQuestions: change.content.shuffleQuestions,
+            shuffleOptions: change.content.shuffleOptions,
           }),
         },
       );
@@ -156,6 +172,27 @@ export class ExamRepository {
 
   async findById(id: string): Promise<ExamSchedule | null> {
     return this.examOrmRepository.findOne({ where: { id } });
+  }
+
+  async findByIds(ids: string[]): Promise<ExamSchedule[]> {
+    if (ids.length === 0) return [];
+    return this.examOrmRepository.find({ where: { id: In(ids) } });
+  }
+
+  /** All exams of the given classes matching a specific format, newest first. */
+  async findByClassIdsAndFormat(
+    classIds: string[],
+    format: ExamFormat,
+  ): Promise<ExamSchedule[]> {
+    if (classIds.length === 0) return [];
+    return this.examOrmRepository.find({
+      where: { classId: In(classIds), format },
+      order: { startTime: 'DESC' },
+    });
+  }
+
+  async countQuestions(examId: string): Promise<number> {
+    return this.questionOrmRepository.count({ where: { examId } });
   }
 
   /** The exam's questions and options in display order. */

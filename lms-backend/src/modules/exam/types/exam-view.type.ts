@@ -21,6 +21,10 @@ export class ExamView {
   readonly endTime: Date;
   readonly durationMinutes: number;
   readonly format: ExamFormat;
+  readonly maxAttempts: number | null;
+  readonly showResults: boolean;
+  readonly shuffleQuestions: boolean;
+  readonly shuffleOptions: boolean;
   /** Empty for a FILE exam. */
   readonly questions: readonly ExamQuestionView[];
   /** The question file of a FILE exam; always null for a multiple-choice exam. */
@@ -40,6 +44,10 @@ export class ExamView {
     this.endTime = entity.endTime;
     this.durationMinutes = entity.durationMinutes;
     this.format = entity.format;
+    this.maxAttempts = entity.maxAttempts ?? null;
+    this.showResults = entity.showResults ?? true;
+    this.shuffleQuestions = entity.shuffleQuestions ?? false;
+    this.shuffleOptions = entity.shuffleOptions ?? false;
     this.questions = parts.questions;
     this.file = parts.file;
     this.status = parts.status;

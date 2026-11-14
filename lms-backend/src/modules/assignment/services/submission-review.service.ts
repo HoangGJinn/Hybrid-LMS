@@ -3,6 +3,7 @@ import { ZipArchive } from 'archiver';
 import type { Response } from 'express';
 import type { Readable } from 'node:stream';
 import type { AuthenticatedUser } from '../../../common/types/authenticated-user.type.js';
+import { emptyToNull } from '../../../common/utils/string.util.js';
 import { FileFacade } from '../../../shared/file/facades/file.facade.js';
 import { AcademicFacade } from '../../academic/facades/academic.facade.js';
 import { ContentFacade } from '../../content/facades/content.facade.js';
@@ -163,7 +164,7 @@ export class SubmissionReviewService {
     await this.submissionRepository.saveGrade(
       submissionId,
       dto.score,
-      dto.comment?.trim() || null,
+      emptyToNull(dto.comment),
       new Date(),
     );
     const graded = await this.submissionRepository.findById(submissionId);

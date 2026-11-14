@@ -19,7 +19,9 @@ import {
 import {
   EXAM_MAX_QUESTIONS,
   EXAM_NAME_MAX_LENGTH,
+  MAX_ATTEMPTS,
   MAX_DURATION_MINUTES,
+  MIN_ATTEMPTS,
   MIN_DURATION_MINUTES,
   OPTION_MAX_LENGTH,
   MAX_OPTIONS,
@@ -98,6 +100,28 @@ export class CreateExamDto {
   @IsOptional()
   @IsUUID()
   readonly fileId?: string;
+
+  /** Allowed attempts per student; null means unlimited attempts, omitted defaults to 1. */
+  @IsOptional()
+  @IsInt()
+  @Min(MIN_ATTEMPTS)
+  @Max(MAX_ATTEMPTS)
+  readonly maxAttempts?: number | null;
+
+  /** Whether students can see their score and review correct answers after completing an attempt. */
+  @IsOptional()
+  @IsBoolean()
+  readonly showResults?: boolean;
+
+  /** Whether question order is shuffled per attempt. */
+  @IsOptional()
+  @IsBoolean()
+  readonly shuffleQuestions?: boolean;
+
+  /** Whether option order within each question is shuffled per attempt. */
+  @IsOptional()
+  @IsBoolean()
+  readonly shuffleOptions?: boolean;
 }
 
 /**
@@ -107,8 +131,8 @@ export class CreateExamDto {
 export class UpdateExamDto extends CreateExamDto {}
 
 /**
- * What can still change after the exam is locked: its name and, only to make it longer, the closing time
- * and the duration. A field that is left out stays as it is.
+ * What can still change after the exam is locked: its name, `showResults` and, while not closed, a later closing
+ * time, a longer duration or more allowed attempts (`maxAttempts`, or `null` for unlimited).
  */
 export class UpdateExamScheduleDto {
   @IsOptional()
@@ -127,4 +151,14 @@ export class UpdateExamScheduleDto {
   @Min(MIN_DURATION_MINUTES)
   @Max(MAX_DURATION_MINUTES)
   readonly durationMinutes?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(MIN_ATTEMPTS)
+  @Max(MAX_ATTEMPTS)
+  readonly maxAttempts?: number | null;
+
+  @IsOptional()
+  @IsBoolean()
+  readonly showResults?: boolean;
 }

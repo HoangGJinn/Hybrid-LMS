@@ -8,4 +8,9 @@ export const MIN_OPTIONS = 2;
 export const MAX_OPTIONS = 6;
 export const MIN_DURATION_MINUTES = 1;
 export const MAX_DURATION_MINUTES = 480;
+export const MIN_ATTEMPTS = 1;
+export const MAX_ATTEMPTS = 100;
 export const MS_PER_MINUTE = 60_000;
+/** Network latency tolerance after a session's deadline during which saving answers and submitting are still accepted. */
+export const EXAM_GRACE_PERIOD_MS = 30_000;
+export const EXAM_MAX_SCORE = 10;

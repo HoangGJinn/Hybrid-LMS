@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import { ExamFormat } from '../enums/exam-format.enum.js';
 import { ExamStatus } from '../enums/exam-status.enum.js';
-import { isContentLocked, resolveExamStatus } from './exam-status.util.js';
+import {
+  isContentLocked,
+  resolveExamMaxAttempts,
+  resolveExamStatus,
+} from './exam-status.util.js';
 
 const exam = {
   startTime: new Date('2026-11-10T08:00:00Z'),
@@ -29,6 +34,29 @@ describe('isContentLocked', () => {
     [ExamStatus.CLOSED, 0],
   ])('should lock for %s with %i sessions', (status, started) => {
     expect(isContentLocked(status, started)).toBe(true);
+  });
+});
+
+describe('resolveExamMaxAttempts', () => {
+  it('forces 1 attempt for FILE exams and preserves configured/unlimited attempts for MCQ', () => {
+    expect(
+      resolveExamMaxAttempts({ format: ExamFormat.FILE, maxAttempts: 5 }),
+    ).toBe(1);
+    expect(
+      resolveExamMaxAttempts({ format: ExamFormat.MULTIPLE_CHOICE }),
+    ).toBe(1);
+    expect(
+      resolveExamMaxAttempts({
+        format: ExamFormat.MULTIPLE_CHOICE,
+        maxAttempts: null,
+      }),
+    ).toBeNull();
+    expect(
+      resolveExamMaxAttempts({
+        format: ExamFormat.MULTIPLE_CHOICE,
+        maxAttempts: 3,
+      }),
+    ).toBe(3);
   });
 });
 

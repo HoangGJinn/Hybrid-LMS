@@ -1,10 +1,18 @@
 import { Injectable } from '@nestjs/common'
-import { ExamItemRepository } from '../repositories/exam-item.repository.js'
+import {
+  type ClassExamLink,
+  ExamItemRepository,
+} from '../repositories/exam-item.repository.js'
 
 /** Which exams a class shows. */
 @Injectable()
 export class ClassExamService {
   constructor(private readonly examItemRepository: ExamItemRepository) {}
+
+  /** The exams shown by the given classes, as (exam, class) pairs. */
+  async findExamsByClasses(classIds: string[]): Promise<ClassExamLink[]> {
+    return this.examItemRepository.findByClasses(classIds)
+  }
 
   /** Tells whether the class shows the exam; an exam of another class must stay unreachable. */
   async isExamInClass(classId: string, examId: string): Promise<boolean> {

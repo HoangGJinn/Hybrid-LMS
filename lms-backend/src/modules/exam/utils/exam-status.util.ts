@@ -1,4 +1,14 @@
+import { ExamFormat } from '../enums/exam-format.enum.js';
 import { ExamStatus } from '../enums/exam-status.enum.js';
+
+/** FILE exams always allow 1 editable attempt; MCQ defaults to 1 when omitted, or keeps null for unlimited. */
+export const resolveExamMaxAttempts = (exam: {
+  format: ExamFormat;
+  maxAttempts?: number | null;
+}): number | null => {
+  if (exam.format === ExamFormat.FILE) return 1;
+  return exam.maxAttempts === undefined ? 1 : exam.maxAttempts;
+};
 
 /** The status of an exam at `now`; the schedule alone decides it, never the number of sessions. */
 export const resolveExamStatus = (

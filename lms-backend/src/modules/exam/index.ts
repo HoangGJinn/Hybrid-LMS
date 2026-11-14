@@ -5,6 +5,7 @@ export { ExamSchedule } from './entities/exam-schedule.entity.js';
 export { ExamScheduleMode } from './entities/exam-schedule-mode.entity.js';
 export { ExamSection } from './entities/exam-section.entity.js';
 export { ExamSession } from './entities/exam-session.entity.js';
+export { ExamSessionAnswer } from './entities/exam-session-answer.entity.js';
 export { ProctoringLog } from './entities/proctoring-log.entity.js';
 export { ExamViolation } from './entities/exam-violation.entity.js';
 export { Complaint } from './entities/complaint.entity.js';
