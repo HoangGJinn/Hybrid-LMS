@@ -31,11 +31,16 @@ export const useUpdateExam = () => {
           classId,
           exam.id,
           exam.status === 'CLOSED'
-            ? { examName: input.examName }
+            ? {
+                examName: input.examName,
+                showResults: input.showResults,
+              }
             : {
                 examName: input.examName,
                 endTime: input.endTime,
                 durationMinutes: input.durationMinutes,
+                maxAttempts: input.maxAttempts,
+                showResults: input.showResults,
               },
         );
       }

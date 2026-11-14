@@ -27,7 +27,9 @@ import {
   EXAM_NAME_MAX_LENGTH,
   hasExamFormErrors,
   isQuestionComplete,
+  MAX_ATTEMPTS,
   MAX_DURATION_MINUTES,
+  MIN_ATTEMPTS,
   MIN_DURATION_MINUTES,
   toDraftQuestions,
   toNewExamInput,
@@ -58,16 +60,16 @@ const toDate = (iso: string | undefined, fallback: () => Date): Date => {
 
 const lockNotice = (exam: LecturerExam): string => {
   if (exam.status === 'CLOSED') {
-    return 'This exam is closed; only its name can be changed.';
+    return 'This exam is closed; only its name and result visibility can be changed.';
   }
   if (exam.startedCount > 0) {
     const students =
       exam.startedCount === 1
         ? '1 student has'
         : `${exam.startedCount} students have`;
-    return `${students} started; questions and answers are locked. Closing time and duration can only be extended.`;
+    return `${students} started; questions and answers are locked. Closing time, duration and allowed attempts can only be increased.`;
   }
-  return 'This exam has opened; questions and answers are locked. Closing time and duration can only be extended.';
+  return 'This exam has opened; questions and answers are locked. Closing time, duration and allowed attempts can only be increased.';
 };
 
 /**
@@ -97,6 +99,19 @@ export const CreateExamDialog = ({
   );
   const [durationMinutes, setDurationMinutes] = useState(
     exam ? String(exam.durationMinutes) : DEFAULT_DURATION_MINUTES,
+  );
+  const [unlimitedAttempts, setUnlimitedAttempts] = useState(
+    exam ? exam.maxAttempts === null : false,
+  );
+  const [maxAttempts, setMaxAttempts] = useState(
+    exam && exam.maxAttempts !== null ? String(exam.maxAttempts) : '1',
+  );
+  const [showResults, setShowResults] = useState(exam?.showResults ?? true);
+  const [shuffleQuestions, setShuffleQuestions] = useState(
+    exam?.shuffleQuestions ?? false,
+  );
+  const [shuffleOptions, setShuffleOptions] = useState(
+    exam?.shuffleOptions ?? false,
   );
   const [format, setFormat] = useState<ExamFormat>(
     exam?.format ?? 'MULTIPLE_CHOICE',
@@ -134,6 +149,11 @@ export const CreateExamDialog = ({
       endTime,
       durationMinutes,
       format,
+      unlimitedAttempts,
+      maxAttempts,
+      showResults,
+      shuffleQuestions,
+      shuffleOptions,
       questions,
       file,
     };
@@ -228,6 +248,80 @@ export const CreateExamDialog = ({
             </p>
             {errors.durationMinutes && (
               <FieldError message={errors.durationMinutes} />
+            )}
+          </div>
+        </Section>
+
+        <Section title="Attempts & results">
+          <div className="space-y-3 text-sm">
+            <div className="space-y-1.5">
+              <span className="block text-muted-foreground">
+                Allowed attempts per student (highest score kept)
+              </span>
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="flex cursor-pointer items-center gap-2">
+                  <input
+                    type="checkbox"
+                    disabled={isClosed}
+                    checked={unlimitedAttempts}
+                    onChange={(e) => setUnlimitedAttempts(e.target.checked)}
+                  />
+                  <span>Unlimited attempts</span>
+                </label>
+                {!unlimitedAttempts && (
+                  <div className="flex items-center gap-2">
+                    <Input
+                      id="exam-max-attempts"
+                      aria-label="Maximum attempts"
+                      type="number"
+                      inputMode="numeric"
+                      min={MIN_ATTEMPTS}
+                      max={MAX_ATTEMPTS}
+                      disabled={isClosed}
+                      value={maxAttempts}
+                      onChange={(e) => setMaxAttempts(e.target.value)}
+                      className="h-9 w-24"
+                    />
+                    <span className="text-xs text-muted-foreground">
+                      {Number(maxAttempts) === 1 ? 'attempt' : 'attempts'}
+                    </span>
+                  </div>
+                )}
+              </div>
+              {errors.maxAttempts && <FieldError message={errors.maxAttempts} />}
+            </div>
+
+            <label className="flex cursor-pointer items-center gap-2">
+              <input
+                type="checkbox"
+                checked={showResults}
+                onChange={(e) => setShowResults(e.target.checked)}
+              />
+              <span>
+                Allow students to see their score and review correct answers
+                after submitting
+              </span>
+            </label>
+
+            {format === 'MULTIPLE_CHOICE' && !isContentLocked && (
+              <div className="grid gap-2 border-t pt-2.5 sm:grid-cols-2">
+                <label className="flex cursor-pointer items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={shuffleQuestions}
+                    onChange={(e) => setShuffleQuestions(e.target.checked)}
+                  />
+                  <span>Shuffle question order per attempt</span>
+                </label>
+                <label className="flex cursor-pointer items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={shuffleOptions}
+                    onChange={(e) => setShuffleOptions(e.target.checked)}
+                  />
+                  <span>Shuffle answer choices per attempt</span>
+                </label>
+              </div>
             )}
           </div>
         </Section>

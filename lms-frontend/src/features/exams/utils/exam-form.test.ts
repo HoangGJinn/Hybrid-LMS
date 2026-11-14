@@ -38,6 +38,11 @@ const buildValues = (
   startTime: '2026-11-12T08:00',
   endTime: '2026-11-12T10:00',
   durationMinutes: '60',
+  unlimitedAttempts: false,
+  maxAttempts: '1',
+  showResults: true,
+  shuffleQuestions: false,
+  shuffleOptions: false,
   format: 'MULTIPLE_CHOICE',
   questions: [buildQuestion()],
   file: null,
@@ -362,6 +367,9 @@ describe('validateExamForm', () => {
           startTime: new Date('2026-11-12T08:00').toISOString(),
           endTime: new Date('2026-11-12T10:00').toISOString(),
           durationMinutes: 60,
+          maxAttempts: 1,
+          shuffleQuestions: false,
+          shuffleOptions: false,
           status: 'UPCOMING',
           isContentLocked: false,
         },
@@ -374,18 +382,60 @@ describe('validateExamForm', () => {
     });
   });
 
+  describe('maxAttempts', () => {
+    it('should accept unlimited attempts', () => {
+      const errors = validateExamForm(
+        buildValues({ unlimitedAttempts: true, maxAttempts: '' }),
+        NOW,
+      );
+
+      expect(errors.maxAttempts).toBeUndefined();
+    });
+
+    it.each(['', '0', '-1', '1.5', '101', 'abc'])(
+      'should reject invalid maxAttempts "%s" when not unlimited',
+      (maxAttempts) => {
+        const errors = validateExamForm(
+          buildValues({ unlimitedAttempts: false, maxAttempts }),
+          NOW,
+        );
+
+        expect(errors.maxAttempts).toBeDefined();
+      },
+    );
+  });
+
   describe('when editing a locked exam', () => {
     const lockedEdit = (
       status: 'UPCOMING' | 'OPEN' | 'CLOSED' = 'OPEN',
+      maxAttempts: number | null = 1,
     ): ExamEditContext => ({
       exam: {
         startTime: new Date('2026-11-10T07:00').toISOString(),
         endTime: new Date('2026-11-10T10:00').toISOString(),
         durationMinutes: 60,
+        maxAttempts,
+        shuffleQuestions: false,
+        shuffleOptions: false,
         status,
         isContentLocked: true,
       },
       hasKeptFile: false,
+    });
+
+    it('should reject decreasing maxAttempts on a locked exam', () => {
+      const errors = validateExamForm(
+        buildValues({
+          endTime: '2026-11-10T10:00',
+          durationMinutes: '60',
+          unlimitedAttempts: false,
+          maxAttempts: '1',
+        }),
+        NOW,
+        lockedEdit('OPEN', 2),
+      );
+
+      expect(errors.maxAttempts).toMatch(/only be increased/);
     });
 
     it('should accept a later closing time and longer duration and ignore questions', () => {
@@ -537,6 +587,9 @@ describe('toNewExamInput', () => {
         startTime: '2026-11-01T08:00:00.000Z',
         endTime: '2026-11-01T10:00:00.000Z',
         durationMinutes: 60,
+        maxAttempts: 1,
+        shuffleQuestions: false,
+        shuffleOptions: false,
         status: 'CLOSED',
         isContentLocked: true,
       },
@@ -544,7 +597,7 @@ describe('toNewExamInput', () => {
     };
 
     const actual = toNewExamInput(
-      buildValues({ examName: '  Renamed  ' }),
+      buildValues({ examName: '  Renamed  ', showResults: false }),
       edit,
     );
 
@@ -553,6 +606,8 @@ describe('toNewExamInput', () => {
       startTime: '2026-11-01T08:00:00.000Z',
       endTime: '2026-11-01T10:00:00.000Z',
       durationMinutes: 60,
+      maxAttempts: 1,
+      showResults: false,
       questions: [],
       file: null,
     });

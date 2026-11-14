@@ -7,9 +7,13 @@ export { useRemoveExam } from './hooks/useRemoveExam';
 export { useUpcomingExams } from './hooks/useExams';
 export { examKeys } from './api/queryKeys';
 export type {
+  ExamFileLink,
   ExamFormat,
   ExamSchedule,
   ExamSession,
+  ExamSessionStatus,
+  GradeExamSessionInput,
   LecturerExam,
+  LecturerExamAttemptItem,
   NewExamInput,
 } from './types/exams.types';

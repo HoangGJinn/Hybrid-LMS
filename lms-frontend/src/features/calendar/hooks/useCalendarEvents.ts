@@ -31,7 +31,7 @@ export const useCalendarEvents = () => {
           title: e.examName,
           context: codeOf(e.classId),
           at: e.startTime,
-          href: '/student/exams',
+          href: `/student/courses/${e.classId}/exams/${e.id}`,
         })),
         ...kcList.flatMap((k): CalendarEvent[] =>
           k.nextReviewAt

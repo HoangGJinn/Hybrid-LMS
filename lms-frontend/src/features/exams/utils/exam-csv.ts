@@ -5,6 +5,7 @@ import {
   parseCsv,
   validateCsvFile,
 } from '@shared/utils/csv';
+import type { LecturerExamResults } from '../types/exams.types';
 import {
   EXAM_MAX_QUESTIONS,
   MAX_OPTIONS,
@@ -177,3 +178,94 @@ export const parseQuestionCsv = (
   }
   return { questions, errors: [] };
 };
+
+export const EXAM_SUMMARY_CSV_HEADER = [
+  'Student Code',
+  'Full Name',
+  'Email',
+  'Status',
+  'Attempts Used',
+  'Best Score',
+  'Latest Submitted At',
+  'Feedback Comment',
+] as const;
+
+export const EXAM_DETAILED_ATTEMPTS_CSV_HEADER = [
+  'Student Code',
+  'Full Name',
+  'Email',
+  'Attempt #',
+  'Status',
+  'Started At',
+  'Submitted At',
+  'Correct Count',
+  'Total Questions',
+  'Score',
+  'Feedback Comment',
+] as const;
+
+/**
+ * Builds a Summary CSV (1 row per enrolled student in the class) for `SCRUM-54 Export Exam Results`.
+ */
+export const buildExamSummaryResultsCsv = (
+  results: LecturerExamResults,
+): string => {
+  const rows: string[][] = [
+    [...EXAM_SUMMARY_CSV_HEADER],
+    ...results.students.map((stu) => [
+      stu.studentCode,
+      stu.fullName,
+      stu.email,
+      stu.status,
+      String(stu.attemptsUsed),
+      stu.bestScore !== null ? stu.bestScore.toFixed(2) : '',
+      stu.latestSubmittedAt ?? '',
+      stu.comment ?? '',
+    ]),
+  ];
+  return `${rows.map((row) => row.map(escapeCsvCell).join(',')).join('\r\n')}\r\n`;
+};
+
+/**
+ * Builds a Detailed Attempts CSV (1 row per attempt, or 1 NOT_STARTED row for students with 0 attempts).
+ */
+export const buildExamDetailedAttemptsCsv = (
+  results: LecturerExamResults,
+): string => {
+  const rows: string[][] = [[...EXAM_DETAILED_ATTEMPTS_CSV_HEADER]];
+  for (const stu of results.students) {
+    if (stu.attempts.length === 0) {
+      rows.push([
+        stu.studentCode,
+        stu.fullName,
+        stu.email,
+        '0',
+        'NOT_STARTED',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+      ]);
+      continue;
+    }
+    for (const attempt of stu.attempts) {
+      rows.push([
+        stu.studentCode,
+        stu.fullName,
+        stu.email,
+        String(attempt.attemptNumber),
+        attempt.status,
+        attempt.startedAt,
+        attempt.submittedAt ?? attempt.endedAt ?? '',
+        attempt.correctCount !== null ? String(attempt.correctCount) : '',
+        attempt.totalQuestions > 0 ? String(attempt.totalQuestions) : '',
+        attempt.score !== null ? attempt.score.toFixed(2) : '',
+        attempt.comment ?? '',
+      ]);
+    }
+  }
+  return `${rows.map((row) => row.map(escapeCsvCell).join(',')).join('\r\n')}\r\n`;
+};
+

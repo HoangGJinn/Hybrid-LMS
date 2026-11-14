@@ -19,6 +19,8 @@ export const MAX_OPTIONS = 6;
 export const DEFAULT_OPTIONS = 4;
 export const MIN_DURATION_MINUTES = 1;
 export const MAX_DURATION_MINUTES = 480;
+export const MIN_ATTEMPTS = 1;
+export const MAX_ATTEMPTS = 100;
 
 const MS_PER_MINUTE = 60_000;
 
@@ -40,6 +42,13 @@ export interface ExamFormValues {
   /** Kept as typed so an empty or half-typed field can be reported. */
   durationMinutes: string;
   format: ExamFormat;
+  /** True when attempts are unlimited (`maxAttempts = null`); false when limited by `maxAttempts` text. */
+  unlimitedAttempts?: boolean;
+  /** Kept as typed when `unlimitedAttempts` is false (e.g. `'1'`). */
+  maxAttempts?: string;
+  showResults?: boolean;
+  shuffleQuestions?: boolean;
+  shuffleOptions?: boolean;
   questions: ExamQuestionDraft[];
   file: File | null;
 }
@@ -58,6 +67,7 @@ export interface ExamFormErrors {
   startTime?: string;
   endTime?: string;
   durationMinutes?: string;
+  maxAttempts?: string;
   /** About the list as a whole, e.g. "Add at least one question". */
   questions?: string;
   /** By question index. */
@@ -169,11 +179,33 @@ const parseDuration = (text: string): number | null => {
   return isValid ? value : null;
 };
 
+/** Parses the typed maxAttempts when not unlimited; `null` when invalid. */
+const parseMaxAttempts = (text: string): number | null => {
+  const value = Number(text.trim());
+  const isValid =
+    text.trim() !== '' &&
+    Number.isInteger(value) &&
+    value >= MIN_ATTEMPTS &&
+    value <= MAX_ATTEMPTS;
+  return isValid ? value : null;
+};
+
+const resolveMaxAttempts = (values: ExamFormValues): number | null => {
+  if (values.unlimitedAttempts) return null;
+  if (values.maxAttempts === undefined) return 1;
+  return parseMaxAttempts(values.maxAttempts) ?? 1;
+};
+
 export interface ExamEditContext {
   exam: Pick<
     LecturerExam,
     'startTime' | 'endTime' | 'durationMinutes' | 'status' | 'isContentLocked'
-  >;
+  > & {
+    maxAttempts?: number | null;
+    showResults?: boolean;
+    shuffleQuestions?: boolean;
+    shuffleOptions?: boolean;
+  };
   /** True when the exam already has a question file and the lecturer has not removed it. */
   hasKeptFile: boolean;
 }
@@ -210,6 +242,19 @@ const validateLockedSchedule = (
     const windowMinutes = Math.floor((end - start) / MS_PER_MINUTE);
     if (duration > windowMinutes) {
       errors.durationMinutes = `The duration cannot be longer than the time between opening and closing (${windowMinutes} minutes)`;
+    }
+  }
+
+  if (values.unlimitedAttempts !== undefined || values.maxAttempts !== undefined) {
+    const currentMax = exam.maxAttempts === undefined ? 1 : exam.maxAttempts;
+    if (!values.unlimitedAttempts) {
+      const parsed = parseMaxAttempts(values.maxAttempts ?? '');
+      if (parsed === null) {
+        errors.maxAttempts = `Enter a whole number of attempts from ${MIN_ATTEMPTS} to ${MAX_ATTEMPTS}`;
+      } else if (currentMax === null || parsed < currentMax) {
+        errors.maxAttempts =
+          'Allowed attempts can only be increased once the exam has opened';
+      }
     }
   }
 };
@@ -250,6 +295,12 @@ export const validateExamForm = (
       errors.durationMinutes = `The duration cannot be longer than the time between opening and closing (${windowMinutes} minutes)`;
   }
 
+  if (!values.unlimitedAttempts && values.maxAttempts !== undefined) {
+    if (parseMaxAttempts(values.maxAttempts) === null) {
+      errors.maxAttempts = `Enter a whole number of attempts from ${MIN_ATTEMPTS} to ${MAX_ATTEMPTS}`;
+    }
+  }
+
   if (values.format === 'FILE') {
     if (values.file === null && !edit?.hasKeptFile) {
       errors.file = 'Choose the question file';
@@ -284,6 +335,9 @@ export const toNewExamInput = (
   values: ExamFormValues,
   edit?: ExamEditContext,
 ): NewExamInput => {
+  const maxAttempts = resolveMaxAttempts(values);
+  const showResults = values.showResults ?? true;
+  const isMcq = values.format === 'MULTIPLE_CHOICE';
   if (edit?.exam.isContentLocked) {
     const typedEnd = new Date(values.endTime).getTime();
     const currentEnd = toMinuteFloor(new Date(edit.exam.endTime).getTime());
@@ -301,6 +355,11 @@ export const toNewExamInput = (
       endTime,
       durationMinutes,
       format: values.format,
+      maxAttempts:
+        edit.exam.status === 'CLOSED'
+          ? (edit.exam.maxAttempts ?? 1)
+          : maxAttempts,
+      showResults,
       questions: [],
       file: null,
     };
@@ -311,6 +370,10 @@ export const toNewExamInput = (
     endTime: new Date(values.endTime).toISOString(),
     durationMinutes: Number(values.durationMinutes.trim()),
     format: values.format,
+    maxAttempts,
+    showResults,
+    shuffleQuestions: isMcq ? (values.shuffleQuestions ?? false) : false,
+    shuffleOptions: isMcq ? (values.shuffleOptions ?? false) : false,
     questions:
       values.format === 'MULTIPLE_CHOICE'
         ? values.questions.map(toNewQuestion)

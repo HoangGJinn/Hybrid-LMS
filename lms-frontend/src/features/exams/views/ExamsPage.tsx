@@ -7,20 +7,13 @@ import { Button } from '@shared/components/ui/button';
 import { toAsyncState } from '@shared/utils/async-state';
 import { useUpcomingExams } from '../hooks/useExams';
 import { Link } from 'react-router';
-import { Clock } from 'lucide-react';
-
-const examStatus = (start: string, end: string) => {
-  const now = Date.now();
-  if (now < +new Date(start)) return 'UPCOMING';
-  if (now <= +new Date(end)) return 'OPEN';
-  return 'COMPLETED';
-};
+import { Clock, Trophy } from 'lucide-react';
 
 const ExamsPage = () => {
   const state = toAsyncState(useUpcomingExams());
   return (
     <div>
-      <PageHeader title="Exams" subtitle="Scheduled exams for your courses" />
+      <PageHeader title="Exams" />
       <AsyncView
         state={state}
         isEmpty={(d) => d.length === 0}
@@ -31,10 +24,10 @@ const ExamsPage = () => {
             {[...exams]
               .sort((a, b) => +new Date(a.startTime) - +new Date(b.startTime))
               .map((e) => {
-                const status = examStatus(e.startTime, e.endTime);
-                const mins = Math.round(
-                  (+new Date(e.endTime) - +new Date(e.startTime)) / 60000,
-                );
+                const attemptsText =
+                  e.maxAttempts === null
+                    ? `${e.attemptsUsed} / ∞ attempts`
+                    : `${e.attemptsUsed} / ${e.maxAttempts} attempts`;
                 return (
                   <li
                     key={e.id}
@@ -42,19 +35,36 @@ const ExamsPage = () => {
                   >
                     <div className="flex-1">
                       <p className="m-0 font-semibold">{e.examName}</p>
-                      <p className="m-0 mt-1 flex items-center gap-1 text-sm text-muted-foreground">
-                        <Clock className="h-4 w-4" />
-                        {formatDateTime(e.startTime)} · {mins} minutes
+                      <p className="m-0 mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                        <span className="inline-flex items-center gap-1">
+                          <Clock className="h-4 w-4" />
+                          {formatDateTime(e.startTime)} · {e.durationMinutes}{' '}
+                          mins
+                        </span>
+                        <span>· {attemptsText}</span>
+                        {e.showResults && e.bestScore !== null && (
+                          <span className="inline-flex items-center gap-1 font-medium text-foreground">
+                            · <Trophy className="h-3.5 w-3.5 text-warning" />
+                            Best: {e.bestScore.toFixed(2)}/10
+                          </span>
+                        )}
                       </p>
                     </div>
-                    <StatusBadge status={status} />
-                    {/* Demo: entry allowed anytime in mock mode; the backend enforces the real window. */}
+                    <StatusBadge status={e.status} />
                     <Button
                       asChild
-                      variant={status === 'OPEN' ? 'default' : 'outline'}
+                      variant={
+                        e.inProgressSessionId || e.status === 'OPEN'
+                          ? 'default'
+                          : 'outline'
+                      }
                     >
                       <Link to={`/student/courses/${e.classId}/exams/${e.id}`}>
-                        Enter Exam Room
+                        {e.inProgressSessionId
+                          ? 'Continue Attempt'
+                          : e.attemptsUsed > 0
+                            ? 'View / Retake'
+                            : 'Enter Exam Room'}
                       </Link>
                     </Button>
                   </li>

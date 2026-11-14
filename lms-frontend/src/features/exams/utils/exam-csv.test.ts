@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { createEmptyQuestion, type ExamQuestionDraft } from './exam-form';
 import {
+  buildExamDetailedAttemptsCsv,
+  buildExamSummaryResultsCsv,
   isBlankQuestion,
   parseQuestionCsv,
   QUESTION_TEMPLATE_CSV,
   validateQuestionFile,
 } from './exam-csv';
+import type { LecturerExamResults } from '../types/exams.types';
 
 const HEADER = 'Question,Option A,Option B,Option C,Option D,Option E,Option F,Correct';
 
@@ -170,5 +173,112 @@ describe('isBlankQuestion', () => {
     { correctIndex: 0 },
   ])('should be false once anything is entered: %o', (patch) => {
     expect(isBlankQuestion({ ...createEmptyQuestion(), ...patch })).toBe(false);
+  });
+});
+
+describe('buildExamSummaryResultsCsv & buildExamDetailedAttemptsCsv', () => {
+  const sampleResults: LecturerExamResults = {
+    examId: 'exam-1',
+    classId: 'class-1',
+    examName: 'Midterm',
+    format: 'MULTIPLE_CHOICE',
+    maxAttempts: 2,
+    summary: {
+      totalStudents: 2,
+      startedCount: 1,
+      submittedCount: 1,
+      gradedCount: 1,
+      averageScore: 8.5,
+      maxScore: 8.5,
+      minScore: 8.5,
+    },
+    students: [
+      {
+        studentId: 'stu-1',
+        studentCode: '22110001',
+        fullName: 'Nguyen Van A',
+        email: 'a@school.edu.vn',
+        status: 'GRADED',
+        attemptsUsed: 2,
+        bestScore: 8.5,
+        latestSessionId: 's-2',
+        latestSubmittedAt: '2026-11-12T08:30:00Z',
+        gradedAt: null,
+        comment: 'Well done, good job',
+        attempts: [
+          {
+            sessionId: 's-1',
+            attemptNumber: 1,
+            status: 'COMPLETED',
+            startedAt: '2026-11-12T08:00:00Z',
+            endedAt: '2026-11-12T08:15:00Z',
+            submittedAt: '2026-11-12T08:15:00Z',
+            gradedAt: null,
+            score: 6,
+            comment: null,
+            correctCount: 6,
+            totalQuestions: 10,
+            submittedFiles: [],
+          },
+          {
+            sessionId: 's-2',
+            attemptNumber: 2,
+            status: 'COMPLETED',
+            startedAt: '2026-11-12T08:20:00Z',
+            endedAt: '2026-11-12T08:30:00Z',
+            submittedAt: '2026-11-12T08:30:00Z',
+            gradedAt: null,
+            score: 8.5,
+            comment: 'Well done, good job',
+            correctCount: 17,
+            totalQuestions: 20,
+            submittedFiles: [],
+          },
+        ],
+      },
+      {
+        studentId: 'stu-2',
+        studentCode: '22110002',
+        fullName: 'Tran Thi B',
+        email: 'b@school.edu.vn',
+        status: 'NOT_STARTED',
+        attemptsUsed: 0,
+        bestScore: null,
+        latestSessionId: null,
+        latestSubmittedAt: null,
+        gradedAt: null,
+        comment: null,
+        attempts: [],
+      },
+    ],
+  };
+
+  it('builds a summary CSV with 1 row per student and properly escaped cells', () => {
+    const csv = buildExamSummaryResultsCsv(sampleResults);
+    const lines = csv.trim().split('\r\n');
+
+    expect(lines).toHaveLength(3);
+    expect(lines[0]).toBe(
+      'Student Code,Full Name,Email,Status,Attempts Used,Best Score,Latest Submitted At,Feedback Comment',
+    );
+    expect(lines[1]).toBe(
+      '22110001,Nguyen Van A,a@school.edu.vn,GRADED,2,8.50,2026-11-12T08:30:00Z,"Well done, good job"',
+    );
+    expect(lines[2]).toBe(
+      '22110002,Tran Thi B,b@school.edu.vn,NOT_STARTED,0,,,',
+    );
+  });
+
+  it('builds a detailed attempts CSV with 1 row per attempt plus NOT_STARTED students', () => {
+    const csv = buildExamDetailedAttemptsCsv(sampleResults);
+    const lines = csv.trim().split('\r\n');
+
+    expect(lines).toHaveLength(4);
+    expect(lines[0]).toBe(
+      'Student Code,Full Name,Email,Attempt #,Status,Started At,Submitted At,Correct Count,Total Questions,Score,Feedback Comment',
+    );
+    expect(lines[1]).toContain('22110001,Nguyen Van A,a@school.edu.vn,1,COMPLETED');
+    expect(lines[2]).toContain('22110001,Nguyen Van A,a@school.edu.vn,2,COMPLETED');
+    expect(lines[3]).toContain('22110002,Tran Thi B,b@school.edu.vn,0,NOT_STARTED');
   });
 });
