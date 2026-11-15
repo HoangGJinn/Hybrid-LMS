@@ -40,6 +40,7 @@ import { masteryRoute } from '@features/mastery/routes';
 import { roadmapRoute } from '@features/roadmap/routes';
 import { analyticsRoute } from '@features/analytics/routes';
 import { aiGeneratorRoute } from '@features/ai-generate/routes';
+import { questionBankRoute } from '@features/question-bank/routes';
 
 // Each feature owns its routes (features/<name>/routes.ts). This file only assembles them, so features never import each other to build the tree.
 export const router = createBrowserRouter([
@@ -97,6 +98,7 @@ export const router = createBrowserRouter([
                   }),          
                   gradingDeskRoute,
                   studentRosterRoute,
+                  questionBankRoute,
                   analyticsRoute,
                   aiGeneratorRoute,
                 ],

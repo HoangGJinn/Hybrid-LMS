@@ -9,6 +9,7 @@ import {
   Users,
   BarChart3,
   Map,
+  Library,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { UserRole } from '@core/types/auth.types';
@@ -34,6 +35,7 @@ export const navByRole: Record<UserRole, NavItem[]> = {
     { label: 'My Classes', to: '/lecturer/classes', icon: BookOpen },
     { label: 'Grading Desk', to: '/lecturer/grading', icon: ClipboardList },
     { label: 'Students', to: '/lecturer/students', icon: Users },
+    { label: 'Question Bank', to: '/lecturer/question-bank', icon: Library }, 
     { label: 'Analytics', to: '/lecturer/analytics', icon: BarChart3 },
     { label: 'AI Assessment', to: '/lecturer/ai-generator', icon: Sparkles },
   ],
