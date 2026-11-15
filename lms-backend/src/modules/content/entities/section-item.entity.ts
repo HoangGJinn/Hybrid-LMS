@@ -37,12 +37,15 @@ export class SectionItem {
   @Column({ name: 'order_index', type: 'int' })
   orderIndex: number;
 
-  // Note: document_id và assignment_id giữ dạng string (không @ManyToOne)
-  // để tránh tight coupling giữa Content → Document/Assignment.
-  // Facade của Document/Assignment sẽ được gọi khi cần JOIN dữ liệu.
+  // Note: document_id, assignment_id và exam_id giữ dạng string (không @ManyToOne)
+  // để tránh tight coupling giữa Content → Document/Assignment/Exam.
+  // Facade của Document/Assignment/Exam sẽ được gọi khi cần JOIN dữ liệu.
   @Column({ name: 'document_id', type: 'uuid', nullable: true })
   documentId: string | null;
 
   @Column({ name: 'assignment_id', type: 'uuid', nullable: true })
   assignmentId: string | null;
+
+  @Column({ name: 'exam_id', type: 'uuid', nullable: true })
+  examId: string | null;
 }

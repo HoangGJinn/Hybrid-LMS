@@ -16,7 +16,7 @@ import { Button } from '@shared/components/ui/button'
 import { Input } from '@shared/components/ui/input'
 import { cn } from '@shared/utils/cn'
 import { moveItem } from '../utils/move-item'
-import type { ItemType, Section, SectionItem } from '../types/courses.types'
+import type { Section, SectionItem } from '../types/courses.types'
 
 const itemIcon = {
   DOCUMENT: FileText,
@@ -31,18 +31,19 @@ const itemLink = (classId: string, item: SectionItem): string | null => {
     return `/lecturer/classes/${classId}/documents/${item.documentId}`
   if (item.itemType === 'ASSIGNMENT' && item.assignmentId)
     return `/lecturer/classes/${classId}/assignments/${item.assignmentId}`
+  if (item.itemType === 'EXAM' && item.examId)
+    return `/lecturer/classes/${classId}/exams/${item.examId}`
   if (item.itemType === 'VIDEO')
 
     return `/lecturer/classes/${classId}/videos/${item.id}`
   return null
 }
 
-/** Documents and assignments own stored data, so removing them asks for confirmation first. */
+/** Documents, assignments and exams own stored data, so removing them asks for confirmation first. */
 const isConfirmed = (item: SectionItem): boolean =>
-  item.itemType === 'DOCUMENT' || item.itemType === 'ASSIGNMENT'
-
-// Documents, videos and assignments are added through their own buttons.
-const itemTypes: ItemType[] = ['EXAM']
+  item.itemType === 'DOCUMENT' ||
+  item.itemType === 'ASSIGNMENT' ||
+  item.itemType === 'EXAM'
 
 interface SectionCardProps {
   section: Section
@@ -55,10 +56,10 @@ interface SectionCardProps {
   onTitleChange: (title: string) => void
   onDescriptionChange: (description: string) => void
   onItemsChange: (items: SectionItem[]) => void
-  onAddItem: (itemType: ItemType) => void
   onAddDocument: (file: File) => void
   onAddVideo: () => void
   onAddAssignment: () => void
+  onAddExam: () => void
   /** Asks for confirmation first; plain items are deleted straight away. */
   onRemoveContent: (item: SectionItem) => void
   isUploadingDocument: boolean
@@ -79,10 +80,10 @@ export const SectionCard = ({
   onTitleChange,
   onDescriptionChange,
   onItemsChange,
-  onAddItem,
   onAddDocument,
   onAddVideo,
   onAddAssignment,
+  onAddExam,
   onRemoveContent,
   isUploadingDocument,
   onMoveUp,
@@ -260,12 +261,10 @@ export const SectionCard = ({
                 <Plus className="mr-1 h-3 w-3" />
                 Add assignment
               </Button>
-              {itemTypes.map((type) => (
-                <Button key={type} size="sm" variant="outline" onClick={() => onAddItem(type)}>
-                  <Plus className="mr-1 h-3 w-3" />
-                  {type.charAt(0) + type.slice(1).toLowerCase()}
-                </Button>
-              ))}
+              <Button size="sm" variant="outline" onClick={onAddExam}>
+                <Plus className="mr-1 h-3 w-3" />
+                Add exam
+              </Button>
             </li>
           )}
         </ul>

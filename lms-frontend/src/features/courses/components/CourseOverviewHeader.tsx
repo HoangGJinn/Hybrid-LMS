@@ -71,7 +71,7 @@ export const CourseOverviewHeader = ({
   }, []);
 
   return (
-    <div className="mb-5 flex flex-wrap items-center gap-3">
+    <div className="mb-3 flex flex-wrap items-center gap-2.5">
       {/* 1. Status Filter Dropdown */}
       <div className="relative" ref={statusRef}>
         <button

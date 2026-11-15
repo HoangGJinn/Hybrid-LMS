@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { Role } from '../../../common/enums/role.enum.js';
 import type { AuthenticatedUser } from '../../../common/types/authenticated-user.type.js';
+import { emptyToNull } from '../../../common/utils/string.util.js';
 import { FileFacade } from '../../../shared/file/facades/file.facade.js';
 import { AcademicFacade } from '../../academic/facades/academic.facade.js';
 import { ContentFacade } from '../../content/facades/content.facade.js';
@@ -59,7 +60,7 @@ export class AssignmentService {
         submissionType: dto.submissionType,
         // Online answers take no files, so the accepted formats only matter for file submissions.
         acceptedExtensions: isFileSubmission ? dto.acceptedExtensions : [],
-        submissionNote: dto.submissionNote?.trim() || null,
+        submissionNote: emptyToNull(dto.submissionNote),
       },
       dto.fileIds,
     );
@@ -132,7 +133,7 @@ export class AssignmentService {
         endAt,
         submissionType: dto.submissionType,
         acceptedExtensions: isFileSubmission ? dto.acceptedExtensions : [],
-        submissionNote: dto.submissionNote?.trim() || null,
+        submissionNote: emptyToNull(dto.submissionNote),
       },
       removedFileIds,
       dto.fileIds,

@@ -31,6 +31,8 @@ const itemLink = (courseId: string, item: SectionItem) => {
     return `/student/courses/${courseId}/videos/${item.id}`;
   if (item.itemType === 'ASSIGNMENT' && item.assignmentId)
     return `/student/courses/${courseId}/assignments/${item.assignmentId}`;
+  if (item.itemType === 'EXAM' && item.examId)
+    return `/student/courses/${courseId}/exams/${item.examId}`;
   return '/student/exams';
 };
 

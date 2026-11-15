@@ -1,11 +1,11 @@
 import { Modal } from '@shared/components/Modal';
 import { Button } from '@shared/components/ui/button';
-import type { QuizQuestion } from '@features/quizzes';
+import type { StudentExamQuestion } from '../types/exams.types';
 
 interface SubmitReviewDialogProps {
   open: boolean;
-  questions: QuizQuestion[];
-  answers: Record<string, number>;
+  questions: StudentExamQuestion[];
+  answers: Record<string, string>;
   flags: Record<string, boolean>;
   isSubmitting: boolean;
   onClose: () => void;
@@ -67,7 +67,8 @@ const SubmitReviewDialog = ({
     <Modal open={open} title="Submit exam?" onClose={onClose}>
       <p className="mt-0 text-sm text-muted-foreground">
         {questions.length - unanswered.length} of {questions.length} questions
-        answered. You cannot change your answers after submitting.
+        answered. You cannot change your answers for this attempt after
+        submitting.
       </p>
       <JumpList label="Unanswered" indexes={unanswered} onJump={onJump} />
       <JumpList label="Flagged for review" indexes={flagged} onJump={onJump} />

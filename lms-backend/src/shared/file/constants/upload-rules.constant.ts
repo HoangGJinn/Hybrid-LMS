@@ -35,6 +35,14 @@ const DOCUMENT_CONTENT_TYPES: Readonly<Record<string, string>> = {
   'application/x-7z-compressed': '7z',
 };
 
+/** Question files of an exam: only formats that a lecturer writes an exam in. */
+const EXAM_CONTENT_TYPES: Readonly<Record<string, string>> = {
+  'application/pdf': 'pdf',
+  'application/msword': 'doc',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
+    'docx',
+};
+
 /**
  * Code and text files for assignments. The content type is fixed per extension on the frontend,
  * because browsers report '' or different types for these files and S3 must see exactly the same type.
@@ -115,6 +123,22 @@ export const UPLOAD_RULES: Readonly<Record<FilePurpose, UploadRule>> = {
     maxSizeBytes: MAX_SIZE_BYTES,
     keyPrefix: 'submissions',
     isScopedToAssignment: true,
+    extensionByContentType: WORK_CONTENT_TYPES,
+  },
+  /** The question file of an exam (the lecturer's alternative to typing multiple-choice questions). */
+  [FilePurpose.EXAM]: {
+    allowedRoles: [Role.LECTURER],
+    maxSizeBytes: MAX_SIZE_BYTES,
+    keyPrefix: 'exams',
+    isScopedToAssignment: false,
+    extensionByContentType: EXAM_CONTENT_TYPES,
+  },
+  /** Files a student hands in for a FILE-format exam attempt. */
+  [FilePurpose.EXAM_SUBMISSION]: {
+    allowedRoles: [Role.STUDENT],
+    maxSizeBytes: MAX_SIZE_BYTES,
+    keyPrefix: 'exam-submissions',
+    isScopedToAssignment: false,
     extensionByContentType: WORK_CONTENT_TYPES,
   },
 };

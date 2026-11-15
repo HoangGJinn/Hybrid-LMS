@@ -44,6 +44,8 @@ export interface SectionItem {
   orderIndex: number;
   documentId: string | null;
   assignmentId: string | null;
+  /** Set for EXAM items, null for every other type. */
+  examId: string | null;
   isCompleted: boolean;
 }
 

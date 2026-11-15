@@ -9,6 +9,7 @@ import type { Section } from '../entities/section.entity.js'
 import { AcademicFacade } from '../../academic/facades/academic.facade.js'
 import { SectionRepository } from '../repositories/section.repository.js'
 import { SectionView } from '../types/section-view.type.js'
+import { ClassExamService } from './class-exam.service.js'
 import { SectionService } from './section.service.js'
 
 type Mock = ReturnType<typeof vi.fn>
@@ -67,6 +68,7 @@ describe('SectionService', () => {
     replaceAll: Mock
   }
   let academicFacade: { assertCanViewClass: Mock; assertCanManageClass: Mock }
+  let classExamService: { findExamIdsOfClass: Mock }
   let service: SectionService
 
   beforeEach(() => {
@@ -81,9 +83,15 @@ describe('SectionService', () => {
       assertCanViewClass: vi.fn().mockResolvedValue(undefined),
       assertCanManageClass: vi.fn().mockResolvedValue(undefined),
     }
+    classExamService = {
+      findExamIdsOfClass: vi.fn().mockImplementation((_classId: string, ids: string[]) =>
+        Promise.resolve(ids),
+      ),
+    }
     service = new SectionService(
       repository as unknown as SectionRepository,
       academicFacade as unknown as AcademicFacade,
+      classExamService as unknown as ClassExamService,
     )
   })
 
@@ -223,6 +231,94 @@ describe('SectionService', () => {
         'Payload references content of another class',
       )
       expect(repository.replaceAll).not.toHaveBeenCalled()
+    })
+
+    describe('exam items', () => {
+      const examDto = (
+        items: Record<string, unknown>[],
+      ): SaveSectionsDto =>
+        ({
+          sections: [{ id: 'sec-1', title: 'Week 1', orderIndex: 1, items }],
+        }) as unknown as SaveSectionsDto
+      const examItem = (id: string, extra: Record<string, unknown> = {}) => ({
+        id,
+        itemType: 'EXAM',
+        title: 'Midterm',
+        orderIndex: 1,
+        examId: `exam-${id}`,
+        ...extra,
+      })
+
+      it('saves exam items whose exams belong to the class', async () => {
+        const payload = examDto([examItem('a'), examItem('b')])
+
+        await service.saveAll(CLASS_ID, payload, lecturer)
+
+        expect(classExamService.findExamIdsOfClass).toHaveBeenCalledWith(CLASS_ID, [
+          'exam-a',
+          'exam-b',
+        ])
+        expect(repository.replaceAll).toHaveBeenCalledWith(CLASS_ID, payload.sections)
+      })
+
+      it('does not look up exams when the payload has none', async () => {
+        await service.saveAll(CLASS_ID, dto, lecturer)
+
+        expect(classExamService.findExamIdsOfClass).not.toHaveBeenCalled()
+      })
+
+      it('rejects an exam item without an exam id', async () => {
+        const payload = examDto([examItem('a', { examId: null })])
+
+        await expect(service.saveAll(CLASS_ID, payload, lecturer)).rejects.toThrow(
+          'An exam item must reference an exam',
+        )
+        expect(repository.replaceAll).not.toHaveBeenCalled()
+      })
+
+      it('rejects an exam item that also references a document or an assignment', async () => {
+        for (const extra of [{ documentId: 'doc-1' }, { assignmentId: 'asg-1' }]) {
+          const payload = examDto([examItem('a', extra)])
+
+          await expect(
+            service.saveAll(CLASS_ID, payload, lecturer),
+          ).rejects.toBeInstanceOf(BadRequestException)
+        }
+        expect(repository.replaceAll).not.toHaveBeenCalled()
+      })
+
+      it('rejects an exam id on an item that is not an exam', async () => {
+        const payload = examDto([
+          { id: 'a', itemType: 'DOCUMENT', title: 'Notes', orderIndex: 1, examId: 'exam-a' },
+        ])
+
+        await expect(service.saveAll(CLASS_ID, payload, lecturer)).rejects.toThrow(
+          'Only an exam item can reference an exam',
+        )
+        expect(repository.replaceAll).not.toHaveBeenCalled()
+      })
+
+      it('rejects the same exam added twice', async () => {
+        const payload = examDto([
+          examItem('a', { examId: 'exam-x' }),
+          examItem('b', { examId: 'exam-x' }),
+        ])
+
+        await expect(service.saveAll(CLASS_ID, payload, lecturer)).rejects.toThrow(
+          'An exam can only be added once',
+        )
+        expect(repository.replaceAll).not.toHaveBeenCalled()
+      })
+
+      it('rejects an exam that is missing or belongs to another class', async () => {
+        classExamService.findExamIdsOfClass.mockResolvedValue(['exam-a'])
+        const payload = examDto([examItem('a'), examItem('b')])
+
+        await expect(service.saveAll(CLASS_ID, payload, lecturer)).rejects.toThrow(
+          'no longer exists',
+        )
+        expect(repository.replaceAll).not.toHaveBeenCalled()
+      })
     })
 
     it('accepts an empty payload and clears the class', async () => {

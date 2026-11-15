@@ -1,15 +1,18 @@
 import { useState } from 'react';
 import { Flag } from 'lucide-react';
 import { cn } from '@shared/utils/cn';
-import type { QuizQuestion } from '@features/quizzes';
+import type { StudentExamQuestion } from '../types/exams.types';
 
 type PaletteFilter = 'all' | 'unanswered' | 'flagged';
 
 interface QuestionPaletteProps {
-  questions: QuizQuestion[];
-  answers: Record<string, number>;
+  questions: StudentExamQuestion[];
+  answers: Record<string, string>;
+  savedQuestionIds: ReadonlySet<string>;
+  dirtyQuestionIds: ReadonlySet<string>;
   flags: Record<string, boolean>;
-  current: number;
+  pageStart: number;
+  pageEnd: number;
   onSelect: (index: number) => void;
 }
 
@@ -21,25 +24,35 @@ const FILTER_LABEL: Record<PaletteFilter, string> = {
 
 const describeQuestion = (
   index: number,
-  isAnswered: boolean,
+  isSaved: boolean,
+  isDirty: boolean,
   isFlagged: boolean,
-  isCurrent: boolean,
-) =>
-  [
+  isOnCurrentPage: boolean,
+): string => {
+  const status = isSaved
+    ? 'answer saved'
+    : isDirty
+      ? 'answered (saving...)'
+      : 'not answered';
+  return [
     `Question ${index + 1}`,
-    isAnswered ? 'answered' : 'not answered',
+    status,
     isFlagged && 'flagged for review',
-    isCurrent && 'current question',
+    isOnCurrentPage && 'on current page',
   ]
     .filter(Boolean)
     .join(', ');
+};
 
-/** Question navigator for the exam room: status per question, legend, and filters for review. */
+/** Question navigator for the exam room: status per question (saved vs pending save), legend, and filters. */
 const QuestionPalette = ({
   questions,
   answers,
+  savedQuestionIds,
+  dirtyQuestionIds,
   flags,
-  current,
+  pageStart,
+  pageEnd,
   onSelect,
 }: QuestionPaletteProps) => {
   const [filter, setFilter] = useState<PaletteFilter>('all');
@@ -53,7 +66,7 @@ const QuestionPalette = ({
     flagged: flaggedCount,
   };
 
-  const matchesFilter = (q: QuizQuestion) =>
+  const matchesFilter = (q: StudentExamQuestion) =>
     filter === 'all' ||
     (filter === 'unanswered' && answers[q.id] === undefined) ||
     (filter === 'flagged' && Boolean(flags[q.id]));
@@ -86,22 +99,35 @@ const QuestionPalette = ({
       <div className="grid grid-cols-5 gap-2">
         {questions.map((q, i) => {
           const isAnswered = answers[q.id] !== undefined;
+          const isSaved = isAnswered && savedQuestionIds.has(q.id);
+          const isDirty = isAnswered && dirtyQuestionIds.has(q.id);
           const isFlagged = Boolean(flags[q.id]);
-          const isCurrent = i === current;
+          const isOnCurrentPage = i >= pageStart && i < pageEnd;
+          const label = describeQuestion(
+            i,
+            isSaved,
+            isDirty,
+            isFlagged,
+            isOnCurrentPage,
+          );
           return (
             <button
               key={q.id}
               type="button"
+              title={label}
+              aria-label={label}
+              aria-current={isOnCurrentPage ? 'step' : undefined}
               onClick={() => onSelect(i)}
-              aria-label={describeQuestion(i, isAnswered, isFlagged, isCurrent)}
-              aria-current={isCurrent ? 'step' : undefined}
               className={cn(
-                'relative h-9 rounded-md border text-sm transition-opacity',
-                isAnswered
+                'relative h-9 rounded-md border text-sm font-medium transition-opacity',
+                isSaved
                   ? 'border-primary bg-primary text-primary-foreground'
-                  : 'bg-card text-foreground hover:bg-accent',
+                  : isDirty
+                    ? 'border-dashed border-primary bg-primary/20 text-foreground'
+                    : 'bg-card text-foreground hover:bg-accent',
                 isFlagged && 'border-warning',
-                isCurrent && 'ring-2 ring-ring ring-offset-1 ring-offset-card',
+                isOnCurrentPage &&
+                  'ring-2 ring-ring ring-offset-1 ring-offset-card',
                 !matchesFilter(q) && 'opacity-30',
               )}
             >
@@ -119,7 +145,11 @@ const QuestionPalette = ({
       <ul className="m-0 mt-4 grid list-none gap-1.5 p-0 text-xs text-muted-foreground">
         <li className="flex items-center gap-2">
           <span className="h-3 w-3 rounded-sm border border-primary bg-primary" />
-          Answered
+          Answer saved
+        </li>
+        <li className="flex items-center gap-2">
+          <span className="h-3 w-3 rounded-sm border border-dashed border-primary bg-primary/20" />
+          Answered (pending save)
         </li>
         <li className="flex items-center gap-2">
           <span className="h-3 w-3 rounded-sm border bg-card" />
@@ -134,7 +164,7 @@ const QuestionPalette = ({
         </li>
         <li className="flex items-center gap-2">
           <span className="h-3 w-3 rounded-sm ring-2 ring-ring" />
-          Current question
+          Current 10-question page
         </li>
       </ul>
     </div>

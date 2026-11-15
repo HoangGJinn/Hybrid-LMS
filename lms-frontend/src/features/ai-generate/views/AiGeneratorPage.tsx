@@ -80,10 +80,7 @@ const AiGeneratorPage = () => {
 
   return (
     <div>
-      <PageHeader
-        title="AI Assessment Generator"
-        subtitle="Create quizzes and exams from course documents, targeted by knowledge component"
-      />
+      <PageHeader title="AI Assessment Generator" />
       <ol className="m-0 mb-6 flex list-none flex-wrap gap-2 p-0">
         {steps.map((s, i) => (
           <li

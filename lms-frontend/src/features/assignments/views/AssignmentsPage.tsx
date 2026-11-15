@@ -25,10 +25,7 @@ const AssignmentsPage = () => {
   const [filter, setFilter] = useState<(typeof filters)[number]>('ALL');
   return (
     <div>
-      <PageHeader
-        title="Assignments"
-        subtitle="Track deadlines and submit your work"
-      />
+      <PageHeader title="Assignments" />
       <div className="mb-4 flex flex-wrap gap-2">
         {filters.map((f) => (
           <button

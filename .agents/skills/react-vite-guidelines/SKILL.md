@@ -1,5 +1,5 @@
 ---
-name: React Vite Tailwind Guidelines
+name: react-vite-guidelines
 description: Coding standards and guidelines for the frontend React + Vite + TailwindCSS project.
 ---
 

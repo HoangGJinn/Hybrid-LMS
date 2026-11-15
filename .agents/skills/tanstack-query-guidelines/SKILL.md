@@ -1,5 +1,5 @@
 ---
-name: TanStack Query v5 Guidelines
+name: tanstack-query-guidelines
 description: Best practices and conventions for TanStack Query (React Query) v5, query key factories, mutations, caching, and server state management.
 ---
 

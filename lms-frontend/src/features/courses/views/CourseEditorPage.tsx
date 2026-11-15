@@ -14,6 +14,12 @@ import {
   useRemoveAssignment,
   type NewAssignmentInput,
 } from '@features/assignments'
+import {
+  CreateExamDialog,
+  useCreateExam,
+  useRemoveExam,
+  type NewExamInput,
+} from '@features/exams'
 import { AsyncView } from '@shared/components/AsyncView'
 import { EmptyState } from '@shared/components/EmptyState'
 import { ErrorState } from '@shared/components/ErrorState'
@@ -29,7 +35,7 @@ import { useCreateSection } from '../hooks/useCreateSection'
 import { useSaveSections } from '../hooks/useSaveSections'
 import { moveItem } from '../utils/move-item'
 import { removeItem } from '../utils/remove-item'
-import type { ItemType, Section, SectionItem } from '../types/courses.types'
+import type { Section, SectionItem } from '../types/courses.types'
 
 /** Course tab of a lecturer's class: the collapsible week cards, with an edit mode. Banner and tabs live in LecturerCourseLayout. */
 const CourseEditorPage = () => {
@@ -41,6 +47,8 @@ const CourseEditorPage = () => {
   const removeDocument = useRemoveDocument()
   const createAssignment = useCreateAssignment()
   const removeAssignment = useRemoveAssignment()
+  const createExam = useCreateExam()
+  const removeExam = useRemoveExam()
   const queryClient = useQueryClient()
   // `null` = no "new section" form open; otherwise the title being typed.
   const [newTitle, setNewTitle] = useState<string | null>(null)
@@ -53,29 +61,14 @@ const CourseEditorPage = () => {
   // Section the lecturer is adding a YouTube video to; `null` keeps the dialog closed.
   const [videoSectionId, setVideoSectionId] = useState<string | null>(null)
   const [assignmentSectionId, setAssignmentSectionId] = useState<string | null>(null)
+  // Section the lecturer is adding an exam to; `null` keeps the dialog closed.
+  const [examSectionId, setExamSectionId] = useState<string | null>(null)
   const editing = draft !== null
 
   const setSections = (updater: (current: Section[]) => Section[]) =>
     setDraft((current) => (current === null ? current : updater(current)))
   const update = (id: string, patch: Partial<Section>) =>
     setSections((s) => s.map((x) => (x.id === id ? { ...x, ...patch } : x)))
-  const addItem = (sec: Section, itemType: ItemType) =>
-    update(sec.id, {
-      items: [
-        ...sec.items,
-        {
-          id: crypto.randomUUID(),
-          sectionId: sec.id,
-          itemType,
-          title: `New ${itemType.toLowerCase()}`,
-          externalUrl: null,
-          orderIndex: sec.items.length + 1,
-          documentId: null,
-          assignmentId: null,
-          isCompleted: false,
-        },
-      ],
-    })
 
   /** UC-29: upload the file, then add it to the draft section; "Save changes" publishes it. */
   const addDocument = (sectionId: string, file: File) => {
@@ -105,6 +98,7 @@ const CourseEditorPage = () => {
                         orderIndex: x.items.length + 1,
                         documentId: document.id,
                         assignmentId: null,
+                        examId: null,
                         isCompleted: false,
                       },
                     ],
@@ -139,6 +133,7 @@ const CourseEditorPage = () => {
                   orderIndex: x.items.length + 1,
                   documentId: null,
                   assignmentId: null,
+                  examId: null,
                   isCompleted: false,
                 },
               ],
@@ -174,6 +169,7 @@ const CourseEditorPage = () => {
                         orderIndex: x.items.length + 1,
                         documentId: null,
                         assignmentId: assignment.id,
+                        examId: null,
                         isCompleted: false,
                       },
                     ],
@@ -189,7 +185,47 @@ const CourseEditorPage = () => {
     )
   }
 
-  /** UC-30: after confirmation the document and its stored file are deleted right away. */
+  /** UC-31: creates the exam (uploading its question file), then adds it to the draft section. */
+  const handleCreateExam = (input: NewExamInput) => {
+    const sectionId = examSectionId
+    if (sectionId === null) return
+    createExam.mutate(
+      { classId: courseId, input },
+      {
+        onSuccess: (exam) => {
+          setSections((current) =>
+            current.map((x) =>
+              x.id === sectionId
+                ? {
+                    ...x,
+                    items: [
+                      ...x.items,
+                      {
+                        id: crypto.randomUUID(),
+                        sectionId,
+                        itemType: 'EXAM',
+                        title: exam.examName,
+                        externalUrl: null,
+                        orderIndex: x.items.length + 1,
+                        documentId: null,
+                        assignmentId: null,
+                        examId: exam.id,
+                        isCompleted: false,
+                      },
+                    ],
+                  }
+                : x,
+            ),
+          )
+          setExamSectionId(null)
+          toast.success('Exam created. Save changes to publish it.')
+        },
+        onError: (error) => toast.error(error.message),
+      },
+    )
+  }
+
+  /** UC-30 / UC-32: after confirmation the document or exam and its stored file are deleted right away. */
   const handleConfirmRemoval = () => {
     if (pendingRemoval === null) return
     const item = pendingRemoval
@@ -197,7 +233,19 @@ const CourseEditorPage = () => {
       setSections((current) => removeItem(current, item.sectionId, item.id))
       setPendingRemoval(null)
       queryClient.invalidateQueries({ queryKey: courseKeys.sections(courseId) })
-      toast.success('Document deleted')
+      toast.success(item.itemType === 'EXAM' ? 'Exam removed' : 'Document deleted')
+    }
+    if (item.itemType === 'EXAM') {
+      // An exam item without an exam id points at nothing on the server.
+      if (item.examId === null) {
+        finish()
+        return
+      }
+      removeExam.mutate(
+        { classId: courseId, examId: item.examId },
+        { onSuccess: finish, onError: (error) => toast.error(error.message) },
+      )
+      return
     }
     // An item without a document was never uploaded, so there is nothing to delete on the server.
     if (item.documentId === null) {
@@ -215,6 +263,7 @@ const CourseEditorPage = () => {
     setDraft(null)
     setPendingRemoval(null)
     setAssignmentSectionId(null)
+    setExamSectionId(null)
     setVideoSectionId(null)
     setNewTitle(null)
   }
@@ -299,10 +348,11 @@ const CourseEditorPage = () => {
                   onTitleChange={(title) => update(sec.id, { title })}
                   onDescriptionChange={(description) => update(sec.id, { description })}
                   onItemsChange={(items) => update(sec.id, { items })}
-                  onAddItem={(type) => addItem(sec, type)}
+
                   onAddDocument={(file) => addDocument(sec.id, file)}
                   onAddVideo={() => setVideoSectionId(sec.id)}
                   onAddAssignment={() => setAssignmentSectionId(sec.id)}
+                  onAddExam={() => setExamSectionId(sec.id)}
                   onRemoveContent={setPendingRemoval}
                   isUploadingDocument={uploadDocument.isPending}
                   onMoveUp={() => setSections((s) => moveItem(s, i, -1))}
@@ -361,9 +411,21 @@ const CourseEditorPage = () => {
         onClose={() => setAssignmentSectionId(null)}
         onSubmit={handleCreateAssignment}
       />
+      {examSectionId !== null && (
+        <CreateExamDialog
+          open
+          isSubmitting={createExam.isPending}
+          onClose={() => setExamSectionId(null)}
+          onSubmit={handleCreateExam}
+        />
+      )}
       <RemoveContentConfirm
         item={pendingRemoval}
-        isRemoving={removeDocument.isPending || removeAssignment.isPending}
+        isRemoving={
+          removeDocument.isPending ||
+          removeAssignment.isPending ||
+          removeExam.isPending
+        }
         onConfirm={handleConfirmRemoval}
         onClose={() => setPendingRemoval(null)}
       />

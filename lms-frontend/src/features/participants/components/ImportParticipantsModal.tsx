@@ -1,11 +1,11 @@
-import { useState, type ChangeEvent } from 'react';
-import { Download } from 'lucide-react';
+import { useState } from 'react';
 import { toast } from 'sonner';
 import { getErrorMessage } from '@core/api/errors';
+import { CsvFilePicker } from '@shared/components/CsvFilePicker';
 import { Modal } from '@shared/components/Modal';
 import { Button } from '@shared/components/ui/button';
 import { cn } from '@shared/utils/cn';
-import { downloadCsv } from '@shared/utils/download';
+import { readCsvFile } from '@shared/utils/csv';
 import { useImportParticipants } from '../hooks/useImportParticipants';
 import type {
   ImportResult,
@@ -18,8 +18,6 @@ import {
   parseParticipantCsv,
 } from '../utils/participant-csv';
 
-/** Larger files are certainly not a roster; reading them would only freeze the page. */
-const MAX_FILE_BYTES = 2 * 1024 * 1024;
 const MAX_LISTED_PROBLEMS = 100;
 
 const ERROR_BOX =
@@ -81,22 +79,16 @@ const ImportBody = ({
   const isChecking = isPending && variables?.dryRun === true;
   const isImporting = isPending && variables?.dryRun === false;
 
-  const handleFile = async (event: ChangeEvent<HTMLInputElement>) => {
-    const input = event.target;
-    const file = input.files?.[0];
+  const handleFile = async (file: File) => {
     setRows(null);
     setPreview(null);
     setError(null);
-    if (!file) return;
-    if (file.size > MAX_FILE_BYTES) {
-      setError('This file is too large. Use a CSV file of at most 2 MB.');
-      input.value = '';
+    const read = await readCsvFile(file);
+    if (read.error !== null) {
+      setError(read.error);
       return;
     }
-
-    const parsed = parseParticipantCsv(await file.text());
-    // Lets the same file be picked again after it has been corrected.
-    input.value = '';
+    const parsed = parseParticipantCsv(read.text);
     if (parsed.error) {
       setError(parsed.error);
       return;
@@ -134,27 +126,14 @@ const ImportBody = ({
         rows). A file exported from this page can be imported again.
       </p>
 
-      <div className="space-y-2">
-        <label htmlFor="import-file" className="block text-xs font-semibold">
-          CSV file
-        </label>
-        <input
-          id="import-file"
-          type="file"
-          accept=".csv,text/csv"
-          onChange={(event) => void handleFile(event)}
-          disabled={isImporting}
-          className="block w-full text-sm file:mr-3 file:cursor-pointer file:rounded-md file:border file:border-input file:bg-background file:px-3 file:py-1.5 file:text-sm file:font-medium hover:file:bg-accent"
-        />
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => downloadCsv(IMPORT_TEMPLATE_CSV, 'participants-template.csv')}
-        >
-          <Download className="h-4 w-4" />
-          Download template
-        </Button>
-      </div>
+      <CsvFilePicker
+        ariaLabel="CSV file"
+        pickLabel="Choose CSV file"
+        templateCsv={IMPORT_TEMPLATE_CSV}
+        templateFileName="participants-template.csv"
+        disabled={isImporting}
+        onPickFile={(file) => void handleFile(file)}
+      />
 
       {isChecking && (
         <p className="m-0 text-sm text-muted-foreground" role="status">
