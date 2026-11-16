@@ -29,7 +29,7 @@ import {
   documentRoute,
   lecturerDocumentRoute,
 } from '@features/documents/routes';
-import { quizRoute } from '@features/quizzes/routes';
+import { practiceRoute, quizRoute } from '@features/quizzes/routes';
 import {
   assignmentDetailRoute,
   studentAssignmentsRoute,
@@ -76,6 +76,7 @@ export const router = createBrowserRouter([
                     detailPages: [
                       documentRoute,
                       quizRoute,
+                      practiceRoute,
                       assignmentDetailRoute,
                       examRoomRoute,
                     ],
