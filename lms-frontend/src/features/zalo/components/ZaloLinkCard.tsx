@@ -1,12 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { Check, Copy, ExternalLink, Loader2 } from 'lucide-react';
+import { ZALO_BOT_LINK, ZALO_BOT_NAME } from '@core/config/env';
 import { Button } from '@shared/components/ui/button';
 import { Card } from '@shared/components/ui/card';
 import { cn } from '@shared/utils/cn';
 import { zaloApi } from '../api/zaloApi';
-
-const BOT_NAME = import.meta.env.VITE_ZALO_BOT_NAME || 'tên bot của bạn';
-const BOT_LINK = import.meta.env.VITE_ZALO_BOT_LINK || '';
 
 const StepNumber = ({ n }: { n: number }) => (
   <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground">
@@ -36,7 +34,8 @@ export default function ZaloLinkCard() {
     }
   };
 
-    useEffect(() => {
+  // Lấy trạng thái ban đầu; setState chỉ gọi trong callback, không gọi đồng bộ trong effect
+  useEffect(() => {
     let active = true;
     zaloApi
       .status()
@@ -127,7 +126,7 @@ export default function ZaloLinkCard() {
               <StepNumber n={2} />
               <div className="space-y-2">
                 <p>
-                  Mở Zalo, tìm bot <b>{BOT_NAME}</b> và gửi đúng mã bên dưới.
+                  Mở Zalo, tìm bot <b>{ZALO_BOT_NAME}</b> và gửi đúng mã bên dưới.
                 </p>
                 {code && (
                   <>
@@ -138,9 +137,9 @@ export default function ZaloLinkCard() {
                         {copied ? 'Đã chép' : 'Sao chép'}
                       </Button>
                     </div>
-                    {BOT_LINK && (
+                    {ZALO_BOT_LINK && (
                       <Button asChild size="sm" variant="outline">
-                        <a href={BOT_LINK} target="_blank" rel="noopener noreferrer">
+                        <a href={ZALO_BOT_LINK} target="_blank" rel="noopener noreferrer">
                           Mở bot trên Zalo <ExternalLink />
                         </a>
                       </Button>
