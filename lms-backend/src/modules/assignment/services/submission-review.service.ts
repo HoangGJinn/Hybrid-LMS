@@ -7,6 +7,7 @@ import { emptyToNull } from '../../../common/utils/string.util.js';
 import { FileFacade } from '../../../shared/file/facades/file.facade.js';
 import { AcademicFacade } from '../../academic/facades/academic.facade.js';
 import { ContentFacade } from '../../content/facades/content.facade.js';
+import { ZaloFacade } from '../../zalo/index.js';
 import type { GradeSubmissionDto } from '../dto/grade-submission.dto.js';
 import type { AssignmentSubmission } from '../entities/assignment-submission.entity.js';
 import type { Assignment } from '../entities/assignment.entity.js';
@@ -50,6 +51,7 @@ export class SubmissionReviewService {
     private readonly academicFacade: AcademicFacade,
     private readonly contentFacade: ContentFacade,
     private readonly fileFacade: FileFacade,
+    private readonly zaloFacade: ZaloFacade,
   ) {}
 
   /** Assignments of every class the student is enrolled in, with the student's own status. */
@@ -148,7 +150,10 @@ export class SubmissionReviewService {
     });
   }
 
-  /** Saves the score and feedback of one submission; grading again simply overwrites the previous grade. */
+  /**
+   * Saves the score and feedback of one submission; grading again simply overwrites the previous grade.
+   * Once saved, the student is told on Zalo (fire and forget: it never delays or fails the grading).
+   */
   async grade(
     classId: string,
     assignmentId: string,
@@ -161,15 +166,22 @@ export class SubmissionReviewService {
     if (!submission || submission.assignmentId !== assignmentId) {
       throw new NotFoundException('Submission not found');
     }
+    const comment = emptyToNull(dto.comment);
     await this.submissionRepository.saveGrade(
       submissionId,
       dto.score,
-      emptyToNull(dto.comment),
+      comment,
       new Date(),
     );
     const graded = await this.submissionRepository.findById(submissionId);
     if (!graded) throw new NotFoundException('Submission not found');
     const [view] = await this.toViews([graded]);
+    void this.notifyGraded(
+      submission.submittedBy,
+      assignmentId,
+      dto.score,
+      comment,
+    );
     return view;
   }
 
@@ -244,6 +256,28 @@ export class SubmissionReviewService {
     );
     if (!isInClass) {
       throw new NotFoundException('Assignment not found');
+    }
+  }
+
+  /** Tells the student on Zalo that the submission was graded. Never throws: a Zalo failure must not undo a grade. */
+  private async notifyGraded(
+    studentId: string,
+    assignmentId: string,
+    score: number,
+    comment: string | null,
+  ): Promise<void> {
+    try {
+      const assignment =
+        await this.assignmentRepository.findById(assignmentId);
+      if (!assignment) return;
+      const lines = [
+        `✅ Bài "${assignment.title}" đã được chấm.`,
+        `Điểm: ${score}`,
+      ];
+      if (comment) lines.push(`Nhận xét: ${comment}`);
+      await this.zaloFacade.notifyUser(studentId, lines.join('\n'));
+    } catch {
+      /* a failed notification is not worth failing the grading */
     }
   }
 

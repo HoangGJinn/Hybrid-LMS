@@ -16,3 +16,8 @@ export const GOOGLE_CLIENT_ID: string =
 export const USE_MOCK: boolean = import.meta.env.PROD
   ? import.meta.env.VITE_USE_MOCK === 'true'
   : import.meta.env.VITE_USE_MOCK !== 'false';
+
+// src/core/config/env.ts  (thêm vào cuối file)
+export const ZALO_BOT_NAME: string =
+  import.meta.env.VITE_ZALO_BOT_NAME || 'BOT HCM-UTE';
+export const ZALO_BOT_LINK: string = import.meta.env.VITE_ZALO_BOT_LINK || '';

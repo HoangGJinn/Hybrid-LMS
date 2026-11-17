@@ -13,6 +13,7 @@ import { DocumentModule } from './modules/document/document.module.js';
 import { ExamModule } from './modules/exam/exam.module.js';
 import { MasteryModule } from './modules/mastery/mastery.module.js';
 import { RoadmapModule } from './modules/roadmap/roadmap.module.js';
+import { ZaloModule } from './modules/zalo/index.js';
 import { FileModule } from './shared/file/file.module.js';
 import { NotificationModule } from './shared/notification/notification.module.js';
 
@@ -43,6 +44,7 @@ import { validate } from './config/env.validation.js';
     ExamModule,
     MasteryModule,
     RoadmapModule,
+    ZaloModule,
     FileModule,
     NotificationModule,
   ],
