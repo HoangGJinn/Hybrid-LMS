@@ -6,7 +6,7 @@ import { StatusBadge } from '@shared/components/ui/badge';
 import { toAsyncState } from '@shared/utils/async-state';
 import { useStudentDashboard } from '../hooks/useStudentDashboard';
 import { useCurrentUser } from '@features/auth';
-import ZaloLinkCard from '@features/zalo/components/ZaloLinkCard';
+import { ZaloLinkCard } from '@features/zalo';
 import { formatDate, formatPercentage } from '@shared/utils/format';
 
 const Stat = ({ label, value }: { label: string; value: string | number }) => (
