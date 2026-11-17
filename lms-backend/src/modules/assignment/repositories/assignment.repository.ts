@@ -5,7 +5,8 @@ import { AssignmentFile } from '../entities/assignment-file.entity.js';
 import { Assignment } from '../entities/assignment.entity.js';
 import { SubmissionType } from '../enums/submission-type.enum.js';
 
-export interface NewAssignment {
+/** The fields of an assignment that a lecturer can edit. */
+export interface AssignmentFields {
   readonly title: string;
   readonly instruction: string;
   readonly openAt: Date;
@@ -13,6 +14,11 @@ export interface NewAssignment {
   readonly submissionType: SubmissionType;
   readonly acceptedExtensions: string[];
   readonly submissionNote: string | null;
+}
+
+export interface NewAssignment extends AssignmentFields {
+  /** The lecturer creating it. */
+  readonly createdBy: string;
 }
 
 /** All TypeORM access for assignments and their attached files. */
@@ -45,7 +51,7 @@ export class AssignmentRepository {
    */
   async update(
     id: string,
-    input: NewAssignment,
+    input: AssignmentFields,
     removedFileIds: string[],
     addedFileIds: string[],
   ): Promise<Assignment | null> {
@@ -75,6 +81,21 @@ export class AssignmentRepository {
   async findByIds(ids: string[]): Promise<Assignment[]> {
     if (ids.length === 0) return [];
     return this.assignmentOrmRepository.find({ where: { id: In(ids) } });
+  }
+
+  /** One page of assignments created before `cutoff`, ordered by id; pass the last id of the previous page as `afterId`. */
+  async findCreatedBefore(
+    cutoff: Date,
+    afterId: string | null,
+    limit: number,
+  ): Promise<Assignment[]> {
+    const query = this.assignmentOrmRepository
+      .createQueryBuilder('assignment')
+      .where('assignment.createdAt < :cutoff', { cutoff })
+      .orderBy('assignment.id', 'ASC')
+      .take(limit);
+    if (afterId !== null) query.andWhere('assignment.id > :afterId', { afterId });
+    return query.getMany();
   }
 
   /** Ids of the files attached to the assignment's brief. */

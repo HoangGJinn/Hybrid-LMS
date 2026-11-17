@@ -5,11 +5,13 @@ import type { NewAssignmentInput } from '../types/assignments.types';
 interface CreateAssignmentInput {
   classId: string;
   input: NewAssignmentInput;
+  /** Section to place the assignment in; the server places it in the same request. */
+  sectionId?: string;
 }
 
-/** UC-33: creates an assignment; the caller places it in a section of the draft. */
+/** UC-33: creates an assignment and, when `sectionId` is given, places it in that section. */
 export const useCreateAssignment = () =>
   useMutation({
-    mutationFn: ({ classId, input }: CreateAssignmentInput) =>
-      assignmentService.create(classId, input),
+    mutationFn: ({ classId, input, sectionId }: CreateAssignmentInput) =>
+      assignmentService.create(classId, input, sectionId),
   });

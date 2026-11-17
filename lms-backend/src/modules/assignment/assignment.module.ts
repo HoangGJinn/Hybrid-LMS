@@ -11,6 +11,7 @@ import { AssignmentSubmission } from './entities/assignment-submission.entity.js
 import { Assignment } from './entities/assignment.entity.js';
 import { AssignmentRepository } from './repositories/assignment.repository.js';
 import { SubmissionRepository } from './repositories/submission.repository.js';
+import { AssignmentCleanupService } from './services/assignment-cleanup.service.js';
 import { AssignmentService } from './services/assignment.service.js';
 import { SubmissionReviewService } from './services/submission-review.service.js';
 import { SubmissionService } from './services/submission.service.js';
@@ -36,6 +37,7 @@ import { ZaloModule } from '../zalo/index.js';
     SubmissionService,
     SubmissionReviewService,
     AssignmentService,
+    AssignmentCleanupService,
   ],
   exports: [],
 })
