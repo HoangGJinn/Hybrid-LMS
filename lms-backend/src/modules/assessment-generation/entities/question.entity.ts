@@ -16,6 +16,7 @@ import { GenerationJob } from './generation-job.entity.js';
 import { QuestionSource } from '../enums/question-source.enum.js';
 import { QuestionDifficulty } from '../enums/question-difficulty.enum.js';
 import { QuestionReviewStatus } from '../enums/question-review-status.enum.js';
+import { QuestionType } from '../enums/question-type.enum.js';
 
 @Entity('questions')
 @Index('uq_questions_subject_content_hash', ['subjectId', 'contentHash'], {
@@ -96,4 +97,7 @@ export class Question {
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   readonly createdAt: Date;
+
+  @Column({ name: 'question_type', type: 'enum', enum: QuestionType, enumName: 'question_type_enum', default: QuestionType.MULTIPLE_CHOICE })
+  questionType: QuestionType;
 }

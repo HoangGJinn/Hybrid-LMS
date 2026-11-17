@@ -1,4 +1,5 @@
 import type { QuestionDifficulty } from '../enums/question-difficulty.enum.js';
+import { QuestionType } from '../enums/question-type.enum.js';
 import type { QuizInstanceStatus } from '../enums/quiz-instance-status.enum.js';
 
 export interface QuizOptionView {
@@ -8,9 +9,11 @@ export interface QuizOptionView {
 
 /** Revealed once a question is answered (or the quiz is submitted). */
 export interface QuizAnswerFeedback {
-  selectedOptionId: string | null; // null: left unanswered
+  selectedOptionId: string | null; // multiple choice; null: left unanswered or fill-blank
+  answerText: string | null; // fill-blank: what the student typed
   isCorrect: boolean;
-  correctOptionId: string;
+  correctOptionId: string | null; // multiple choice only
+  correctAnswers: string[]; // fill-blank: accepted answers (empty for multiple choice)
   explanation: string | null;
 }
 
@@ -18,6 +21,7 @@ export interface QuizQuestionView {
   id: string; // quiz_instance_questions.id: the id to answer with
   orderIndex: number;
   questionText: string;
+  type: QuestionType;
   difficulty: QuestionDifficulty;
   knowledgeComponents: { kcId: string; name: string }[];
   options: QuizOptionView[];
@@ -63,7 +67,7 @@ export interface KcBreakdownView {
 export interface QuizResultView {
   quiz: QuizView;
   kcBreakdown: KcBreakdownView[];
-}
+} 
 
 export interface KcMasteryView {
   kcId: string;

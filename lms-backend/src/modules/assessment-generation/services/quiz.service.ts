@@ -33,6 +33,8 @@ import type {
 } from '../types/quiz-view.type.js';
 import { computeMasteryByKc, type AnswerSample } from '../utils/mastery.js';
 import { shuffled } from '../utils/random.js';
+import { QuestionType } from '../enums/question-type.enum.js';
+import { isAcceptedAnswer } from '../utils/answer-normalizer.js';
 
 const HISTORY_ROWS = 2000;
 const round2 = (n: number): number => Math.round(n * 100) / 100;
@@ -87,9 +89,21 @@ export class QuizService {
     }
 
     const questionIds = picked.map((p) => p.questionId);
+    // const options = await this.options.find({ where: { questionId: In(questionIds) } });
+    // const optionIdsByQuestion = new Map<string, string[]>();
+    // for (const o of options) {
+    //   const list = optionIdsByQuestion.get(o.questionId) ?? [];
+    //   list.push(o.id);
+    //   optionIdsByQuestion.set(o.questionId, list);
+    // }
+    const pickedQuestions = await this.questions.find({ where: { id: In(questionIds) } });
+    const fillBlankIds = new Set(
+      pickedQuestions.filter((q) => q.questionType === QuestionType.FILL_BLANK).map((q) => q.id),
+    );
     const options = await this.options.find({ where: { questionId: In(questionIds) } });
     const optionIdsByQuestion = new Map<string, string[]>();
     for (const o of options) {
+      if (fillBlankIds.has(o.questionId)) continue; // accepted answers are never shown as choices
       const list = optionIdsByQuestion.get(o.questionId) ?? [];
       list.push(o.id);
       optionIdsByQuestion.set(o.questionId, list);
@@ -171,20 +185,75 @@ export class QuizService {
     });
     if (!qq) throw new NotFoundException('Không tìm thấy câu hỏi trong bài quiz.');
 
+  //   const [question, options] = await Promise.all([
+  //     this.questions.findOneByOrFail({ id: qq.questionId }),
+  //     this.options.find({ where: { questionId: qq.questionId } }),
+  //   ]);
+  //   const correct = options.find((o) => o.isCorrect);
+  //   if (!correct) throw new ConflictException('Câu hỏi này chưa có đáp án đúng.');
+
+  //   const existing = await this.answers.findOne({
+  //     where: { quizInstanceQuestionId: qq.id, studentId },
+  //   });
+  //   if (existing) return this.feedback(existing, correct.id, question.explanation);
+
+  //   const selected = options.find((o) => o.id === dto.selectedOptionId);
+  //   if (!selected) throw new BadRequestException('Đáp án không thuộc câu hỏi này.');
+
+  //   const kcLinks = await this.links.find({
+  //     where: { questionId: qq.questionId },
+  //     order: { kcId: 'ASC' },
+  //     take: 1,
+  //   });
+
+  //   const saved = await this.answers.save(
+  //     this.answers.create({
+  //       quizInstanceQuestionId: qq.id,
+  //       studentId,
+  //       questionId: qq.questionId,
+  //       kcId: kcLinks[0]?.kcId ?? null,
+  //       selectedOptionId: selected.id,
+  //       isCorrect: selected.isCorrect,
+  //       timeSpentSeconds: dto.timeSpentSeconds ?? null,
+  //     }),
+  //   );
+  //   return this.feedback(saved, correct.id, question.explanation);
+  // }
+
     const [question, options] = await Promise.all([
       this.questions.findOneByOrFail({ id: qq.questionId }),
       this.options.find({ where: { questionId: qq.questionId } }),
     ]);
-    const correct = options.find((o) => o.isCorrect);
-    if (!correct) throw new ConflictException('Câu hỏi này chưa có đáp án đúng.');
+
+    const correctOptions = options.filter((o) => o.isCorrect);
+    if (correctOptions.length === 0) {
+      throw new ConflictException('Câu hỏi này chưa có đáp án đúng.');
+    }
+    const isFillBlank = question.questionType === QuestionType.FILL_BLANK;
+    const accepted = correctOptions.map((o) => o.optionText);
 
     const existing = await this.answers.findOne({
       where: { quizInstanceQuestionId: qq.id, studentId },
     });
-    if (existing) return this.feedback(existing, correct.id, question.explanation);
+    if (existing) {
+      return this.feedback(existing, isFillBlank, correctOptions, question.explanation);
+    }
 
-    const selected = options.find((o) => o.id === dto.selectedOptionId);
-    if (!selected) throw new BadRequestException('Đáp án không thuộc câu hỏi này.');
+    let selectedOptionId: string | null = null;
+    let answerText: string | null = null;
+    let isCorrect: boolean;
+    if (isFillBlank) {
+      if (dto.answerText === undefined) {
+        throw new BadRequestException('Câu điền từ cần nhập câu trả lời.');
+      }
+      answerText = dto.answerText.normalize('NFC').trim().slice(0, 200);
+      isCorrect = isAcceptedAnswer(answerText, accepted);
+    } else {
+      const selected = options.find((o) => o.id === dto.selectedOptionId);
+      if (!selected) throw new BadRequestException('Đáp án không thuộc câu hỏi này.');
+      selectedOptionId = selected.id;
+      isCorrect = selected.isCorrect;
+    }
 
     const kcLinks = await this.links.find({
       where: { questionId: qq.questionId },
@@ -198,13 +267,15 @@ export class QuizService {
         studentId,
         questionId: qq.questionId,
         kcId: kcLinks[0]?.kcId ?? null,
-        selectedOptionId: selected.id,
-        isCorrect: selected.isCorrect,
+        selectedOptionId,
+        answerText,
+        isCorrect,
         timeSpentSeconds: dto.timeSpentSeconds ?? null,
       }),
     );
-    return this.feedback(saved, correct.id, question.explanation);
+    return this.feedback(saved, isFillBlank, correctOptions, question.explanation);
   }
+
 
   /** Grades the quiz (unanswered questions count as wrong) and returns the result with per-topic progress. */
   async submit(quizId: string, studentId: string): Promise<QuizResultView> {
@@ -338,15 +409,31 @@ export class QuizService {
     }
   }
 
+  // private feedback(
+  //   answer: QuizInstanceAnswer,
+  //   correctOptionId: string,
+  //   explanation: string | null,
+  // ): QuizAnswerFeedback {
+  //   return {
+  //     selectedOptionId: answer.selectedOptionId,
+  //     isCorrect: answer.isCorrect,
+  //     correctOptionId,
+  //     explanation,
+  //   };
+  // }
+
   private feedback(
-    answer: QuizInstanceAnswer,
-    correctOptionId: string,
+    answer: QuizInstanceAnswer | null,
+    isFillBlank: boolean,
+    correctOptions: QuestionOption[],
     explanation: string | null,
   ): QuizAnswerFeedback {
     return {
-      selectedOptionId: answer.selectedOptionId,
-      isCorrect: answer.isCorrect,
-      correctOptionId,
+      selectedOptionId: answer?.selectedOptionId ?? null,
+      answerText: answer?.answerText ?? null,
+      isCorrect: answer?.isCorrect ?? false,
+      correctOptionId: isFillBlank ? null : (correctOptions[0]?.id ?? null),
+      correctAnswers: isFillBlank ? correctOptions.map((o) => o.optionText) : [],
       explanation,
     };
   }
@@ -405,30 +492,25 @@ export class QuizService {
         const ib = order.indexOf(b.id);
         return (ia < 0 ? 999 : ia) - (ib < 0 ? 999 : ib);
       });
-      const correct = own.find((o) => o.isCorrect);
+      const correctOptions = own.filter((o) => o.isCorrect);
+      const isFillBlank = question.questionType === QuestionType.FILL_BLANK;
       const given = answerByQq.get(qq.id);
 
       let answer: QuizAnswerFeedback | null = null;
-      if (correct && given) {
-        answer = this.feedback(given, correct.id, question.explanation);
-      } else if (correct && reveal) {
-        answer = {
-          selectedOptionId: null,
-          isCorrect: false,
-          correctOptionId: correct.id,
-          explanation: question.explanation,
-        };
+      if (correctOptions.length > 0 && (given || reveal)) {
+        answer = this.feedback(given ?? null, isFillBlank, correctOptions, question.explanation);
       }
 
       return {
         id: qq.id,
         orderIndex: qq.orderIndex,
         questionText: question.questionText,
+        type: question.questionType,
         difficulty: question.difficulty,
         knowledgeComponents: links
           .filter((l) => l.questionId === qq.questionId)
           .map((l) => ({ kcId: l.kcId, name: l.knowledgeComponent.name })),
-        options: ordered.map((o) => ({ id: o.id, text: o.optionText })),
+        options: isFillBlank ? [] : ordered.map((o) => ({ id: o.id, text: o.optionText })),
         answer,
       };
     });

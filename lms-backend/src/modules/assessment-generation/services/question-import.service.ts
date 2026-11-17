@@ -31,6 +31,7 @@ import {
 } from '../utils/question-excel-parser.js';
 import { normalizeKey } from '../utils/text-normalize.js';
 import type { ImportBatchView } from '../types/import-batch-view.type.js';
+import { QuestionType } from '../enums/question-type.enum.js';
 
 interface Draft {
   question: Question;
@@ -180,6 +181,7 @@ export class QuestionImportService implements OnApplicationBootstrap {
             source: QuestionSource.LECTURER_UPLOAD,
             importBatchId: batch.id,
             questionText: row.questionText,
+            questionType: row.questionType,
             difficulty: row.difficulty,
             explanation: row.explanation,
             // Questions typed in by the lecturer are trusted, so they skip the review queue.
@@ -226,13 +228,36 @@ export class QuestionImportService implements OnApplicationBootstrap {
         const links: QuestionKnowledgeComponent[] = [];
         saved.forEach((q, i) => {
           const { row, kcIds } = drafts[i];
-          for (const o of row.options) {
+          // for (const o of row.options) {
+          //   options.push(
+          //     manager.create(QuestionOption, {
+          //       questionId: q.id,
+          //       optionLabel: o.label,
+          //       optionText: o.text,
+          //       isCorrect: o.label === row.correctLabel,
+          //       generationMethod: null, // typed by the lecturer, not generated
+          //     }),
+          //   );
+          // }
+          const optionRows =
+            row.questionType === QuestionType.FILL_BLANK
+              ? row.acceptedAnswers.map((text, idx) => ({
+                label: String(idx + 1),
+                text,
+                correct: true,
+              }))
+              : row.options.map((o) => ({
+                label: o.label,
+                text: o.text,
+                correct: o.label === row.correctLabel,
+              }));
+          for (const o of optionRows) {
             options.push(
               manager.create(QuestionOption, {
                 questionId: q.id,
                 optionLabel: o.label,
                 optionText: o.text,
-                isCorrect: o.label === row.correctLabel,
+                isCorrect: o.correct,
                 generationMethod: null, // typed by the lecturer, not generated
               }),
             );

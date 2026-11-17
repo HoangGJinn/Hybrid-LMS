@@ -9,6 +9,8 @@ import {
   Max,
   MaxLength,
   Min,
+  MinLength,
+  ValidateIf,
 } from 'class-validator';
 
 export const QUIZ_SIZES = [5, 10, 15] as const;
@@ -42,8 +44,17 @@ export class SubmitAnswerDto {
   @IsUUID()
   quizInstanceQuestionId: string;
 
+  /** Required for multiple-choice questions. */
+  @ValidateIf((o: SubmitAnswerDto) => o.answerText === undefined)
   @IsUUID()
   selectedOptionId: string;
+
+  /** Required for fill-in-the-blank questions: what the student typed. */
+  @ValidateIf((o: SubmitAnswerDto) => o.selectedOptionId === undefined)
+  @IsString()
+  @MinLength(1)
+  @MaxLength(200)
+  answerText?: string;
 
   @IsOptional()
   @IsInt()

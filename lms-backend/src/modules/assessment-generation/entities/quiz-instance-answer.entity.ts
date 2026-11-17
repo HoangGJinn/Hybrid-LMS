@@ -66,4 +66,7 @@ export class QuizInstanceAnswer {
 
   @CreateDateColumn({ name: 'answered_at', type: 'timestamptz' })
   readonly answeredAt: Date;
+
+  @Column({ name: 'answer_text', type: 'varchar', length: 200, nullable: true })
+  answerText: string | null;
 }

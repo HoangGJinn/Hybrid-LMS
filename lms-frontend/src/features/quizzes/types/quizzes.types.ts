@@ -34,6 +34,7 @@ export type QuizStatus = 'CREATED' | 'IN_PROGRESS' | 'SUBMITTED' | 'EXPIRED';
 export type Difficulty = 'EASY' | 'MEDIUM' | 'HARD';
 export type QuizFocus = 'WEAK' | 'EVEN';
 export type QuizSize = 5 | 10 | 15;
+export type QuestionType = 'MULTIPLE_CHOICE' | 'FILL_BLANK';
 
 export interface QuizOption {
   id: string;
@@ -43,8 +44,10 @@ export interface QuizOption {
 /** Shown once a question is answered, or for every question once the quiz is submitted. */
 export interface QuizAnswerFeedback {
   selectedOptionId: string | null; // null: left unanswered
+  answerText: string | null;
   isCorrect: boolean;
   correctOptionId: string;
+  correctAnswers: string[];
   explanation: string | null;
 }
 
@@ -53,6 +56,7 @@ export interface QuizQuestion {
   orderIndex: number;
   questionText: string;
   difficulty: Difficulty;
+  type: QuestionType;
   knowledgeComponents: { kcId: string; name: string }[];
   options: QuizOption[];
   answer: QuizAnswerFeedback | null;
@@ -122,6 +126,8 @@ export interface CreateQuizInput {
 
 export interface AnswerInput {
   quizInstanceQuestionId: string;
-  selectedOptionId: string;
+  selectedOptionId?: string;
+  answerText?: string;
   timeSpentSeconds?: number;
 }
+

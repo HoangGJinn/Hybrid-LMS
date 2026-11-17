@@ -6,6 +6,7 @@ import { EmptyState } from '@shared/components/EmptyState';
 import { Button } from '@shared/components/ui/button';
 import { toAsyncState } from '@shared/utils/async-state';
 import { cn } from '@shared/utils/cn';
+import { FillBlankInput } from '../components/FillBlankInput';
 import { QuizResultView } from '../components/QuizResultView';
 import { useAnswerQuestion } from '../hooks/useAnswerQuestion';
 import { useQuiz } from '../hooks/useQuiz';
@@ -13,6 +14,23 @@ import { useSubmitQuiz } from '../hooks/useSubmitQuiz';
 import type { Quiz } from '../types/quizzes.types';
 
 const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F'];
+
+/** Shows the "____" of a fill-in-the-blank question as a visible gap. */
+const QuestionText = ({ text }: { text: string }) => (
+  <>
+    {text.split(/(_{3,})/).map((part, i) =>
+      /^_{3,}$/.test(part) ? (
+        <span
+          key={i}
+          aria-label="blank"
+          className="mx-1 inline-block w-20 border-b-2 border-primary align-baseline"
+        />
+      ) : (
+        <span key={i}>{part}</span>
+      ),
+    )}
+  </>
+);
 
 const QuizPage = () => {
   const { courseId = '', quizId = '' } = useParams();
@@ -45,6 +63,7 @@ const QuizRunner = ({ quiz, courseId }: { quiz: Quiz; courseId: string }) => {
   const firstOpen = quiz.questions.findIndex((q) => !q.answer);
   const [current, setCurrent] = useState(firstOpen === -1 ? 0 : firstOpen);
   const [picked, setPicked] = useState<string | null>(null);
+  const [typed, setTyped] = useState('');
   const shownAt = useRef(Date.now());
 
   const total = quiz.questions.length;
@@ -54,21 +73,24 @@ const QuizRunner = ({ quiz, courseId }: { quiz: Quiz; courseId: string }) => {
   }
 
   const answer = question.answer;
+  const isFill = question.type === 'FILL_BLANK';
   const last = current === total - 1;
   const unanswered = total - quiz.answeredCount;
   const selectedId = answer?.selectedOptionId ?? picked;
+  const canCheck = isFill ? typed.trim() !== '' : picked !== null;
 
   const goTo = (index: number) => {
     setCurrent(index);
     setPicked(null);
+    setTyped('');
     shownAt.current = Date.now();
   };
 
   const check = () => {
-    if (!picked || answerQuestion.isPending) return;
+    if (!canCheck || answerQuestion.isPending) return;
     answerQuestion.mutate({
       quizInstanceQuestionId: question.id,
-      selectedOptionId: picked,
+      ...(isFill ? { answerText: typed.trim() } : { selectedOptionId: picked! }),
       timeSpentSeconds: Math.min(
         3600,
         Math.round((Date.now() - shownAt.current) / 1000),
@@ -113,49 +135,65 @@ const QuizRunner = ({ quiz, courseId }: { quiz: Quiz; courseId: string }) => {
               <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium capitalize">
                 {question.difficulty.toLowerCase()}
               </span>
+              {isFill && (
+                <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium">
+                  Fill in the blank
+                </span>
+              )}
             </div>
 
             <h1 id="question" className="m-0 text-xl font-semibold leading-snug">
-              {question.questionText}
+              <QuestionText text={question.questionText} />
             </h1>
 
-            <div role="group" aria-labelledby="question" className="space-y-3">
-              {question.options.map((opt, i) => {
-                const selected = selectedId === opt.id;
-                const correct = !!answer && opt.id === answer.correctOptionId;
-                const wrong = !!answer && selected && !answer.isCorrect;
-                return (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    disabled={!!answer}
-                    aria-pressed={selected}
-                    onClick={() => setPicked(opt.id)}
-                    className={cn(
-                      'flex w-full items-center gap-3 rounded-lg border-2 bg-card p-3 text-left text-base',
-                      !answer && 'cursor-pointer hover:border-primary/50',
-                      selected && !answer && 'border-primary bg-primary/10',
-                      correct && 'border-success bg-success/10',
-                      wrong && 'border-destructive bg-destructive/5',
-                    )}
-                  >
-                    <span
+            {isFill ? (
+              <FillBlankInput
+                key={question.id}
+                value={answer?.answerText ?? typed}
+                onChange={setTyped}
+                onSubmit={check}
+                disabled={!!answer}
+                correct={answer ? answer.isCorrect : null}
+              />
+            ) : (
+              <div role="group" aria-labelledby="question" className="space-y-3">
+                {question.options.map((opt, i) => {
+                  const selected = selectedId === opt.id;
+                  const correct = !!answer && opt.id === answer.correctOptionId;
+                  const wrong = !!answer && selected && !answer.isCorrect;
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      disabled={!!answer}
+                      aria-pressed={selected}
+                      onClick={() => setPicked(opt.id)}
                       className={cn(
-                        'flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-sm font-bold',
-                        selected && !answer && 'bg-primary text-primary-foreground',
-                        correct && 'bg-success text-white',
-                        wrong && 'bg-destructive text-white',
+                        'flex w-full items-center gap-3 rounded-lg border-2 bg-card p-3 text-left text-base',
+                        !answer && 'cursor-pointer hover:border-primary/50',
+                        selected && !answer && 'border-primary bg-primary/10',
+                        correct && 'border-success bg-success/10',
+                        wrong && 'border-destructive bg-destructive/5',
                       )}
                     >
-                      {LETTERS[i] ?? i + 1}
-                    </span>
-                    <span className="flex-1">{opt.text}</span>
-                    {correct && <CheckCircle2 className="h-5 w-5 text-success" />}
-                    {wrong && <XCircle className="h-5 w-5 text-destructive" />}
-                  </button>
-                );
-              })}
-            </div>
+                      <span
+                        className={cn(
+                          'flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-sm font-bold',
+                          selected && !answer && 'bg-primary text-primary-foreground',
+                          correct && 'bg-success text-white',
+                          wrong && 'bg-destructive text-white',
+                        )}
+                      >
+                        {LETTERS[i] ?? i + 1}
+                      </span>
+                      <span className="flex-1">{opt.text}</span>
+                      {correct && <CheckCircle2 className="h-5 w-5 text-success" />}
+                      {wrong && <XCircle className="h-5 w-5 text-destructive" />}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
 
             {answer && (
               <div
@@ -170,6 +208,12 @@ const QuizRunner = ({ quiz, courseId }: { quiz: Quiz; courseId: string }) => {
                 <div className="font-bold">
                   {answer.isCorrect ? 'Correct' : 'Not quite'}
                 </div>
+                {!answer.isCorrect && isFill && answer.correctAnswers.length > 0 && (
+                  <p className="mb-0 mt-1">
+                    Accepted answer{answer.correctAnswers.length > 1 ? 's' : ''}:{' '}
+                    <strong>{answer.correctAnswers.join(' / ')}</strong>
+                  </p>
+                )}
                 {answer.explanation && (
                   <p className="mb-0 mt-1 text-muted-foreground">{answer.explanation}</p>
                 )}
@@ -197,7 +241,7 @@ const QuizRunner = ({ quiz, courseId }: { quiz: Quiz; courseId: string }) => {
                 <span className="text-sm text-destructive">Submission failed. Try again.</span>
               )}
               {!answer ? (
-                <Button disabled={!picked || answerQuestion.isPending} onClick={check}>
+                <Button disabled={!canCheck || answerQuestion.isPending} onClick={check}>
                   {answerQuestion.isPending ? 'Checking…' : 'Check answer'}
                 </Button>
               ) : last ? (

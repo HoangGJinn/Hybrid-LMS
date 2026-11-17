@@ -46,8 +46,18 @@ const ResultBody = ({
   const pct = Math.round(quiz.score ?? 0);
   const duration = formatDuration(quiz.createdAt, quiz.submittedAt);
   const missed = quiz.questions.filter((q) => q.answer?.isCorrect !== true);
-  const optionText = (q: (typeof quiz.questions)[number], id: string | null) =>
-    q.options.find((o) => o.id === id)?.text ?? 'No answer';
+  // const optionText = (q: (typeof quiz.questions)[number], id: string | null) =>
+  //   q.options.find((o) => o.id === id)?.text ?? 'No answer';
+
+  const yourAnswer = (q: (typeof quiz.questions)[number]): string =>
+    q.type === 'FILL_BLANK'
+      ? q.answer?.answerText || 'No answer'
+      : (q.options.find((o) => o.id === q.answer?.selectedOptionId)?.text ?? 'No answer');
+
+  const correctAnswer = (q: (typeof quiz.questions)[number]): string =>
+    q.type === 'FILL_BLANK'
+      ? (q.answer?.correctAnswers.join(' / ') ?? '')
+      : (q.options.find((o) => o.id === q.answer?.correctOptionId)?.text ?? '');
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -137,11 +147,10 @@ const ResultBody = ({
                 <div className="space-y-2 px-4 pb-4 pl-14 text-sm">
                   <div>
                     <span className="font-semibold text-destructive">Your answer: </span>
-                    {optionText(q, q.answer?.selectedOptionId ?? null)}
-                  </div>
+                    {yourAnswer(q)}                  </div>
                   <div>
                     <span className="font-semibold text-success">Correct answer: </span>
-                    {optionText(q, q.answer?.correctOptionId ?? null)}
+                    {correctAnswer(q)}
                   </div>
                   {q.answer?.explanation && (
                     <p className="m-0 text-muted-foreground">{q.answer.explanation}</p>
