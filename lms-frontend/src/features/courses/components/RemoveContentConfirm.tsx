@@ -18,27 +18,28 @@ interface RemoveCopy {
 
 const COPY: Partial<Record<ItemType, RemoveCopy>> = {
   ASSIGNMENT: {
-    title: 'Remove assignment?',
+    title: 'Delete assignment?',
     consequence:
-      'will be removed from this section. If students have already submitted, their work is kept; otherwise the assignment and its files are deleted from storage.',
-    action: 'Remove assignment',
+      'will be deleted from this course and disappear for students. An assignment that students have already submitted to cannot be deleted; hide it instead.',
+    action: 'Delete assignment',
   },
   EXAM: {
-    title: 'Remove exam?',
+    title: 'Delete exam?',
     consequence:
-      'will be removed from this section, so students no longer see it. If students have already started it, their work is kept; otherwise the exam and its question file are deleted from storage.',
-    action: 'Remove exam',
+      'will be deleted from this section, so students no longer see it. If you only want to pause it, hide it instead.',
+    action: 'Delete exam',
   },
 };
 
 const DOCUMENT_COPY: RemoveCopy = {
   title: 'Delete document?',
   consequence:
-    'will be removed from this section and its file will be permanently deleted from storage. This cannot be undone.',
+    'will be deleted from this section and disappear for students. If you only want to pause it, hide it instead.',
   action: 'Delete document',
 };
 
-/** UC-30 / UC-32 / UC-34 confirmation shown before a document, an exam or an assignment is removed. */
+
+/** UC-30 / UC-32 / UC-34 confirmation shown before a document, an exam or an assignment is deleted. */
 export const RemoveContentConfirm = ({
   item,
   isRemoving,
@@ -63,7 +64,7 @@ export const RemoveContentConfirm = ({
               disabled={isRemoving}
               onClick={onConfirm}
             >
-              {isRemoving ? 'Removing…' : copy.action}
+              {isRemoving ? 'Deleting…' : copy.action}
             </Button>
           </div>
         </div>

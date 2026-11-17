@@ -4,6 +4,7 @@ import { In, Repository } from 'typeorm'
 import { ExamSchedule } from '../../exam/entities/exam-schedule.entity.js'
 import { SectionItem } from '../entities/section-item.entity.js'
 import { ItemType } from '../enums/item-type.enum.js'
+import { restrictToLiveItems, type ItemScope } from './item-filters.js'
 
 /** One exam shown by one class. */
 export interface ClassExamLink {
@@ -22,20 +23,49 @@ export class ExamItemRepository {
   ) { }
 
   /** Tells whether a section of the class shows the exam. */
-  async existsInClass(classId: string, examId: string): Promise<boolean> {
-    return this.itemOrmRepository
+  // async existsInClass(classId: string, examId: string): Promise<boolean> {
+  //   return this.itemOrmRepository
+  //     .createQueryBuilder('item')
+  //     .innerJoin('item.section', 'section')
+  //     .where('section.classId = :classId', { classId })
+  //     .andWhere('item.itemType = :itemType', { itemType: ItemType.EXAM })
+  //     .andWhere('item.examId = :examId', { examId })
+  //     .getExists()
+  // }
+  async existsInClass(
+    classId: string,
+    examId: string,
+    scope: ItemScope = {},
+  ): Promise<boolean> {
+    const query = this.itemOrmRepository
       .createQueryBuilder('item')
       .innerJoin('item.section', 'section')
       .where('section.classId = :classId', { classId })
       .andWhere('item.itemType = :itemType', { itemType: ItemType.EXAM })
       .andWhere('item.examId = :examId', { examId })
-      .getExists()
+    return restrictToLiveItems(query, scope).getExists()
   }
 
   /** Every (exam, class) pair shown by the given classes, each pair once. */
-  async findByClasses(classIds: string[]): Promise<ClassExamLink[]> {
+  // async findByClasses(classIds: string[]): Promise<ClassExamLink[]> {
+  //   if (classIds.length === 0) return []
+  //   return this.itemOrmRepository
+  //     .createQueryBuilder('item')
+  //     .innerJoin('item.section', 'section')
+  //     .select('item.examId', 'examId')
+  //     .addSelect('section.classId', 'classId')
+  //     .where('section.classId IN (:...classIds)', { classIds })
+  //     .andWhere('item.itemType = :itemType', { itemType: ItemType.EXAM })
+  //     .andWhere('item.examId IS NOT NULL')
+  //     .distinct(true)
+  //     .getRawMany<ClassExamLink>()
+  // }
+  async findByClasses(
+    classIds: string[],
+    scope: ItemScope = {},
+  ): Promise<ClassExamLink[]> {
     if (classIds.length === 0) return []
-    return this.itemOrmRepository
+    const query = this.itemOrmRepository
       .createQueryBuilder('item')
       .innerJoin('item.section', 'section')
       .select('item.examId', 'examId')
@@ -44,16 +74,40 @@ export class ExamItemRepository {
       .andWhere('item.itemType = :itemType', { itemType: ItemType.EXAM })
       .andWhere('item.examId IS NOT NULL')
       .distinct(true)
-      .getRawMany<ClassExamLink>()
+    return restrictToLiveItems(query, scope).getRawMany<ClassExamLink>()
   }
 
   /** Removes the class's section items that show the exam and returns how many were removed. */
-  async deleteItemsByExam(classId: string, examId: string): Promise<number> {
+  // async deleteItemsByExam(classId: string, examId: string): Promise<number> {
+  //   const result = await this.itemOrmRepository
+  //     .createQueryBuilder()
+  //     .delete()
+  //     .from(SectionItem)
+  //     .where('exam_id = :examId', { examId })
+  //     .andWhere(
+  //       'section_id IN (SELECT id FROM sections WHERE class_id = :classId)',
+  //       { classId },
+  //     )
+  //     .execute()
+  //   return result.affected ?? 0
+  // }
+
+
+  /**
+   * Soft-deletes the class's section items that show the exam and returns how many were deleted.
+   * The exam and its question file stay (see isExamReferenced) until a clean-up job removes them.
+   */
+  async deleteItemsByExam(
+    classId: string,
+    examId: string,
+    deletedBy: string | null = null,
+  ): Promise<number> {
     const result = await this.itemOrmRepository
       .createQueryBuilder()
-      .delete()
-      .from(SectionItem)
+      .update(SectionItem)
+      .set({ deletedAt: () => 'NOW()', deletedBy })
       .where('exam_id = :examId', { examId })
+      .andWhere('deleted_at IS NULL')
       .andWhere(
         'section_id IN (SELECT id FROM sections WHERE class_id = :classId)',
         { classId },

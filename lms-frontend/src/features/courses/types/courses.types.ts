@@ -77,3 +77,14 @@ export interface PaginatedCourses {
   limit: number;
   totalPages: number;
 }
+
+export interface SectionItem {
+  // ...giữ nguyên các field cũ
+  /** `false` = ẩn với sinh viên. `undefined` coi như hiện. */
+  isVisible?: boolean;
+}
+
+export interface Section {
+  // ...giữ nguyên các field cũ
+  isVisible?: boolean;
+}

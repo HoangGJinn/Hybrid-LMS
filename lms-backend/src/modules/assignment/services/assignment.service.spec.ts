@@ -1,4 +1,9 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Role } from '../../../common/enums/role.enum.js';
 import type { AuthenticatedUser } from '../../../common/types/authenticated-user.type.js';
@@ -17,6 +22,7 @@ type Mock = ReturnType<typeof vi.fn>;
 
 const CLASS_ID = 'class-1';
 const ASSIGNMENT_ID = 'assign-1';
+const SECTION_ID = 'sec-1';
 
 const lecturer = {
   id: 'lec-1',
@@ -43,11 +49,23 @@ const buildAssignment = (overrides: Partial<Assignment> = {}): Assignment =>
 
 describe('AssignmentService', () => {
   let service: AssignmentService;
-  let assignmentRepo: Record<keyof AssignmentRepository, Mock>;
-  let submissionService: Record<keyof SubmissionService, Mock>;
+  let assignmentRepo: {
+    create: Mock;
+    update: Mock;
+    findById: Mock;
+    findByIds: Mock;
+    findFileIds: Mock;
+    deleteById: Mock;
+  };
+  let submissionService: {
+    submit: Mock;
+    findViewByStudent: Mock;
+    count: Mock;
+  };
   let academicFacade: { assertCanManageClass: Mock; assertCanViewClass: Mock };
   let contentFacade: {
     isAssignmentInClass: Mock;
+    addAssignmentToSection: Mock;
     removeAssignmentFromClass: Mock;
     isAssignmentReferenced: Mock;
   };
@@ -77,6 +95,7 @@ describe('AssignmentService', () => {
     };
     contentFacade = {
       isAssignmentInClass: vi.fn().mockResolvedValue(true),
+      addAssignmentToSection: vi.fn().mockResolvedValue(true),
       removeAssignmentFromClass: vi.fn().mockResolvedValue(1),
       isAssignmentReferenced: vi.fn().mockResolvedValue(false),
     };
@@ -96,6 +115,17 @@ describe('AssignmentService', () => {
   });
 
   describe('create', () => {
+    const createDto = {
+      title: 'Lab 1',
+      instruction: 'Do the lab',
+      openAt: '2026-11-01T08:00:00Z',
+      endAt: '2099-11-10T08:00:00Z',
+      submissionType: SubmissionType.FILE,
+      acceptedExtensions: ['pdf', 'zip'],
+      submissionNote: 'Upload zip',
+      fileIds: ['f-1'],
+    };
+
     it('creates a FILE assignment with extensions and builds view for lecturer', async () => {
       const entity = buildAssignment();
       assignmentRepo.create.mockResolvedValue(entity);
@@ -107,16 +137,7 @@ describe('AssignmentService', () => {
 
       const view = await service.create(
         CLASS_ID,
-        {
-          title: 'Lab 1',
-          instruction: 'Do the lab',
-          openAt: '2026-11-01T08:00:00Z',
-          endAt: '2099-11-10T08:00:00Z',
-          submissionType: SubmissionType.FILE,
-          acceptedExtensions: ['pdf', 'zip'],
-          submissionNote: '  Upload zip  ',
-          fileIds: ['f-1'],
-        },
+        { ...createDto, submissionNote: '  Upload zip  ' },
         lecturer,
       );
 
@@ -132,6 +153,7 @@ describe('AssignmentService', () => {
         expect.objectContaining({
           acceptedExtensions: ['pdf', 'zip'],
           submissionNote: 'Upload zip',
+          createdBy: lecturer.id,
         }),
         ['f-1'],
       );
@@ -188,6 +210,66 @@ describe('AssignmentService', () => {
           lecturer,
         ),
       ).rejects.toThrow(BadRequestException);
+      expect(assignmentRepo.create).not.toHaveBeenCalled();
+    });
+
+    it('propagates ForbiddenException when the user cannot manage the class', async () => {
+      academicFacade.assertCanManageClass.mockRejectedValue(new ForbiddenException());
+
+      await expect(service.create(CLASS_ID, createDto, student)).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
+      expect(assignmentRepo.create).not.toHaveBeenCalled();
+    });
+
+    describe('with a section', () => {
+      const dtoWithSection = { ...createDto, sectionId: SECTION_ID };
+
+      it('does not place the assignment when no section is given', async () => {
+        assignmentRepo.create.mockResolvedValue(buildAssignment());
+
+        await service.create(CLASS_ID, createDto, lecturer);
+
+        expect(contentFacade.addAssignmentToSection).not.toHaveBeenCalled();
+      });
+
+      it('places the new assignment at the end of the section', async () => {
+        assignmentRepo.create.mockResolvedValue(buildAssignment());
+
+        await service.create(CLASS_ID, dtoWithSection, lecturer);
+
+        expect(contentFacade.addAssignmentToSection).toHaveBeenCalledWith(
+          CLASS_ID,
+          SECTION_ID,
+          ASSIGNMENT_ID,
+          'Lab 1',
+        );
+        expect(assignmentRepo.deleteById).not.toHaveBeenCalled();
+        expect(fileFacade.deleteFiles).not.toHaveBeenCalled();
+      });
+
+      it('discards the assignment and its files when the section is not of the class', async () => {
+        assignmentRepo.create.mockResolvedValue(buildAssignment());
+        contentFacade.addAssignmentToSection.mockResolvedValue(false);
+
+        await expect(
+          service.create(CLASS_ID, dtoWithSection, lecturer),
+        ).rejects.toThrow(NotFoundException);
+
+        expect(assignmentRepo.deleteById).toHaveBeenCalledWith(ASSIGNMENT_ID);
+        expect(fileFacade.deleteFiles).toHaveBeenCalledWith(['f-1']);
+      });
+
+      it('discards the assignment and rethrows when placing fails unexpectedly', async () => {
+        const error = new Error('db down');
+        assignmentRepo.create.mockResolvedValue(buildAssignment());
+        contentFacade.addAssignmentToSection.mockRejectedValue(error);
+
+        await expect(service.create(CLASS_ID, dtoWithSection, lecturer)).rejects.toBe(error);
+
+        expect(assignmentRepo.deleteById).toHaveBeenCalledWith(ASSIGNMENT_ID);
+        expect(fileFacade.deleteFiles).toHaveBeenCalledWith(['f-1']);
+      });
     });
   });
 
@@ -281,6 +363,7 @@ describe('AssignmentService', () => {
       await expect(
         service.update(CLASS_ID, ASSIGNMENT_ID, baseDto, lecturer),
       ).rejects.toThrow(NotFoundException);
+      expect(fileFacade.deleteFiles).not.toHaveBeenCalled();
     });
 
     it('updates assignment and deletes unkept files after unlinking', async () => {
@@ -359,52 +442,108 @@ describe('AssignmentService', () => {
       expect(view.submissionCount).toBe(0);
     });
 
+    it('hides hidden assignments from students only', async () => {
+      assignmentRepo.findById.mockResolvedValue(buildAssignment());
+
+      await service.findOne(CLASS_ID, ASSIGNMENT_ID, student);
+      expect(contentFacade.isAssignmentInClass).toHaveBeenLastCalledWith(
+        CLASS_ID,
+        ASSIGNMENT_ID,
+        { visibleOnly: true },
+      );
+
+      await service.findOne(CLASS_ID, ASSIGNMENT_ID, lecturer);
+      expect(contentFacade.isAssignmentInClass).toHaveBeenLastCalledWith(
+        CLASS_ID,
+        ASSIGNMENT_ID,
+        { visibleOnly: false },
+      );
+    });
+
+    it('counts submissions for a lecturer instead of loading one submission', async () => {
+      assignmentRepo.findById.mockResolvedValue(buildAssignment());
+      submissionService.count.mockResolvedValue(5);
+
+      const view = await service.findOne(CLASS_ID, ASSIGNMENT_ID, lecturer);
+
+      expect(view.submissionCount).toBe(5);
+      expect(submissionService.findViewByStudent).not.toHaveBeenCalled();
+    });
+
     it('throws NotFoundException when assignment does not belong to class', async () => {
       contentFacade.isAssignmentInClass.mockResolvedValue(false);
       await expect(
         service.findOne(CLASS_ID, ASSIGNMENT_ID, student),
       ).rejects.toThrow(NotFoundException);
     });
+
+    it('throws NotFoundException when the assignment row is missing', async () => {
+      assignmentRepo.findById.mockResolvedValue(null);
+
+      await expect(
+        service.findOne(CLASS_ID, ASSIGNMENT_ID, student),
+      ).rejects.toThrow(NotFoundException);
+    });
   });
 
-  describe('remove', () => {
-    it('throws NotFoundException when assignment does not exist or is not in class', async () => {
-      assignmentRepo.findById.mockResolvedValue(null);
+  describe('remove (soft delete)', () => {
+    it('soft-deletes the assignment from the class, recording who asked', async () => {
       await expect(
         service.remove(CLASS_ID, ASSIGNMENT_ID, lecturer),
-      ).rejects.toThrow(NotFoundException);
+      ).resolves.toBeUndefined();
 
-      assignmentRepo.findById.mockResolvedValue(buildAssignment());
-      contentFacade.removeAssignmentFromClass.mockResolvedValue(0);
-      contentFacade.isAssignmentReferenced.mockResolvedValue(true);
-      await expect(
-        service.remove(CLASS_ID, ASSIGNMENT_ID, lecturer),
-      ).rejects.toThrow(NotFoundException);
+      expect(academicFacade.assertCanManageClass).toHaveBeenCalledWith(
+        CLASS_ID,
+        lecturer,
+      );
+      expect(contentFacade.isAssignmentInClass).toHaveBeenCalledWith(
+        CLASS_ID,
+        ASSIGNMENT_ID,
+      );
+      expect(submissionService.count).toHaveBeenCalledWith(ASSIGNMENT_ID);
+      expect(contentFacade.removeAssignmentFromClass).toHaveBeenCalledWith(
+        CLASS_ID,
+        ASSIGNMENT_ID,
+        lecturer.id,
+      );
     });
 
-    it('keeps assignment and files if still referenced elsewhere or has submissions', async () => {
-      assignmentRepo.findById.mockResolvedValue(buildAssignment());
-      contentFacade.removeAssignmentFromClass.mockResolvedValue(1);
-      contentFacade.isAssignmentReferenced.mockResolvedValue(true);
-
+    it('keeps the assignment row and its files for the clean-up job', async () => {
       await service.remove(CLASS_ID, ASSIGNMENT_ID, lecturer);
-      expect(assignmentRepo.deleteById).not.toHaveBeenCalled();
 
-      contentFacade.isAssignmentReferenced.mockResolvedValue(false);
+      expect(assignmentRepo.deleteById).not.toHaveBeenCalled();
+      expect(fileFacade.deleteFiles).not.toHaveBeenCalled();
+    });
+
+    it('throws NotFoundException when the assignment is not in the class', async () => {
+      contentFacade.isAssignmentInClass.mockResolvedValue(false);
+
+      await expect(
+        service.remove(CLASS_ID, ASSIGNMENT_ID, lecturer),
+      ).rejects.toThrow(NotFoundException);
+      expect(submissionService.count).not.toHaveBeenCalled();
+      expect(contentFacade.removeAssignmentFromClass).not.toHaveBeenCalled();
+    });
+
+    it('throws ConflictException when students have already submitted', async () => {
       submissionService.count.mockResolvedValue(1);
-      await service.remove(CLASS_ID, ASSIGNMENT_ID, lecturer);
-      expect(assignmentRepo.deleteById).not.toHaveBeenCalled();
+
+      await expect(
+        service.remove(CLASS_ID, ASSIGNMENT_ID, lecturer),
+      ).rejects.toThrow(ConflictException);
+      expect(contentFacade.removeAssignmentFromClass).not.toHaveBeenCalled();
     });
 
-    it('deletes assignment and attached files when unreferenced and empty of submissions', async () => {
-      assignmentRepo.findById.mockResolvedValue(buildAssignment());
-      assignmentRepo.findFileIds.mockResolvedValue(['f-1', 'f-2']);
+    it('propagates ForbiddenException when the user cannot manage the class', async () => {
+      academicFacade.assertCanManageClass.mockRejectedValue(
+        new ForbiddenException(),
+      );
 
-      await service.remove(CLASS_ID, ASSIGNMENT_ID, lecturer);
-
-      expect(assignmentRepo.deleteById).toHaveBeenCalledWith(ASSIGNMENT_ID);
-      expect(fileFacade.deleteFiles).toHaveBeenCalledWith(['f-1', 'f-2']);
+      await expect(
+        service.remove(CLASS_ID, ASSIGNMENT_ID, student),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(contentFacade.isAssignmentInClass).not.toHaveBeenCalled();
+      expect(contentFacade.removeAssignmentFromClass).not.toHaveBeenCalled();
     });
   });
 });
-

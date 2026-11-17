@@ -4,6 +4,7 @@ import { In, Repository } from 'typeorm';
 import { ItemCompletion } from '../entities/item-completion.entity.js';
 import { SectionItem } from '../entities/section-item.entity.js';
 import { ItemType } from '../enums/item-type.enum.js';
+import { restrictToLiveItems, type ItemScope } from './item-filters.js';
 
 /** TypeORM access for the DOCUMENT items of a class and the students' completion of them. */
 @Injectable()
@@ -16,8 +17,24 @@ export class DocumentItemRepository {
   ) {}
 
   /** Lists the distinct document ids of a class in display order (section order, then item order). */
-  async findDocumentIdsByClassId(classId: string): Promise<string[]> {
-    const rows = await this.itemOrmRepository
+  // async findDocumentIdsByClassId(classId: string): Promise<string[]> {
+  //   const rows = await this.itemOrmRepository
+  //     .createQueryBuilder('item')
+  //     .innerJoin('item.section', 'section')
+  //     .select('item.documentId', 'documentId')
+  //     .where('section.classId = :classId', { classId })
+  //     .andWhere('item.itemType = :itemType', { itemType: ItemType.DOCUMENT })
+  //     .andWhere('item.documentId IS NOT NULL')
+  //     .orderBy('section.orderIndex', 'ASC')
+  //     .addOrderBy('item.orderIndex', 'ASC')
+  //     .getRawMany<{ documentId: string }>();
+  //   return [...new Set(rows.map((row) => row.documentId))];
+  // }
+  async findDocumentIdsByClassId(
+    classId: string,
+    scope: ItemScope = {},
+  ): Promise<string[]> {
+    const query = this.itemOrmRepository
       .createQueryBuilder('item')
       .innerJoin('item.section', 'section')
       .select('item.documentId', 'documentId')
@@ -25,8 +42,10 @@ export class DocumentItemRepository {
       .andWhere('item.itemType = :itemType', { itemType: ItemType.DOCUMENT })
       .andWhere('item.documentId IS NOT NULL')
       .orderBy('section.orderIndex', 'ASC')
-      .addOrderBy('item.orderIndex', 'ASC')
-      .getRawMany<{ documentId: string }>();
+      .addOrderBy('item.orderIndex', 'ASC');
+    const rows = await restrictToLiveItems(query, scope).getRawMany<{
+      documentId: string;
+    }>();
     return [...new Set(rows.map((row) => row.documentId))];
   }
 
@@ -34,15 +53,16 @@ export class DocumentItemRepository {
   async findItemIdsByDocument(
     classId: string,
     documentId: string,
+    scope: ItemScope = {},
   ): Promise<string[]> {
-    const rows = await this.itemOrmRepository
+    const query = this.itemOrmRepository
       .createQueryBuilder('item')
       .innerJoin('item.section', 'section')
       .select('item.id', 'id')
       .where('section.classId = :classId', { classId })
       .andWhere('item.itemType = :itemType', { itemType: ItemType.DOCUMENT })
-      .andWhere('item.documentId = :documentId', { documentId })
-      .getRawMany<{ id: string }>();
+      .andWhere('item.documentId = :documentId', { documentId });
+    const rows = await restrictToLiveItems(query, scope).getRawMany<{ id: string }>();
     return rows.map((row) => row.id);
   }
 
@@ -83,13 +103,36 @@ export class DocumentItemRepository {
     await this.completionOrmRepository.insert(rows);
   }
 
-    /** Removes the class's section items that show the document and returns how many were removed. */
-  async deleteItemsByDocument(classId: string, documentId: string): Promise<number> {
+  /** Removes the class's section items that show the document and returns how many were removed. */
+  // async deleteItemsByDocument(classId: string, documentId: string): Promise<number> {
+  //   const result = await this.itemOrmRepository
+  //     .createQueryBuilder()
+  //     .delete()
+  //     .from(SectionItem)
+  //     .where('document_id = :documentId', { documentId })
+  //     .andWhere(
+  //       'section_id IN (SELECT id FROM sections WHERE class_id = :classId)',
+  //       { classId },
+  //     )
+  //     .execute();
+  //   return result.affected ?? 0;
+  // }
+
+    /**
+   * Soft-deletes the class's section items that show the document and returns how many were deleted.
+   * The document and its file stay (see isDocumentReferenced) until the clean-up job removes them.
+   */
+  async deleteItemsByDocument(
+    classId: string,
+    documentId: string,
+    deletedBy: string | null = null,
+  ): Promise<number> {
     const result = await this.itemOrmRepository
       .createQueryBuilder()
-      .delete()
-      .from(SectionItem)
+      .update(SectionItem)
+      .set({ deletedAt: () => 'NOW()', deletedBy })
       .where('document_id = :documentId', { documentId })
+      .andWhere('deleted_at IS NULL')
       .andWhere(
         'section_id IN (SELECT id FROM sections WHERE class_id = :classId)',
         { classId },

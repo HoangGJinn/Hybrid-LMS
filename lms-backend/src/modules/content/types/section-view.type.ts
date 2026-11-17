@@ -9,22 +9,31 @@ export class SectionView {
   readonly title: string
   readonly description: string | null
   readonly orderIndex: number
+  readonly isVisible: boolean
   readonly items: readonly SectionItemView[]
 
-  private constructor(entity: Section, items: readonly SectionItem[]) {
+  private constructor(
+    entity: Section,
+    items: readonly SectionItem[],
+    completedIds: ReadonlySet<string>,
+  ) {
     this.id = entity.id
     this.classId = entity.classId
     this.title = entity.title
     this.description = entity.description
     this.orderIndex = entity.orderIndex
-    this.items = items.map((item) => SectionItemView.fromEntity(item))
+    this.isVisible = entity.isVisible
+    this.items = items.map((item) =>
+      SectionItemView.fromEntity(item, completedIds.has(item.id)),
+    )
   }
 
   /** Maps an entity (and its items, if any) to its view. */
   static fromEntity(
     entity: Section,
     items: readonly SectionItem[] = [],
+    completedIds: ReadonlySet<string> = new Set(),
   ): SectionView {
-    return new SectionView(entity, items)
+    return new SectionView(entity, items, completedIds)
   }
 }

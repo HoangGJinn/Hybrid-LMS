@@ -65,4 +65,12 @@ export class CreateAssignmentDto {
   @ArrayUnique()
   @IsUUID('all', { each: true })
   readonly fileIds: string[];
+
+  /**
+   * Section of the class to place the assignment in. Given, creating and placing happen together:
+   * if the placing fails the new assignment is discarded, so nothing is left behind. Ignored when editing.
+   */
+  @IsOptional()
+  @IsUUID()
+  readonly sectionId?: string;
 }

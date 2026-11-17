@@ -1,5 +1,5 @@
 import { USE_MOCK } from '@core/config/env';
-import { mockAssignments, mockSubmissions, delay } from '@core/mocks';
+import { mockAssignments, mockSections, mockSubmissions, delay } from '@core/mocks';
 import { apiClient } from '@core/api/client';
 import { del, get, post, put } from '@core/api/http';
 import { uploadFileToS3 } from '@core/api/s3-upload';
@@ -78,9 +78,50 @@ export const assignmentService = {
     return delay(assignment ? toMockDetail(assignment) : undefined);
   },
   /** UC-33: uploads the attachments to S3, then creates the assignment. */
+  // create: async (
+  //   classId: string,
+  //   input: NewAssignmentInput,
+  // ): Promise<AssignmentDetail> => {
+  //   if (USE_MOCK) {
+  //     const assignment: Assignment = {
+  //       id: crypto.randomUUID(),
+  //       classId,
+  //       title: input.title,
+  //       instruction: input.instruction,
+  //       openAt: input.openAt,
+  //       endAt: input.endAt,
+  //       status: 'OPEN',
+  //       submissionType: input.submissionType,
+  //       acceptedExtensions: input.acceptedExtensions,
+  //       submissionNote: input.submissionNote || null,
+  //     };
+  //     mockAssignments.push(assignment);
+  //     return delay(toMockDetail(assignment));
+  //   }
+  //   const fileIds = await Promise.all(
+  //     input.files.map((file) =>
+  //       uploadFileToS3(file, {
+  //         purpose: 'ASSIGNMENT',
+  //         contentType: resolveContentType(file),
+  //       }),
+  //     ),
+  //   );
+  //   return post(`/api/classes/${classId}/assignments`, {
+  //     title: input.title,
+  //     instruction: input.instruction,
+  //     openAt: input.openAt,
+  //     endAt: input.endAt,
+  //     submissionType: input.submissionType,
+  //     acceptedExtensions: input.acceptedExtensions,
+  //     submissionNote: input.submissionNote,
+  //     fileIds,
+  //   });
+  // },
+    /** UC-33: uploads the attachments to S3, then creates the assignment (and places it in `sectionId` in the same request). */
   create: async (
     classId: string,
     input: NewAssignmentInput,
+    sectionId?: string,
   ): Promise<AssignmentDetail> => {
     if (USE_MOCK) {
       const assignment: Assignment = {
@@ -96,6 +137,22 @@ export const assignmentService = {
         submissionNote: input.submissionNote || null,
       };
       mockAssignments.push(assignment);
+      const section = mockSections.find((s) => s.id === sectionId);
+      if (section) {
+        section.items.push({
+          id: crypto.randomUUID(),
+          sectionId: section.id,
+          itemType: 'ASSIGNMENT',
+          title: assignment.title,
+          externalUrl: null,
+          orderIndex: section.items.length + 1,
+          documentId: null,
+          assignmentId: assignment.id,
+          examId: null,
+          isCompleted: false,
+          isVisible: true,
+        });
+      }
       return delay(toMockDetail(assignment));
     }
     const fileIds = await Promise.all(
@@ -115,8 +172,10 @@ export const assignmentService = {
       acceptedExtensions: input.acceptedExtensions,
       submissionNote: input.submissionNote,
       fileIds,
+      ...(sectionId ? { sectionId } : {}),
     });
   },
+
   /** Lecturer: edits an assignment; uploads the new attachments to S3, then replaces the assignment's data. */
   update: async (
     classId: string,

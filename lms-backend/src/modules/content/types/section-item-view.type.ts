@@ -12,10 +12,11 @@ export class SectionItemView {
   readonly documentId: string | null
   readonly assignmentId: string | null
   readonly examId: string | null
-  /** Completion is a per-student concept, so the lecturer view is always false. */
-  readonly isCompleted = false
+  readonly isVisible: boolean
+  /** Per-student: true when the signed-in student has completed the item. Always false for lecturers and admins. */
+  readonly isCompleted: boolean
 
-  private constructor(entity: SectionItem) {
+  private constructor(entity: SectionItem, isCompleted: boolean) {
     this.id = entity.id
     this.sectionId = entity.sectionId
     this.itemType = entity.itemType
@@ -25,10 +26,12 @@ export class SectionItemView {
     this.documentId = entity.documentId
     this.assignmentId = entity.assignmentId
     this.examId = entity.examId
+    this.isVisible = entity.isVisible
+    this.isCompleted = isCompleted
   }
 
   /** Maps an entity to its view without leaking the entity itself. */
-  static fromEntity(entity: SectionItem): SectionItemView {
-    return new SectionItemView(entity)
+  static fromEntity(entity: SectionItem, isCompleted = false): SectionItemView {
+    return new SectionItemView(entity, isCompleted)
   }
 }

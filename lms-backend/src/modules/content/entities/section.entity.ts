@@ -27,4 +27,7 @@ export class Section {
 
   @Column({ name: 'order_index', type: 'int' })
   orderIndex: number;
+
+  @Column({ name: 'is_visible', type: 'boolean', default: true })
+  isVisible: boolean;
 }
