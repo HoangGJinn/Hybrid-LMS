@@ -36,10 +36,18 @@ export default function ZaloLinkCard() {
     }
   };
 
-  useEffect(() => {
-    fetchStatus().catch(() => {});
-    return stopPolling;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    useEffect(() => {
+    let active = true;
+    zaloApi
+      .status()
+      .then((s) => {
+        if (active) setLinked(s.linked);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+      stopPolling();
+    };
   }, []);
 
   const createCode = async () => {

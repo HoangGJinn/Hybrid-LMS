@@ -24,7 +24,10 @@ async function request<T>(
     return (json?.data ?? json) as T;
   } catch (err) {
     if (isAxiosError(err)) {
-      throw new Error(err.response?.data?.message ?? `HTTP ${err.response?.status ?? err.message}`);
+      throw new Error(
+        err.response?.data?.message ?? `HTTP ${err.response?.status ?? err.message}`,
+        { cause: err },
+      );
     }
     throw err;
   }
