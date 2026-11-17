@@ -14,6 +14,7 @@ import { SubmissionRepository } from './repositories/submission.repository.js';
 import { AssignmentService } from './services/assignment.service.js';
 import { SubmissionReviewService } from './services/submission-review.service.js';
 import { SubmissionService } from './services/submission.service.js';
+import { ZaloModule } from '../zalo/index.js';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { SubmissionService } from './services/submission.service.js';
     AcademicModule,
     ContentModule,
     FileModule,
+    ZaloModule,
   ],
   controllers: [AssignmentController, MyAssignmentsController],
   providers: [

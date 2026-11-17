@@ -7,6 +7,7 @@ import type { AuthenticatedUser } from '../../../common/types/authenticated-user
 import type { FileFacade } from '../../../shared/file/facades/file.facade.js';
 import type { AcademicFacade } from '../../academic/facades/academic.facade.js';
 import type { ContentFacade } from '../../content/facades/content.facade.js';
+import type { ZaloFacade } from '../../zalo/index.js';
 import type { AssignmentSubmission } from '../entities/assignment-submission.entity.js';
 import type { Assignment } from '../entities/assignment.entity.js';
 import { AssignmentStatus } from '../enums/assignment-status.enum.js';
@@ -79,6 +80,7 @@ describe('SubmissionReviewService', () => {
     getDownloadLinks: Mock;
     openReadStream: Mock;
   };
+  let zaloFacade: { notifyUser: Mock };
 
   beforeEach(() => {
     submissionRepo = {
@@ -115,6 +117,9 @@ describe('SubmissionReviewService', () => {
       getDownloadLinks: vi.fn().mockResolvedValue([]),
       openReadStream: vi.fn(),
     };
+    zaloFacade = {
+      notifyUser: vi.fn().mockResolvedValue(true),
+    };
 
     service = new SubmissionReviewService(
       submissionRepo as unknown as SubmissionRepository,
@@ -122,6 +127,7 @@ describe('SubmissionReviewService', () => {
       academicFacade as unknown as AcademicFacade,
       contentFacade as unknown as ContentFacade,
       fileFacade as unknown as FileFacade,
+      zaloFacade as unknown as ZaloFacade,
     );
   });
 
@@ -204,6 +210,9 @@ describe('SubmissionReviewService', () => {
       ),
     ).rejects.toThrow(NotFoundException);
 
+    // a rejected grading never notifies the student
+    expect(zaloFacade.notifyUser).not.toHaveBeenCalled();
+
     submissionRepo.findById
       .mockResolvedValueOnce(buildSubmission())
       .mockResolvedValueOnce(buildSubmission({ score: 9, comment: null }));
@@ -222,6 +231,56 @@ describe('SubmissionReviewService', () => {
       expect.any(Date),
     );
     expect(graded.score).toBe(9);
+
+    // the notification runs in the background, so wait for it
+    await vi.waitFor(() =>
+      expect(zaloFacade.notifyUser).toHaveBeenCalledWith(
+        student.id,
+        expect.stringContaining('Điểm: 9'),
+      ),
+    );
+    const message = zaloFacade.notifyUser.mock.calls[0][1] as string;
+    expect(message).toContain('Lab 1: Intro/Setup');
+    expect(message).not.toContain('Nhận xét');
+  });
+
+  it('includes the lecturer comment in the Zalo notification', async () => {
+    submissionRepo.findById
+      .mockResolvedValueOnce(buildSubmission())
+      .mockResolvedValueOnce(buildSubmission({ score: 7, comment: 'Tốt' }));
+
+    await service.grade(
+      CLASS_ID,
+      ASSIGNMENT_ID,
+      SUBMISSION_ID,
+      { score: 7, comment: 'Tốt' },
+      lecturer,
+    );
+
+    await vi.waitFor(() =>
+      expect(zaloFacade.notifyUser).toHaveBeenCalledWith(
+        student.id,
+        expect.stringContaining('Nhận xét: Tốt'),
+      ),
+    );
+  });
+
+  it('still returns the grade when the Zalo notification fails', async () => {
+    zaloFacade.notifyUser.mockRejectedValue(new Error('zalo down'));
+    submissionRepo.findById
+      .mockResolvedValueOnce(buildSubmission())
+      .mockResolvedValueOnce(buildSubmission({ score: 8, comment: null }));
+
+    const graded = await service.grade(
+      CLASS_ID,
+      ASSIGNMENT_ID,
+      SUBMISSION_ID,
+      { score: 8 },
+      lecturer,
+    );
+
+    expect(graded.score).toBe(8);
+    await vi.waitFor(() => expect(zaloFacade.notifyUser).toHaveBeenCalled());
   });
 
   describe('streamZip', () => {
@@ -290,4 +349,3 @@ describe('SubmissionReviewService', () => {
     });
   });
 });
-
