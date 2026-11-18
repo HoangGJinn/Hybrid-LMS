@@ -320,7 +320,6 @@ export class SectionService {
       const section = await this.sectionRepository.findSection(classId, sectionId)
       if (section === null || !section.isVisible) return
       const items = await this.sectionRepository.findItemsBySectionIds([sectionId])
-      const items = await this.sectionRepository.findItemsBySectionIds([sectionId])
       const visibleItems = items.filter((item) => item.isVisible)
       const schedules = await this.findSchedules(visibleItems)
       await this.contentNotifier.notifySectionOpened(
