@@ -32,7 +32,7 @@ export const SectionItemRow = ({
 }: SectionItemRowProps) => {
   const { icon: Icon, color, label } = ITEM_META[item.itemType]
   const isHidden = item.isVisible === false
-  const hasSchedule = item.openAt !== null && item.closeAt !== null
+  const hasSchedule = Boolean(item.openAt && item.closeAt)
 
   const actions: MenuAction[] = [
     {
