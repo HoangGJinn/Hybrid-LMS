@@ -94,6 +94,7 @@ describe('SectionService', () => {
   }
   let academicFacade: { assertCanViewClass: Mock; assertCanManageClass: Mock }
   let classExamService: { findExamIdsOfClass: Mock; isExamInClass: Mock }
+  let contentNotifier: { notifyItemOpened: Mock; notifySectionOpened: Mock }
   let service: SectionService
 
   beforeEach(() => {
@@ -129,10 +130,15 @@ describe('SectionService', () => {
         .mockImplementation((_classId: string, ids: string[]) => Promise.resolve(ids)),
       isExamInClass: vi.fn().mockResolvedValue(false),
     }
+    contentNotifier = {
+      notifyItemOpened: vi.fn().mockResolvedValue(undefined),
+      notifySectionOpened: vi.fn().mockResolvedValue(undefined),
+    }
     service = new SectionService(
       repository as unknown as SectionRepository,
       academicFacade as unknown as AcademicFacade,
       classExamService as unknown as ClassExamService,
+      contentNotifier as never,
     )
   })
 
@@ -271,6 +277,27 @@ describe('SectionService', () => {
       )
     })
 
+    it('appends an assignment as hidden until the lecturer opens it', async () => {
+      const dto = {
+        id: 'item-assignment',
+        itemType: ItemType.ASSIGNMENT,
+        title: 'Homework',
+        assignmentId: 'assignment-1',
+      } as unknown as CreateSectionItemDto
+
+      await service.createItem(CLASS_ID, 'sec-1', dto, lecturer)
+
+      expect(repository.createItemAtEnd).toHaveBeenCalledWith(
+        'sec-1',
+        expect.objectContaining({
+          assignmentId: 'assignment-1',
+          documentId: null,
+          examId: null,
+          isVisible: false,
+        }),
+      )
+    })
+
     it('throws NotFoundException when the section is not of the class', async () => {
       repository.findSection.mockResolvedValue(null)
 
@@ -360,6 +387,7 @@ describe('SectionService', () => {
         documentId: null,
         assignmentId: null,
         examId: null,
+        isVisible: true,
       })
       expect(result).toEqual(expectedViews())
     })
@@ -376,7 +404,12 @@ describe('SectionService', () => {
 
       expect(repository.createItemAtEnd).toHaveBeenCalledWith(
         'sec-1',
-        expect.objectContaining({ documentId: 'doc-1', assignmentId: null, examId: null }),
+        expect.objectContaining({
+          documentId: 'doc-1',
+          assignmentId: null,
+          examId: null,
+          isVisible: true,
+        }),
       )
     })
 
@@ -463,7 +496,7 @@ describe('SectionService', () => {
         expect(classExamService.isExamInClass).toHaveBeenCalledWith(CLASS_ID, 'exam-1')
         expect(repository.createItemAtEnd).toHaveBeenCalledWith(
           'sec-1',
-          expect.objectContaining({ examId: 'exam-1' }),
+          expect.objectContaining({ examId: 'exam-1', isVisible: false }),
         )
       })
 
