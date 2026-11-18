@@ -5,6 +5,7 @@ import { AcademicModule } from '../academic/academic.module.js';
 import { ContentModule } from '../content/content.module.js';
 import { AssignmentController } from './controllers/assignment.controller.js';
 import { MyAssignmentsController } from './controllers/my-assignments.controller.js';
+import { AssignmentFacade } from './facades/assignment.facade.js';
 import { AssignmentFile } from './entities/assignment-file.entity.js';
 import { AssignmentSubmissionFile } from './entities/assignment-submission-file.entity.js';
 import { AssignmentSubmission } from './entities/assignment-submission.entity.js';

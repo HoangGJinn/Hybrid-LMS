@@ -135,7 +135,7 @@ describe('ContentNotifier', () => {
     expect(message).toContain('Bắt đầu: 08:00 10/11/2099');
     expect(message).toContain('Kết thúc: 23:59 17/11/2099');
   });
-
+  
   it('ignores documents and videos', async () => {
     await notifier.notifyItemOpened(CLASS_ID, 'Tuần 1', { itemType: ItemType.DOCUMENT, title: 'Slide' }, lecturer);
     await notifier.notifyItemOpened(CLASS_ID, 'Tuần 1', { itemType: ItemType.VIDEO, title: 'Video' }, lecturer);

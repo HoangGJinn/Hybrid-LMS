@@ -7,6 +7,7 @@ import {
   composeZaloMessage,
   formatVnDateTime,
 } from '../../zalo/index.js';
+import { ZaloFacade, buildFrontendLink, composeZaloMessage } from '../../zalo/index.js';
 import { ItemType } from '../enums/item-type.enum.js';
 
 /** Thông tin tối thiểu của một mục để dựng tin (SectionItem thỏa kiểu này). */
