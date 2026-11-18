@@ -22,7 +22,7 @@ export interface ItemPatch {
   isVisible?: boolean
 }
 
-/** A new item; its order is decided by the repository (always last). */
+/** A new item; its order is decided by the repository (always last). `isVisible` left out means the column default (visible). */
 export interface NewItem {
   id: string
   itemType: ItemType
@@ -31,6 +31,7 @@ export interface NewItem {
   documentId: string | null
   assignmentId: string | null
   examId: string | null
+  isVisible?: boolean
 }
 
 const isEmptyPatch = (patch: object): boolean =>

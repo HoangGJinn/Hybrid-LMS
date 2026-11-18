@@ -9,8 +9,10 @@ import type { SetCompletionDto } from '../dto/set-completion.dto.js'
 import type { SaveSectionsDto } from '../dto/save-sections.dto.js'
 import type { UpdateSectionItemDto } from '../dto/update-section-item.dto.js'
 import type { UpdateSectionDto } from '../dto/update-section.dto.js'
+import type { Section } from '../entities/section.entity.js'
 import { SectionRepository } from '../repositories/section.repository.js'
 import { ClassExamService } from './class-exam.service.js'
+import { ContentNotifier, isNotifiableItemType } from './content-notifier.service.js'
 import { SectionView } from '../types/section-view.type.js'
 import { AcademicFacade } from '../../academic/facades/academic.facade.js'
 import { ItemType } from '../enums/item-type.enum.js'
@@ -30,6 +32,12 @@ const REFERENCE_OF: Record<ItemType, 'documentId' | 'assignmentId' | 'examId' | 
   [ItemType.VIDEO]: null,
 }
 
+/**
+ * Item types that start hidden when added to a section: the lecturer finishes setting them up and
+ * opens them when ready. Opening is also the moment students are told on Zalo.
+ */
+const HIDDEN_ON_CREATE: ReadonlySet<ItemType> = new Set([ItemType.ASSIGNMENT, ItemType.EXAM])
+
 /** Business rules for course sections: readable by class members, editable by the class lecturer. */
 @Injectable()
 export class SectionService {
@@ -37,6 +45,7 @@ export class SectionService {
     private readonly sectionRepository: SectionRepository,
     private readonly academicFacade: AcademicFacade,
     private readonly classExamService: ClassExamService,
+    private readonly contentNotifier: ContentNotifier,
   ) {}
 
   /** Lists the sections (with items) of a class: its lecturer, an admin, or an enrolled student. Students only get what is visible, with their own completion. */
@@ -62,7 +71,7 @@ export class SectionService {
 
   // ----- one-change-at-a-time editing (auto-save); every method answers with the fresh section list -----
 
-  /** Renames, re-describes, shows or hides one section. */
+  /** Renames, re-describes, shows or hides one section. Opening a hidden section tells the students about its assignments and exams on Zalo. */
   async updateSection(
     classId: string,
     sectionId: string,
@@ -70,13 +79,16 @@ export class SectionService {
     user: AuthenticatedUser,
   ): Promise<SectionView[]> {
     await this.academicFacade.assertCanManageClass(classId, user)
-    await this.getSection(classId, sectionId)
+    const before = await this.getSection(classId, sectionId)
     await this.sectionRepository.updateSection(sectionId, {
       title: dto.title,
       description:
         dto.description === undefined ? undefined : emptyToNull(dto.description),
       isVisible: dto.isVisible,
     })
+    if (dto.isVisible === true && !before.isVisible) {
+      void this.notifySectionOpened(classId, sectionId, user)
+    }
     return this.findViews(classId)
   }
 
@@ -118,7 +130,10 @@ export class SectionService {
     return this.findViews(classId)
   }
 
-  /** Appends one item to a section, after checking that it points at something real. */
+  /**
+   * Appends one item to a section, after checking that it points at something real.
+   * Assignments and exams are created hidden; the lecturer opens them later with `updateItem`.
+   */
   async createItem(
     classId: string,
     sectionId: string,
@@ -146,11 +161,12 @@ export class SectionService {
       documentId: dto.documentId ?? null,
       assignmentId: dto.assignmentId ?? null,
       examId: dto.examId ?? null,
+      isVisible: !HIDDEN_ON_CREATE.has(dto.itemType),
     })
     return this.findViews(classId)
   }
 
-  /** Renames, shows or hides one item; a video can also get a new link. */
+  /** Renames, shows or hides one item; a video can also get a new link. Showing a hidden assignment or exam tells the students on Zalo. */
   async updateItem(
     classId: string,
     sectionId: string,
@@ -159,7 +175,7 @@ export class SectionService {
     user: AuthenticatedUser,
   ): Promise<SectionView[]> {
     await this.academicFacade.assertCanManageClass(classId, user)
-    await this.getSection(classId, sectionId)
+    const section = await this.getSection(classId, sectionId)
     const item = await this.sectionRepository.findItem(sectionId, itemId)
     if (item === null) throw new NotFoundException('Item not found')
     if (dto.externalUrl !== undefined) {
@@ -176,6 +192,14 @@ export class SectionService {
       externalUrl: dto.externalUrl,
       isVisible: dto.isVisible,
     })
+    if (
+      dto.isVisible === true &&
+      !item.isVisible &&
+      section.isVisible &&
+      isNotifiableItemType(item.itemType)
+    ) {
+      void this.notifyItemOpened(classId, sectionId, itemId, user)
+    }
     return this.findViews(classId)
   }
 
@@ -274,9 +298,52 @@ export class SectionService {
     return this.findViews(classId)
   }
 
-  private async getSection(classId: string, sectionId: string): Promise<void> {
+  private async getSection(classId: string, sectionId: string): Promise<Section> {
     const section = await this.sectionRepository.findSection(classId, sectionId)
     if (section === null) throw new NotFoundException('Section not found')
+    return section
+  }
+
+  /** Tells the students on Zalo that a section was just opened. Never fails the edit. */
+  private async notifySectionOpened(
+    classId: string,
+    sectionId: string,
+    user: AuthenticatedUser,
+  ): Promise<void> {
+    try {
+      const section = await this.sectionRepository.findSection(classId, sectionId)
+      if (section === null || !section.isVisible) return
+      const items = await this.sectionRepository.findItemsBySectionIds([sectionId])
+      await this.contentNotifier.notifySectionOpened(
+        classId,
+        section.title,
+        items.filter((item) => item.isVisible),
+        user,
+      )
+    } catch {
+      /* a failed notification is not worth failing the edit */
+    }
+  }
+
+  /** Tells the students on Zalo that an assignment or exam just became visible to them. Never fails the edit. */
+  private async notifyItemOpened(
+    classId: string,
+    sectionId: string,
+    itemId: string,
+    user: AuthenticatedUser,
+  ): Promise<void> {
+    try {
+      const [section, item] = await Promise.all([
+        this.sectionRepository.findSection(classId, sectionId),
+        this.sectionRepository.findItem(sectionId, itemId),
+      ])
+      // Students only see an item when both the item and its section are visible.
+      if (section === null || item === null) return
+      if (!section.isVisible || !item.isVisible) return
+      await this.contentNotifier.notifyItemOpened(classId, section.title, item, user)
+    } catch {
+      /* a failed notification is not worth failing the edit */
+    }
   }
 
   private async findViews(

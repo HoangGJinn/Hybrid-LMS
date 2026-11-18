@@ -3,11 +3,12 @@ import { toast } from 'sonner'
 import { courseKeys } from '../api/queryKeys'
 import {
   sectionService,
+  startsHidden,
   type ItemPatch,
   type NewItemInput,
   type SectionPatch,
 } from '../api/section.service'
-import type { Section } from '../types/courses.types'
+import type { Section, SectionItem } from '../types/courses.types'
 
 type Apply<V> = (sections: Section[], variables: V) => Section[]
 
@@ -23,11 +24,13 @@ const renumber = <T extends { orderIndex: number }>(list: T[]): T[] =>
 /**
  * One auto-saved change: the cached sections are updated at once (when `apply` is given),
  * rolled back with an error toast if the server refuses, and refetched once the last pending save is done.
+ * `onSuccess` runs after the server accepted the change.
  */
 const useSectionMutation = <V>(
   courseId: string,
   mutationFn: (variables: V) => Promise<unknown>,
   apply?: Apply<V>,
+  onSuccess?: (variables: V) => void,
 ) => {
   const queryClient = useQueryClient()
   const key = courseKeys.sections(courseId)
@@ -40,6 +43,7 @@ const useSectionMutation = <V>(
       if (previous && apply) queryClient.setQueryData(key, apply(previous, variables))
       return { previous }
     },
+    onSuccess: (_data, variables) => onSuccess?.(variables),
     onError: (error, _variables, context) => {
       if (context?.previous) queryClient.setQueryData(key, context.previous)
       toast.error(error.message)
@@ -77,10 +81,34 @@ export const useSectionEditor = (courseId: string) => {
     (sections, ids) => renumber(sortByIds(sections, ids)),
   )
 
+  // A new assignment or exam starts hidden (like the server does); the lecturer opens it with the eye button.
   const addItem = useSectionMutation(
     courseId,
     (v: { sectionId: string; item: NewItemInput }) =>
       sectionService.createItem(courseId, v.sectionId, v.item),
+    (sections, v) =>
+      sections.map((s) => {
+        if (s.id !== v.sectionId) return s
+        const created: SectionItem = {
+          externalUrl: null,
+          documentId: null,
+          assignmentId: null,
+          examId: null,
+          ...v.item,
+          sectionId: v.sectionId,
+          orderIndex: s.items.length + 1,
+          isCompleted: false,
+          isVisible: !startsHidden(v.item.itemType),
+        }
+        return { ...s, items: [...s.items, created] }
+      }),
+    (v) => {
+      if (startsHidden(v.item.itemType)) {
+        toast.success('Added as hidden', {
+          description: 'Students cannot see it yet. Use the eye button to show it when it is ready.',
+        })
+      }
+    },
   )
 
   const updateItem = useSectionMutation(

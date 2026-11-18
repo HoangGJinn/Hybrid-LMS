@@ -7,7 +7,7 @@ import { emptyToNull } from '../../../common/utils/string.util.js';
 import { FileFacade } from '../../../shared/file/facades/file.facade.js';
 import { AcademicFacade } from '../../academic/facades/academic.facade.js';
 import { ContentFacade } from '../../content/facades/content.facade.js';
-import { ZaloFacade } from '../../zalo/index.js';
+import { ZaloFacade,buildFrontendLink, composeZaloMessage, formatVnDateTime } from '../../zalo/index.js';
 import type { GradeSubmissionDto } from '../dto/grade-submission.dto.js';
 import type { AssignmentSubmission } from '../entities/assignment-submission.entity.js';
 import type { Assignment } from '../entities/assignment.entity.js';
@@ -176,12 +176,7 @@ export class SubmissionReviewService {
     const graded = await this.submissionRepository.findById(submissionId);
     if (!graded) throw new NotFoundException('Submission not found');
     const [view] = await this.toViews([graded]);
-    void this.notifyGraded(
-      submission.submittedBy,
-      assignmentId,
-      dto.score,
-      comment,
-    );
+    void this.notifyGraded(classId, assignmentId, graded, dto.score, comment);
     return view;
   }
 
@@ -260,9 +255,11 @@ export class SubmissionReviewService {
   }
 
   /** Tells the student on Zalo that the submission was graded. Never throws: a Zalo failure must not undo a grade. */
+    /** Tells the student on Zalo that the submission was graded. Never throws: a Zalo failure must not undo a grade. */
   private async notifyGraded(
-    studentId: string,
+    classId: string,
     assignmentId: string,
+    graded: AssignmentSubmission,
     score: number,
     comment: string | null,
   ): Promise<void> {
@@ -270,15 +267,43 @@ export class SubmissionReviewService {
       const assignment =
         await this.assignmentRepository.findById(assignmentId);
       if (!assignment) return;
-      const lines = [
-        `✅ Bài "${assignment.title}" đã được chấm.`,
-        `Điểm: ${score}`,
-      ];
-      if (comment) lines.push(`Nhận xét: ${comment}`);
-      await this.zaloFacade.notifyUser(studentId, lines.join('\n'));
+
+      let classLabel: string | null = null;
+      try {
+        const classView = await this.academicFacade.getClassById(classId);
+        classLabel = `${classView.classCode} - ${classView.name}`;
+      } catch {
+        /* no class name: the line is simply left out */
+      }
+
+      const isLate = graded.submittedAt > assignment.endAt;
+      const message = composeZaloMessage({
+        header: '✅ BÀI TẬP ĐÃ ĐƯỢC CHẤM',
+        fields: [
+          { icon: '📚', label: 'Lớp', value: classLabel },
+          { icon: '📝', label: 'Bài tập', value: assignment.title },
+          { icon: '🎯', label: 'Điểm', value: String(score) },
+          { icon: '💬', label: 'Nhận xét', value: comment },
+          { icon: '⏰', label: 'Hạn nộp', value: formatVnDateTime(assignment.endAt) },
+          {
+            icon: '📤',
+            label: 'Bài nộp',
+            value: `${formatVnDateTime(graded.submittedAt)} (${isLate ? 'nộp trễ' : 'đúng hạn'})`,
+          },
+          { icon: '🕒', label: 'Chấm lúc', value: formatVnDateTime(graded.gradedAt ?? new Date()) },
+        ],
+        footer: this.gradedFooter(
+          buildFrontendLink(`/student/courses/${classId}/assignments/${assignmentId}`),
+        ),
+      });
+      await this.zaloFacade.notifyUser(graded.submittedBy, message);
     } catch {
       /* a failed notification is not worth failing the grading */
     }
+  }
+
+  private gradedFooter(link: string | null): string {
+    return link ? `Chúc bạn học tốt! 💪\n👉 Xem chi tiết: ${link}` : 'Chúc bạn học tốt! 💪';
   }
 
   private toSummary(
