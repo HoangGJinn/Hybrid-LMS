@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ItemCompletion } from './entities/item-completion.entity.js';
 import { SectionItem } from './entities/section-item.entity.js';
@@ -17,6 +17,8 @@ import { ExamItemRepository } from './repositories/exam-item.repository.js';
 import { ClassExamService } from './services/class-exam.service.js';
 import { ContentNotifier } from './services/content-notifier.service.js';
 import { ExamSchedule } from '../exam/entities/exam-schedule.entity.js';
+import { AssignmentModule } from '../assignment/assignment.module.js';
+import { ExamModule } from '../exam/exam.module.js';
 
 @Module({
   imports: [
@@ -28,6 +30,8 @@ import { ExamSchedule } from '../exam/entities/exam-schedule.entity.js';
     ]),
     AcademicModule,
     ZaloModule,
+    forwardRef(() => AssignmentModule),
+    forwardRef(() => ExamModule),
   ],
   controllers: [SectionController],
   providers: [

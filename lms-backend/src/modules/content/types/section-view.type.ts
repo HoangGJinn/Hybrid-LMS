@@ -1,5 +1,6 @@
 import type { SectionItem } from '../entities/section-item.entity.js'
 import type { Section } from '../entities/section.entity.js'
+import { ItemSchedule } from './item-schedule.type.js'
 import { SectionItemView } from './section-item-view.type.js'
 
 /** Read model of a section with its items, shaped for the frontend. */
@@ -16,6 +17,7 @@ export class SectionView {
     entity: Section,
     items: readonly SectionItem[],
     completedIds: ReadonlySet<string>,
+    schedules: ReadonlyMap<string, ItemSchedule>,
   ) {
     this.id = entity.id
     this.classId = entity.classId
@@ -24,7 +26,7 @@ export class SectionView {
     this.orderIndex = entity.orderIndex
     this.isVisible = entity.isVisible
     this.items = items.map((item) =>
-      SectionItemView.fromEntity(item, completedIds.has(item.id)),
+      SectionItemView.fromEntity(item, completedIds.has(item.id), schedules.get(item.id) || null),
     )
   }
 
@@ -33,7 +35,8 @@ export class SectionView {
     entity: Section,
     items: readonly SectionItem[] = [],
     completedIds: ReadonlySet<string> = new Set(),
+    schedules: ReadonlyMap<string, ItemSchedule> = new Map()
   ): SectionView {
-    return new SectionView(entity, items, completedIds)
+    return new SectionView(entity, items, completedIds, schedules)
   }
 }

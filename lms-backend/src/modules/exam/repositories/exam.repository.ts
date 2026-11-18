@@ -235,4 +235,11 @@ export class ExamRepository {
   async deleteById(id: string): Promise<void> {
     await this.examOrmRepository.delete({ id });
   }
+
+  findSchedulesByIds(ids: string[]): Promise<ExamSchedule[]> {
+  return this.examOrmRepository.find({
+    where: { id: In(ids) },
+    select: { id: true, startTime: true, endTime: true },
+  })
+}
 }

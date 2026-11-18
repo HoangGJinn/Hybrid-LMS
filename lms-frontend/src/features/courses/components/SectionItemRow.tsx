@@ -4,6 +4,7 @@ import { ITEM_META } from '../utils/item-meta'
 import type { SectionItem } from '../types/courses.types'
 import { ActionMenu, type MenuAction } from './ActionMenu'
 import { InlineEditText } from './InlineEditText'
+import { formatItemDate } from '../utils/format-item-date'
 
 interface SectionItemRowProps {
   item: SectionItem
@@ -31,6 +32,7 @@ export const SectionItemRow = ({
 }: SectionItemRowProps) => {
   const { icon: Icon, color, label } = ITEM_META[item.itemType]
   const isHidden = item.isVisible === false
+  const hasSchedule = item.openAt !== null && item.closeAt !== null
 
   const actions: MenuAction[] = [
     {
@@ -61,6 +63,18 @@ export const SectionItemRow = ({
           onSave={onRename}
           className="text-brand"
         />
+        {hasSchedule && (
+          <p className="mt-1 flex flex-wrap gap-x-4 text-xs text-muted-foreground">
+            <span>
+              <span className="font-semibold text-foreground/70">Opened:</span>{' '}
+              {formatItemDate(item.openAt!)}
+            </span>
+            <span>
+              <span className="font-semibold text-foreground/70">Closes:</span>{' '}
+              {formatItemDate(item.closeAt!)}
+            </span>
+          </p>
+        )}
       </div>
       {isHidden && (
         <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">

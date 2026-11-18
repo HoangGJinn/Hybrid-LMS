@@ -17,6 +17,10 @@ import { SectionView } from '../types/section-view.type.js'
 import { AcademicFacade } from '../../academic/facades/academic.facade.js'
 import { ItemType } from '../enums/item-type.enum.js'
 import { extractYoutubeVideoId } from '../utils/youtube.util.js'
+import type { SectionItem } from '../entities/section-item.entity.js'
+import type { ItemSchedule } from '../types/item-schedule.type.js'
+import { ExamFacade } from '../../exam/facades/exam.facade.js'
+import { AssignmentFacade } from '../../assignment/facades/assignment.facade.js'
 
 /** The listed ids first (in that order), then every other id in its current order. */
 const mergeOrder = (allIds: string[], firstIds: string[]): string[] => {
@@ -46,6 +50,8 @@ export class SectionService {
     private readonly academicFacade: AcademicFacade,
     private readonly classExamService: ClassExamService,
     private readonly contentNotifier: ContentNotifier,
+    private readonly assignmentFacade: AssignmentFacade,
+    private readonly examFacade: ExamFacade,
   ) {}
 
   /** Lists the sections (with items) of a class: its lecturer, an admin, or an enrolled student. Students only get what is visible, with their own completion. */
@@ -362,11 +368,13 @@ export class SectionService {
     const completedIds = studentId
       ? await this.sectionRepository.findCompletedItemIds(studentId, items.map((item) => item.id))
       : new Set<string>()
+    const schedules = await this.findSchedules(items)
     return sections.map((section) =>
       SectionView.fromEntity(
         section,
         items.filter((item) => item.sectionId === section.id),
         completedIds,
+        schedules,
       ),
     )
   }
@@ -463,5 +471,31 @@ export class SectionService {
     if (new Set(ids).size !== ids.length) {
       throw new BadRequestException('Duplicate ids in payload')
     }
+  }
+
+  /** Open/close dates of the assignments and exams among the items, keyed by section item id. */
+  private async findSchedules(items: SectionItem[]): Promise<Map<string, ItemSchedule>> {
+    const assignmentIds = items
+      .map((item) => item.assignmentId)
+      .filter((id): id is string => id !== null)
+    const examIds = items
+      .map((item) => item.examId)
+      .filter((id): id is string => id !== null)
+    const [assignmentSchedules, examSchedules] = await Promise.all([
+      assignmentIds.length > 0
+        ? this.assignmentFacade.findSchedules(assignmentIds)
+        : new Map<string, ItemSchedule>(),
+      examIds.length > 0
+        ? this.examFacade.findSchedules(examIds)
+        : new Map<string, ItemSchedule>(),
+    ])
+    const result = new Map<string, ItemSchedule>()
+    for (const item of items) {
+      const schedule =
+        (item.assignmentId && assignmentSchedules.get(item.assignmentId)) ||
+        (item.examId && examSchedules.get(item.examId))
+      if (schedule) result.set(item.id, schedule)
+    }
+    return result
   }
 }

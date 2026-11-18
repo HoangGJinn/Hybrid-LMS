@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { FileModule } from '../../shared/file/file.module.js';
 import { AcademicModule } from '../academic/academic.module.js';
@@ -23,6 +23,7 @@ import { ExamSessionRepository } from './repositories/exam-session.repository.js
 import { ExamGradingService } from './services/exam-grading.service.js';
 import { ExamService } from './services/exam.service.js';
 import { StudentExamService } from './services/student-exam.service.js';
+import { ExamFacade } from './facades/exam.facade.js';
 
 @Module({
   imports: [
@@ -41,7 +42,7 @@ import { StudentExamService } from './services/student-exam.service.js';
       ProctoringLog,
     ]),
     AcademicModule,
-    ContentModule,
+    forwardRef(() => ContentModule),
     FileModule,
   ],
   controllers: [ExamController, StudentExamController, LecturerExamController],
@@ -51,7 +52,8 @@ import { StudentExamService } from './services/student-exam.service.js';
     ExamService,
     StudentExamService,
     ExamGradingService,
+    ExamFacade,
   ],
-  exports: [],
+  exports: [ExamFacade],
 })
 export class ExamModule {}

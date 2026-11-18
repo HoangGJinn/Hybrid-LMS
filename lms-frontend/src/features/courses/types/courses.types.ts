@@ -47,6 +47,8 @@ export interface SectionItem {
   /** Set for EXAM items, null for every other type. */
   examId: string | null;
   isCompleted: boolean;
+  openAt: string | null
+  closeAt: string | null
 }
 
 export interface Section {

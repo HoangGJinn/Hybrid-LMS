@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { FileModule } from '../../shared/file/file.module.js';
 import { AcademicModule } from '../academic/academic.module.js';
@@ -16,6 +16,7 @@ import { AssignmentService } from './services/assignment.service.js';
 import { SubmissionReviewService } from './services/submission-review.service.js';
 import { SubmissionService } from './services/submission.service.js';
 import { ZaloModule } from '../zalo/index.js';
+import { AssignmentFacade } from './facades/assignment.facade.js';
 
 @Module({
   imports: [
@@ -26,7 +27,7 @@ import { ZaloModule } from '../zalo/index.js';
       Assignment,
     ]),
     AcademicModule,
-    ContentModule,
+    forwardRef(() => ContentModule),
     FileModule,
     ZaloModule,
   ],
@@ -38,7 +39,8 @@ import { ZaloModule } from '../zalo/index.js';
     SubmissionReviewService,
     AssignmentService,
     AssignmentCleanupService,
+    AssignmentFacade,
   ],
-  exports: [],
+  exports: [AssignmentFacade],
 })
 export class AssignmentModule {}
