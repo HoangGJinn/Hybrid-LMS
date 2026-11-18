@@ -19,6 +19,7 @@ const buildAssignment = (): Assignment =>
   ({
     id: 'assign-1',
     title: 'Lab 1',
+    openAt: new Date('2099-11-03T08:00:00Z'),
     endAt: new Date('2099-11-10T08:00:00Z'),
   }) as Assignment;
 
@@ -49,7 +50,8 @@ describe('AssignmentNotifier', () => {
       ['stu-1', 'stu-2'],
       expect.stringContaining('Lab 1'),
     );
-    expect(zaloFacade.notifyUsers.mock.calls[0][1]).toContain('Hạn nộp');
+    expect(zaloFacade.notifyUsers.mock.calls[0][1]).toContain('Bắt đầu');
+    expect(zaloFacade.notifyUsers.mock.calls[0][1]).toContain('Kết thúc');
   });
 
   it('does nothing when the class has no enrolled students', async () => {

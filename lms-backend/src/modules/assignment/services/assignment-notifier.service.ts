@@ -34,7 +34,8 @@ export class AssignmentNotifier {
 
       const message = [
         `📌 Bài tập mới: ${assignment.title}`,
-        `Hạn nộp: ${formatDateTime(assignment.endAt)}`,
+        `Bắt đầu: ${formatDateTime(assignment.openAt)}`,
+        `Kết thúc: ${formatDateTime(assignment.endAt)}`,
       ].join('\n');
       await this.zaloFacade.notifyUsers(studentIds, message);
     } catch (e: any) {

@@ -1,7 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { AuthenticatedUser } from '../../../common/types/authenticated-user.type.js';
 import { AcademicFacade } from '../../academic/facades/academic.facade.js';
-import { ZaloFacade, buildFrontendLink, composeZaloMessage } from '../../zalo/index.js';
+import {
+  ZaloFacade,
+  buildFrontendLink,
+  composeZaloMessage,
+  formatVnDateTime,
+} from '../../zalo/index.js';
 import { ItemType } from '../enums/item-type.enum.js';
 
 /** Thông tin tối thiểu của một mục để dựng tin (SectionItem thỏa kiểu này). */
@@ -9,6 +14,10 @@ export interface OpenedItem {
   readonly itemType: ItemType;
   readonly title: string;
   readonly assignmentId?: string | null;
+  /** Ngày bắt đầu (mở) của bài tập hoặc bài thi. */
+  readonly openAt?: Date | null;
+  /** Ngày kết thúc (đóng) của bài tập hoặc bài thi. */
+  readonly closeAt?: Date | null;
 }
 
 interface NotifiableKind {
@@ -38,6 +47,13 @@ export const isNotifiableItemType = (itemType: ItemType): boolean =>
   NOTIFIABLE[itemType] !== undefined;
 
 const MAX_LISTED_ITEMS = 10;
+
+/** Ngày giờ theo giờ Việt Nam; thiếu hoặc không hợp lệ thì trả null để bỏ dòng đó. */
+const formatSchedule = (value?: Date | null): string | null => {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : formatVnDateTime(date);
+};
 
 /** Gửi thông báo Zalo khi giảng viên mở bài tập hoặc bài thi cho sinh viên. Không bao giờ throw. */
 @Injectable()
@@ -73,6 +89,8 @@ export class ContentNotifier {
           { icon: '📚', label: 'Lớp', value: await this.classLabel(classId) },
           { icon: '🗂️', label: 'Chương', value: sectionTitle },
           { icon: kind.icon, label: kind.name, value: item.title },
+          { icon: '🕐', label: 'Bắt đầu', value: formatSchedule(item.openAt) },
+          { icon: '⏰', label: 'Kết thúc', value: formatSchedule(item.closeAt) },
         ],
         footer: this.footer(kind.note, buildFrontendLink(path)),
       });
@@ -96,9 +114,14 @@ export class ContentNotifier {
       const notifiable = visibleItems.filter((item) => isNotifiableItemType(item.itemType));
       if (notifiable.length === 0) return;
 
-      const listed = notifiable
-        .slice(0, MAX_LISTED_ITEMS)
-        .map((item) => `   ${NOTIFIABLE[item.itemType]?.icon ?? '•'} ${item.title}`);
+      const listed = notifiable.slice(0, MAX_LISTED_ITEMS).flatMap((item) => {
+        const lines = [`   ${NOTIFIABLE[item.itemType]?.icon ?? '•'} ${item.title}`];
+        const start = formatSchedule(item.openAt);
+        const end = formatSchedule(item.closeAt);
+        if (start) lines.push(`      🕐 Bắt đầu: ${start}`);
+        if (end) lines.push(`      ⏰ Kết thúc: ${end}`);
+        return lines;
+      });
       if (notifiable.length > MAX_LISTED_ITEMS) {
         listed.push(`   … và ${notifiable.length - MAX_LISTED_ITEMS} mục khác`);
       }

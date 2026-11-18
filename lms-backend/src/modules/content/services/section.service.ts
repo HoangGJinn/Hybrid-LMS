@@ -320,10 +320,18 @@ export class SectionService {
       const section = await this.sectionRepository.findSection(classId, sectionId)
       if (section === null || !section.isVisible) return
       const items = await this.sectionRepository.findItemsBySectionIds([sectionId])
+      const visibleItems = items.filter((item) => item.isVisible)
+      const schedules = await this.findSchedules(visibleItems)
       await this.contentNotifier.notifySectionOpened(
         classId,
         section.title,
-        items.filter((item) => item.isVisible),
+        visibleItems.map((item) => ({
+          itemType: item.itemType,
+          title: item.title,
+          assignmentId: item.assignmentId,
+          openAt: schedules.get(item.id)?.openAt ?? null,
+          closeAt: schedules.get(item.id)?.closeAt ?? null,
+        })),
         user,
       )
     } catch {
@@ -346,7 +354,19 @@ export class SectionService {
       // Students only see an item when both the item and its section are visible.
       if (section === null || item === null) return
       if (!section.isVisible || !item.isVisible) return
-      await this.contentNotifier.notifyItemOpened(classId, section.title, item, user)
+      const schedule = (await this.findSchedules([item])).get(item.id)
+      await this.contentNotifier.notifyItemOpened(
+        classId,
+        section.title,
+        {
+          itemType: item.itemType,
+          title: item.title,
+          assignmentId: item.assignmentId,
+          openAt: schedule?.openAt ?? null,
+          closeAt: schedule?.closeAt ?? null,
+        },
+        user,
+      )
     } catch {
       /* a failed notification is not worth failing the edit */
     }
