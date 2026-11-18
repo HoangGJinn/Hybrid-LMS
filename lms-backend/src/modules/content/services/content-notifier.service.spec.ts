@@ -65,6 +65,77 @@ describe('ContentNotifier', () => {
     expect(message).toContain('Giữa kỳ');
   });
 
+  it('shows the start and end time of an assignment in Vietnam time', async () => {
+    await notifier.notifyItemOpened(
+      CLASS_ID,
+      'Tuần 1',
+      {
+        itemType: ItemType.ASSIGNMENT,
+        title: 'Lab 1',
+        assignmentId: 'a-1',
+        openAt: new Date('2099-11-10T01:00:00Z'),
+        closeAt: new Date('2099-11-17T16:59:00Z'),
+      },
+      lecturer,
+    );
+
+    const message = zaloFacade.notifyUsers.mock.calls[0][1] as string;
+    expect(message).toContain('Bắt đầu: 08:00 10/11/2099');
+    expect(message).toContain('Kết thúc: 23:59 17/11/2099');
+  });
+
+  it('shows the start and end time of an exam', async () => {
+    await notifier.notifyItemOpened(
+      CLASS_ID,
+      'Tuần 5',
+      {
+        itemType: ItemType.EXAM,
+        title: 'Giữa kỳ',
+        openAt: new Date('2099-12-01T02:00:00Z'),
+        closeAt: new Date('2099-12-01T04:00:00Z'),
+      },
+      lecturer,
+    );
+
+    const message = zaloFacade.notifyUsers.mock.calls[0][1] as string;
+    expect(message).toContain('Bắt đầu: 09:00 01/12/2099');
+    expect(message).toContain('Kết thúc: 11:00 01/12/2099');
+  });
+
+  it('leaves out the date lines when the schedule is unknown', async () => {
+    await notifier.notifyItemOpened(
+      CLASS_ID,
+      'Tuần 1',
+      { itemType: ItemType.ASSIGNMENT, title: 'Lab 1', assignmentId: 'a-1' },
+      lecturer,
+    );
+
+    const message = zaloFacade.notifyUsers.mock.calls[0][1] as string;
+    expect(message).not.toContain('Bắt đầu');
+    expect(message).not.toContain('Kết thúc');
+  });
+
+  it('shows the dates under each listed item of an opened section', async () => {
+    await notifier.notifySectionOpened(
+      CLASS_ID,
+      'Tuần 2',
+      [
+        {
+          itemType: ItemType.ASSIGNMENT,
+          title: 'Lab 2',
+          assignmentId: 'a-2',
+          openAt: new Date('2099-11-10T01:00:00Z'),
+          closeAt: new Date('2099-11-17T16:59:00Z'),
+        },
+      ],
+      lecturer,
+    );
+
+    const message = zaloFacade.notifyUsers.mock.calls[0][1] as string;
+    expect(message).toContain('Bắt đầu: 08:00 10/11/2099');
+    expect(message).toContain('Kết thúc: 23:59 17/11/2099');
+  });
+  
   it('ignores documents and videos', async () => {
     await notifier.notifyItemOpened(CLASS_ID, 'Tuần 1', { itemType: ItemType.DOCUMENT, title: 'Slide' }, lecturer);
     await notifier.notifyItemOpened(CLASS_ID, 'Tuần 1', { itemType: ItemType.VIDEO, title: 'Video' }, lecturer);

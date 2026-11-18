@@ -110,4 +110,12 @@ export class AssignmentRepository {
   async deleteById(id: string): Promise<void> {
     await this.assignmentOrmRepository.delete({ id });
   }
+
+  /** Only the id and the schedule columns of the given assignments. */
+  findSchedulesByIds(ids: string[]): Promise<Assignment[]> {
+    return this.assignmentOrmRepository.find({
+      where: { id: In(ids) },
+      select: { id: true, openAt: true, endAt: true },
+    })
+  }
 }

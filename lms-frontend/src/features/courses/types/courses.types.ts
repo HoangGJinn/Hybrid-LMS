@@ -47,6 +47,9 @@ export interface SectionItem {
   /** Set for EXAM items, null for every other type. */
   examId: string | null;
   isCompleted: boolean;
+  /** Ngày bắt đầu/kết thúc; chỉ có ở bài tập và bài thi, các loại khác bỏ trống. */
+  openAt?: string | null;
+  closeAt?: string | null;
 }
 
 export interface Section {

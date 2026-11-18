@@ -95,6 +95,8 @@ describe('SectionService', () => {
   let academicFacade: { assertCanViewClass: Mock; assertCanManageClass: Mock }
   let classExamService: { findExamIdsOfClass: Mock; isExamInClass: Mock }
   let contentNotifier: { notifyItemOpened: Mock; notifySectionOpened: Mock }
+  let assignmentFacade: { findSchedules: Mock }
+  let examFacade: { findSchedules: Mock }
   let service: SectionService
 
   beforeEach(() => {
@@ -134,11 +136,15 @@ describe('SectionService', () => {
       notifyItemOpened: vi.fn().mockResolvedValue(undefined),
       notifySectionOpened: vi.fn().mockResolvedValue(undefined),
     }
+    assignmentFacade = { findSchedules: vi.fn().mockResolvedValue(new Map()) }
+    examFacade = { findSchedules: vi.fn().mockResolvedValue(new Map()) }
     service = new SectionService(
       repository as unknown as SectionRepository,
       academicFacade as unknown as AcademicFacade,
       classExamService as unknown as ClassExamService,
       contentNotifier as never,
+      assignmentFacade as never,
+      examFacade as never,
     )
   })
 
@@ -600,6 +606,51 @@ describe('SectionService', () => {
         ),
       ).rejects.toBeInstanceOf(NotFoundException)
       expect(repository.findItem).not.toHaveBeenCalled()
+    })
+
+    describe('Zalo notification when an item is opened', () => {
+      const openAt = new Date('2099-11-10T01:00:00Z')
+      const closeAt = new Date('2099-11-17T16:59:00Z')
+
+      beforeEach(() => {
+        repository.findSection.mockResolvedValue({ ...sectionRows[0], isVisible: true })
+      })
+
+      it('sends the start and end of an assignment together with the item', async () => {
+        const hidden = { id: 'item-a', itemType: ItemType.ASSIGNMENT, title: 'Lab 1', assignmentId: 'as-1', examId: null, isVisible: false }
+        repository.findItem
+          .mockResolvedValueOnce(hidden)
+          .mockResolvedValue({ ...hidden, isVisible: true })
+        assignmentFacade.findSchedules.mockResolvedValue(new Map([['as-1', { openAt, closeAt }]]))
+
+        await service.updateItem(CLASS_ID, 'sec-1', 'item-a', { isVisible: true } as UpdateSectionItemDto, lecturer)
+
+        await vi.waitFor(() => expect(contentNotifier.notifyItemOpened).toHaveBeenCalled())
+        expect(contentNotifier.notifyItemOpened).toHaveBeenCalledWith(
+          CLASS_ID,
+          'Week 1',
+          expect.objectContaining({ itemType: ItemType.ASSIGNMENT, title: 'Lab 1', openAt, closeAt }),
+          lecturer,
+        )
+      })
+
+      it('sends the start and end of an exam together with the item', async () => {
+        const hidden = { id: 'item-e', itemType: ItemType.EXAM, title: 'Giữa kỳ', assignmentId: null, examId: 'ex-1', isVisible: false }
+        repository.findItem
+          .mockResolvedValueOnce(hidden)
+          .mockResolvedValue({ ...hidden, isVisible: true })
+        examFacade.findSchedules.mockResolvedValue(new Map([['ex-1', { openAt, closeAt }]]))
+
+        await service.updateItem(CLASS_ID, 'sec-1', 'item-e', { isVisible: true } as UpdateSectionItemDto, lecturer)
+
+        await vi.waitFor(() => expect(contentNotifier.notifyItemOpened).toHaveBeenCalled())
+        expect(contentNotifier.notifyItemOpened).toHaveBeenCalledWith(
+          CLASS_ID,
+          'Week 1',
+          expect.objectContaining({ itemType: ItemType.EXAM, title: 'Giữa kỳ', openAt, closeAt }),
+          lecturer,
+        )
+      })
     })
   })
 
