@@ -132,6 +132,7 @@ describe('AssignmentItemRepository', () => {
         documentId: null,
         assignmentId: 'a-1',
         examId: null,
+        isVisible: false,
       });
     });
 

@@ -124,6 +124,7 @@ export class AssignmentItemRepository {
         documentId: null,
         assignmentId,
         examId: null,
+        isVisible: false,
       });
       return true;
     });

@@ -28,6 +28,15 @@ export interface NewItemInput {
   examId?: string | null
 }
 
+/**
+ * Assignments and exams start hidden: the lecturer finishes setting them up and opens them
+ * with the eye button (students are told on Zalo at that moment). Documents and videos show right away.
+ * Keep in sync with the backend (SectionService.createItem).
+ */
+const HIDDEN_ON_CREATE: ReadonlySet<ItemType> = new Set<ItemType>(['ASSIGNMENT', 'EXAM'])
+
+export const startsHidden = (itemType: ItemType): boolean => HIDDEN_ON_CREATE.has(itemType)
+
 const base = (classId: string) => `/api/classes/${classId}/sections`
 
 // ----- mock mode: the same operations on the in-memory list -----
@@ -100,7 +109,7 @@ export const sectionService = {
             sectionId,
             orderIndex: section.items.length + 1,
             isCompleted: false,
-            isVisible: true,
+            isVisible: !startsHidden(item.itemType),
           }
           section.items.push(created)
         })

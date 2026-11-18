@@ -49,7 +49,7 @@ export class SectionItem {
   @Column({ name: 'exam_id', type: 'uuid', nullable: true })
   examId: string | null;
 
-  @Column({ name: 'is_visible', type: 'boolean', default: true })
+  @Column({ name: 'is_visible', type: 'boolean' })
   isVisible: boolean;
 
   @Column({ name: 'deleted_at', type: 'timestamptz', nullable: true })

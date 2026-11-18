@@ -8,6 +8,7 @@ import { CommonModule } from './common/common.module.js';
 import { AcademicModule } from './modules/academic/academic.module.js';
 import { AssessmentGenerationModule } from './modules/assessment-generation/assessment-generation.module.js';
 import { AssignmentModule } from './modules/assignment/assignment.module.js';
+import { CalendarModule } from './modules/calendar/calendar.module.js';
 import { ContentModule } from './modules/content/content.module.js';
 import { DocumentModule } from './modules/document/document.module.js';
 import { ExamModule } from './modules/exam/exam.module.js';
@@ -39,6 +40,7 @@ import { validate } from './config/env.validation.js';
     AcademicModule,
     AssessmentGenerationModule,
     AssignmentModule,
+    CalendarModule,
     ContentModule,
     DocumentModule,
     ExamModule,

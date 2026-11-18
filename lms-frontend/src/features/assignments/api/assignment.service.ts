@@ -150,7 +150,7 @@ export const assignmentService = {
           assignmentId: assignment.id,
           examId: null,
           isCompleted: false,
-          isVisible: true,
+          isVisible: false,
         });
       }
       return delay(toMockDetail(assignment));

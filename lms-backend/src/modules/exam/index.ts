@@ -15,3 +15,6 @@ export { ExamStatus } from './enums/exam-status.enum.js';
 export { ExamSessionStatus } from './enums/exam-session-status.enum.js';
 export { ExamViolationStatus } from './enums/exam-violation-status.enum.js';
 export { ComplaintStatus } from './enums/complaint-status.enum.js';
+export { ExamModule } from './exam.module.js';
+export { ExamFacade } from './facades/exam.facade.js';
+export type { StudentExamSummaryView } from './types/student-exam-view.type.js';
