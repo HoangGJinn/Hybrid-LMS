@@ -18,7 +18,6 @@ import { ExamSessionFile } from './entities/exam-session-file.entity.js';
 import { ExamSession } from './entities/exam-session.entity.js';
 import { ExamViolation } from './entities/exam-violation.entity.js';
 import { ProctoringLog } from './entities/proctoring-log.entity.js';
-import { ExamFacade } from './facades/exam.facade.js';
 import { ExamRepository } from './repositories/exam.repository.js';
 import { ExamSessionRepository } from './repositories/exam-session.repository.js';
 import { ExamGradingService } from './services/exam-grading.service.js';
