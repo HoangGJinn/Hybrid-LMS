@@ -17,6 +17,7 @@ import { RoadmapModule } from './modules/roadmap/roadmap.module.js';
 import { ZaloModule } from './modules/zalo/index.js';
 import { FileModule } from './shared/file/file.module.js';
 import { NotificationModule } from './shared/notification/notification.module.js';
+import { GradebookModule } from './modules/gradebook/gradebook.module.js';
 
 import { validate } from './config/env.validation.js';
 
@@ -44,6 +45,7 @@ import { validate } from './config/env.validation.js';
     ContentModule,
     DocumentModule,
     ExamModule,
+    GradebookModule,
     MasteryModule,
     RoadmapModule,
     ZaloModule,

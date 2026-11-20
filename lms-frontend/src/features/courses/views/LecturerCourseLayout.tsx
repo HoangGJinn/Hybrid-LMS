@@ -9,7 +9,7 @@ import { useCourse } from '../hooks/useCourse';
 const tabs = [
   { label: 'Course', to: '.', end: true },
   { label: 'Members', to: 'members' },
-  { label: 'Grades' },
+  { label: 'Grades', to: 'grades' },
   { label: 'Competencies' },
 ];
 

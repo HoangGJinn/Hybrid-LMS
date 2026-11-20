@@ -69,6 +69,11 @@ export const createLecturerClassRoutes = ({
               index: true,
               ...lazyPage(() => import('./views/CourseEditorPage')),
             },
+            {
+              path: 'grades',
+              ...crumb('Điểm số'),
+              ...lazyPage(() => import('./views/LecturerCourseGradesPage')),
+            },
             ...tabs,
           ],
         },
