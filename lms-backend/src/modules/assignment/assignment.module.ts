@@ -12,6 +12,7 @@ import { Assignment } from './entities/assignment.entity.js';
 import { AssignmentRepository } from './repositories/assignment.repository.js';
 import { SubmissionRepository } from './repositories/submission.repository.js';
 import { AssignmentCleanupService } from './services/assignment-cleanup.service.js';
+import { AssignmentExportService } from './services/assignment-export.service.js';
 import { AssignmentService } from './services/assignment.service.js';
 import { SubmissionReviewService } from './services/submission-review.service.js';
 import { SubmissionService } from './services/submission.service.js';
@@ -38,6 +39,7 @@ import { AssignmentFacade } from './facades/assignment.facade.js';
     SubmissionService,
     SubmissionReviewService,
     AssignmentService,
+    AssignmentExportService,
     AssignmentCleanupService,
     AssignmentFacade,
   ],

@@ -5,6 +5,8 @@ export interface GradeColumnView {
   id: string;
   /** Nhãn hiển thị: BT1, KT1, Giữa kỳ... */
   label: string;
+  /** Tên đầy đủ của bài tập / kỳ thi, dùng cho file xuất Excel. */
+  title: string;
   kind: GradeColumnKind;
   sectionId: string;
   sectionName: string;

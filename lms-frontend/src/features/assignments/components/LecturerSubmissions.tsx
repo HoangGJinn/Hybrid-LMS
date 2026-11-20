@@ -1,7 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import type { FormEvent, MouseEvent } from 'react';
 import { toast } from 'sonner';
-import { ArrowLeft, ArrowRight, Columns2, Download, X } from 'lucide-react';
+import {
+  ArrowLeft,
+  ArrowRight,
+  Columns2,
+  Download,
+  FileSpreadsheet,
+  X,
+} from 'lucide-react';
 import { AsyncView } from '@shared/components/AsyncView';
 import { EmptyState } from '@shared/components/EmptyState';
 import {
@@ -18,6 +25,7 @@ import { formatDateTime } from '@shared/utils/format/date';
 import {
   useClassSubmissions,
   useDownloadSubmissions,
+  useExportAssignmentResults,
   useGradeInAssignment,
 } from '../hooks/useSubmissionReview';
 import type {
@@ -46,11 +54,22 @@ export const LecturerSubmissions = ({
   const submissionsQuery = useClassSubmissions(classId, assignment.id);
   const state = toAsyncState(submissionsQuery);
   const download = useDownloadSubmissions();
+  const exportResults = useExportAssignmentResults();
   const [speedGraderId, setSpeedGraderId] = useState<string | null>(null);
 
   const downloadZip = (submissionId: string | undefined, fileName: string) =>
     download.mutate(
       { classId, assignmentId: assignment.id, submissionId, fileName },
+      { onError: (error) => toast.error(error.message) },
+    );
+
+  const exportExcel = () =>
+    exportResults.mutate(
+      {
+        classId,
+        assignmentId: assignment.id,
+        fileName: `${assignment.title}-results`,
+      },
       { onError: (error) => toast.error(error.message) },
     );
 
@@ -83,6 +102,15 @@ export const LecturerSubmissions = ({
           >
             <Download />
             {download.isPending ? 'Preparing zip…' : 'Download all (.zip)'}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={exportResults.isPending}
+            onClick={exportExcel}
+          >
+            <FileSpreadsheet />
+            {exportResults.isPending ? 'Preparing Excel…' : 'Export results (.xlsx)'}
           </Button>
         </div>
       </div>
