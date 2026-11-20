@@ -75,6 +75,7 @@ export class StudentExamService {
     now: Date = new Date(),
   ): Promise<StudentExamSummaryView[]> {
     const classes = await this.academicFacade.getClassesByStudent(user.id);
+    const classById = new Map(classes.map((cls) => [cls.id, cls]));
     const links = await this.contentFacade.findExamsByClasses(
       classes.map((cls) => cls.id),
     );
@@ -87,11 +88,21 @@ export class StudentExamService {
     );
     const examById = new Map(exams.map((exam) => [exam.id, exam]));
     const finalized = await this.finalizeExpiredSessions(sessions, examById, now);
+
+    // Gom session theo exam một lần, thay vì filter lại cho từng exam (O(n·m) -> O(n+m))
+    const sessionsByExam = new Map<string, ExamSession[]>();
+    for (const session of finalized) {
+      const list = sessionsByExam.get(session.examScheduleId) ?? [];
+      list.push(session);
+      sessionsByExam.set(session.examScheduleId, list);
+    }
+
     return exams.map((exam) =>
       this.toSummaryView(
         exam,
-        finalized.filter((s) => s.examScheduleId === exam.id),
+        sessionsByExam.get(exam.id) ?? [],
         now,
+        classById.get(exam.classId),
       ),
     );
   }
@@ -640,6 +651,7 @@ export class StudentExamService {
     exam: ExamSchedule,
     sessions: readonly ExamSession[],
     now: Date,
+    cls: { name: string; classCode: string } | undefined,
   ): StudentExamSummaryView {
     const status = resolveExamStatus(exam, now);
     const showResults = exam.showResults ?? true;
@@ -652,6 +664,8 @@ export class StudentExamService {
     return {
       id: exam.id,
       classId: exam.classId,
+      className: cls?.name ?? null,
+      classCode: cls?.classCode ?? null,
       examName: exam.examName,
       startTime: exam.startTime,
       endTime: exam.endTime,
