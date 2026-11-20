@@ -2,6 +2,7 @@ import { Link } from 'react-router'
 import { Check } from 'lucide-react'
 import { cn } from '@shared/utils/cn'
 import { ITEM_META } from '../utils/item-meta'
+import { formatItemDate } from '../utils/format-item-date'
 import type { SectionItem } from '../types/courses.types'
 
 interface StudentItemRowProps {
@@ -12,7 +13,7 @@ interface StudentItemRowProps {
   onToggleDone: () => void
 }
 
-/** One activity in a section: icon, link, and Moodle's "Mark as done" / "Done" button. */
+/** One activity in a section: icon, link, schedule (assignments and exams) and Moodle's "Mark as done" / "Done" button. */
 export const StudentItemRow = ({ item, href, onOpen, onToggleDone }: StudentItemRowProps) => {
   const { icon: Icon, color, label } = ITEM_META[item.itemType]
   return (
@@ -21,13 +22,27 @@ export const StudentItemRow = ({ item, href, onOpen, onToggleDone }: StudentItem
       className="flex scroll-mt-24 items-center gap-4 rounded-xl border bg-card px-4 py-3"
     >
       <Icon className={cn('h-6 w-6 shrink-0', color)} />
-      <Link
-        to={href}
-        onClick={onOpen}
-        className="min-w-0 flex-1 text-sm text-brand no-underline hover:underline"
-      >
-        {item.title}
-      </Link>
+      <div className="min-w-0 flex-1">
+        <Link
+          to={href}
+          onClick={onOpen}
+          className="text-sm text-brand no-underline hover:underline"
+        >
+          {item.title}
+        </Link>
+        {item.openAt && item.closeAt && (
+          <p className="mt-1 flex flex-wrap gap-x-4 text-xs text-muted-foreground">
+            <span>
+              <span className="font-semibold text-foreground/70">Opened:</span>{' '}
+              {formatItemDate(item.openAt)}
+            </span>
+            <span>
+              <span className="font-semibold text-foreground/70">Closes:</span>{' '}
+              {formatItemDate(item.closeAt)}
+            </span>
+          </p>
+        )}
+      </div>
       <span className="hidden shrink-0 text-xs text-muted-foreground sm:inline">{label}</span>
       {item.isCompleted ? (
         <button
