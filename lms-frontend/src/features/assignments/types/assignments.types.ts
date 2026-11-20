@@ -17,6 +17,8 @@ export interface Assignment {
   acceptedExtensions: string[];
   /** The lecturer's note on what to submit and how. */
   submissionNote: string | null;
+  classCode?: string | null;
+  className?: string | null;
 }
 
 /** A file with a short-lived download link (presigned S3 URL); never store or cache it for long. */

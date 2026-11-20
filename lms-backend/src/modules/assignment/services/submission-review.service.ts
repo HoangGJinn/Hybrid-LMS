@@ -22,6 +22,8 @@ import { computeAssignmentStatus } from '../utils/assignment-status.util.js';
 export interface AssignmentSummary {
   readonly id: string;
   readonly classId: string;
+  readonly classCode: string | null;
+  readonly className: string | null;
   readonly title: string;
   readonly instruction: string;
   readonly openAt: Date;
@@ -71,17 +73,21 @@ export class SubmissionReviewService {
       links.map((link) => [link.assignmentId, link.classId]),
     );
     const now = new Date();
-    return assignments.map((assignment) =>
-      this.toSummary(
+    const classById = new Map(classes.map((classRoom) => [classRoom.id, classRoom]));
+    return assignments.map((assignment) => {
+      const classId = classOf.get(assignment.id) ?? '';
+      const classRoom = classById.get(classId);
+      return this.toSummary(
         assignment,
-        classOf.get(assignment.id) ?? '',
+        classId,
         computeAssignmentStatus(
           assignment,
           mine.find((s) => s.assignmentId === assignment.id) ?? null,
           now,
         ),
-      ),
-    );
+        classRoom ? { code: classRoom.classCode, name: classRoom.name } : null,
+      );
+    });
   }
 
   /** The student's own submissions across all their classes. */
@@ -310,10 +316,13 @@ export class SubmissionReviewService {
     assignment: Assignment,
     classId: string,
     status: AssignmentStatus,
+    classInfo: { code: string; name: string } | null = null,
   ): AssignmentSummary {
     return {
       id: assignment.id,
       classId,
+      classCode: classInfo?.code ?? null,
+      className: classInfo?.name ?? null,
       title: assignment.title,
       instruction: assignment.instruction,
       openAt: assignment.openAt,
