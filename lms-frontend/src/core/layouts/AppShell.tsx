@@ -1,5 +1,13 @@
+import { useEffect } from 'react';
 import { NavLink, Outlet, useNavigation } from 'react-router';
-import { GraduationCap, LogOut, Menu, X } from 'lucide-react';
+import {
+  GraduationCap,
+  LogOut,
+  Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
+  X,
+} from 'lucide-react';
 import { useCurrentUser, useLogout } from '@features/auth';
 import type { UserRole } from '@core/types/auth.types';
 import { NotificationBell } from '@features/notifications';
@@ -8,6 +16,7 @@ import { homeByRole, navByRole } from '@core/config/navigation';
 import { cn } from '@shared/utils/cn';
 import Breadcrumbs from './Breadcrumbs';
 import { ThemeToggle } from '@features/theme';
+import ScrollToTopButton from '@shared/components/ScrollToTopButton';
 
 const initials = (name?: string) =>
   (name ?? 'Guest')
@@ -20,35 +29,51 @@ const initials = (name?: string) =>
 
 const SidebarBody = ({
   role,
+  collapsed = false,
   onNavigate,
 }: {
   role: UserRole;
+  collapsed?: boolean;
   onNavigate?: () => void;
 }) => (
   <>
-    <div className="flex h-14 items-center gap-3 px-5">
-      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-card text-brand shadow-sm">
+    <div
+      className={cn(
+        'flex h-14 items-center gap-3',
+        collapsed ? 'justify-center px-2' : 'px-5',
+      )}
+    >
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-card text-brand shadow-sm">
         <GraduationCap className="h-5 w-5" />
       </div>
-      <span className="text-lg font-bold">Hybrid LMS</span>
+      {!collapsed && (
+        <span className="whitespace-nowrap text-lg font-bold">Hybrid LMS</span>
+      )}
     </div>
-    <nav className="flex-1 space-y-1 px-3 py-2" aria-label="Main navigation">
+    <nav
+      className={cn('flex-1 space-y-1 py-2', collapsed ? 'px-2' : 'px-3')}
+      aria-label="Main navigation"
+    >
       {navByRole[role].map(({ label, to, icon: Icon }) => (
         <NavLink
           key={to}
           to={to}
           end={to === homeByRole[role]}
           onClick={onNavigate}
+          title={collapsed ? label : undefined}
+          aria-label={collapsed ? label : undefined}
           className={({ isActive }) =>
             cn(
-              'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium no-underline transition-colors',
+              'flex items-center rounded-xl py-2.5 text-sm font-medium no-underline transition-colors',
+              collapsed ? 'justify-center px-0' : 'gap-3 px-3',
               isActive
                 ? 'bg-card text-brand shadow-sm'
                 : 'text-sidebar-foreground/80 hover:bg-white/40 hover:text-sidebar-foreground dark:hover:bg-white/10',
             )
           }
         >
-          <Icon className="h-4 w-4" /> {label}
+          <Icon className="h-4 w-4 shrink-0" />
+          {!collapsed && <span className="whitespace-nowrap">{label}</span>}
         </NavLink>
       ))}
     </nav>
@@ -60,13 +85,36 @@ const AppShell = () => {
   const { mutate: logout } = useLogout();
   const mobileNavOpen = useUiStore((s) => s.mobileNavOpen);
   const setMobileNavOpen = useUiStore((s) => s.setMobileNavOpen);
+  const collapsed = useUiStore((s) => s.sidebarCollapsed);
+  const toggleSidebar = useUiStore((s) => s.toggleSidebar);
   const isNavigating = useNavigation().state === 'loading';
   const role = user?.role ?? 'STUDENT';
 
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'b') return;
+      const el = e.target as HTMLElement | null;
+      // không chặn Ctrl+B (in đậm) khi đang gõ trong ô nhập liệu
+      if (el?.closest('input, textarea, [contenteditable="true"]')) return;
+      e.preventDefault();
+      toggleSidebar();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [toggleSidebar]);
+
+  const ToggleIcon = collapsed ? PanelLeftOpen : PanelLeftClose;
+
   return (
     <div className="flex min-h-screen bg-background">
-      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col bg-sidebar text-sidebar-foreground md:flex">
-        <SidebarBody role={role} />
+      <aside
+        id="app-sidebar"
+        className={cn(
+          'sticky top-0 hidden h-screen shrink-0 flex-col overflow-hidden bg-sidebar text-sidebar-foreground transition-[width] duration-200 motion-reduce:transition-none md:flex',
+          collapsed ? 'w-[72px]' : 'w-64',
+        )}
+      >
+        <SidebarBody role={role} collapsed={collapsed} />
       </aside>
 
       {mobileNavOpen && (
@@ -104,6 +152,17 @@ const AppShell = () => {
               className="rounded-md border-0 bg-transparent p-2 hover:bg-accent md:hidden"
             >
               <Menu className="h-5 w-5" />
+            </button>
+            <button
+              type="button"
+              onClick={toggleSidebar}
+              aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              aria-expanded={!collapsed}
+              aria-controls="app-sidebar"
+              title={`${collapsed ? 'Mở rộng' : 'Thu gọn'} sidebar (Ctrl+B)`}
+              className="hidden rounded-md border-0 bg-transparent p-2 hover:bg-accent md:inline-flex"
+            >
+              <ToggleIcon className="h-5 w-5" />
             </button>
             <span className="text-sm font-medium text-brand">
               {role === 'LECTURER' ? 'Lecturer Portal' : 'Student Portal'}
@@ -143,11 +202,12 @@ const AppShell = () => {
             className="fixed inset-x-0 top-0 z-50 h-0.5 animate-pulse bg-primary"
           />
         )}
-        <main className="min-w-0 flex-1 overflow-x-hidden px-4 py-3 sm:px-6 sm:py-4">
+        <main className="min-w-0 flex-1 overflow-x-clip px-4 py-3 sm:px-6 sm:py-4">
           <Breadcrumbs />
           <Outlet />
         </main>
       </div>
+      <ScrollToTopButton />
     </div>
   );
 };
