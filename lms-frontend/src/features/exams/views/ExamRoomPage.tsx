@@ -39,6 +39,7 @@ import QuestionPalette from '../components/QuestionPalette';
 import SubmitReviewDialog from '../components/SubmitReviewDialog';
 import { AttemptReviewViewer } from '../components/AttemptReviewViewer';
 import { FileExamWorkspace } from '../components/FileExamWorkspace';
+import { scoreTone } from '../utils/score-tone';
 
 /** UTEx-style fixed 10-question batch per page. */
 const QUESTIONS_PER_PAGE = 10;
@@ -126,6 +127,29 @@ const ExamRoomPage = () => {
   );
 };
 
+const formatMinutes = (minutes: number): string => {
+  if (minutes < 60) return `${minutes} min`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m === 0 ? `${h} h` : `${h} h ${m} min`;
+};
+
+const tookLabel = (startedAt: string, endedAt: string | null): string | null => {
+  if (!endedAt) return null;
+  const minutes = Math.max(
+    1,
+    Math.round((+new Date(endedAt) - +new Date(startedAt)) / 60_000),
+  );
+  return `took ${formatMinutes(minutes)}`;
+};
+
+const InfoRow = ({ label, value }: { label: string; value: string }) => (
+  <div className="flex items-baseline justify-between gap-4 py-2.5 text-sm">
+    <dt className="text-muted-foreground">{label}</dt>
+    <dd className="m-0 text-right font-medium">{value}</dd>
+  </div>
+);
+
 const LobbyView = ({
   lobby,
   isStarting,
@@ -138,178 +162,259 @@ const LobbyView = ({
   onReviewAttempt: (sessionId: string) => void;
 }) => {
   const hasActive = lobby.activeSessionId !== null;
-  const maxAttemptsLabel =
-    lobby.maxAttempts === null
-      ? 'Unlimited'
-      : `${lobby.attemptsUsed} / ${lobby.maxAttempts}`;
+  const canAct = hasActive || lobby.canStartNewAttempt;
+  const isFile = lobby.format === 'FILE';
+  const attemptsLeft =
+    lobby.maxAttempts === null ? null : lobby.maxAttempts - lobby.attemptsUsed;
+
+  // What the student should know right now, per state.
+  const headline = hasActive
+    ? 'You have an attempt in progress'
+    : lobby.canStartNewAttempt
+      ? lobby.attemptsUsed === 0
+        ? 'Ready to begin'
+        : `Ready for attempt #${lobby.attemptsUsed + 1}`
+      : lobby.status === 'UPCOMING'
+        ? 'Not open yet'
+        : lobby.status === 'CLOSED'
+          ? 'This exam is closed'
+          : 'No attempts left';
+  const reason = hasActive
+    ? 'Pick up where you left off. Your timer is still running.'
+    : lobby.canStartNewAttempt
+      ? isFile
+        ? 'Download the paper, upload your files, and update them any time while the timer runs.'
+        : 'Answers are saved automatically while you work.'
+      : lobby.status === 'UPCOMING'
+        ? `Opens ${formatDateTime(lobby.startTime)}.`
+        : lobby.status === 'CLOSED'
+          ? `Closed ${formatDateTime(lobby.endTime)}.`
+          : 'You have used every attempt allowed for this exam.';
+
+  const bestIndex =
+    lobby.showResults && lobby.bestScore !== null
+      ? lobby.attempts.findIndex((a) => a.score === lobby.bestScore)
+      : -1;
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
+    <div className="mx-auto max-w-5xl space-y-5">
       <PageHeader
         title={lobby.examName}
-        subtitle={`${formatDateTime(lobby.startTime)} → ${formatDateTime(lobby.endTime)} · ${lobby.durationMinutes} minutes per attempt`}
-        actions={<StatusBadge status={lobby.status} />}
+        subtitle={
+          isFile
+            ? 'File submission exam'
+            : `${lobby.questionCount} multiple-choice questions`
+        }
+        actions={
+          <div className="flex items-center gap-2">
+            <StatusBadge status={lobby.status} />
+            <Button variant="outline" size="sm" asChild>
+              <Link to={`/student/courses/${lobby.classId}/content`}>
+                <ArrowLeft className="mr-1.5 h-4 w-4" />
+                Back to course
+              </Link>
+            </Button>
+          </div>
+        }
       />
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <div className="rounded-lg border bg-card p-4">
-          <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            {lobby.format === 'FILE' ? 'Format & duration' : 'Questions & duration'}
-          </span>
-          <p className="m-0 mt-1 text-lg font-semibold">
-            {lobby.format === 'FILE'
-              ? `File submission · ${lobby.durationMinutes} mins`
-              : `${lobby.questionCount} questions · ${lobby.durationMinutes} mins`}
-          </p>
-          <p className="m-0 mt-1 text-xs text-muted-foreground">
-            {lobby.format === 'FILE'
-              ? 'Editable while attempt timer is running'
-              : 'Displayed 10 questions per page'}
-          </p>
-        </div>
-
-        <div className="rounded-lg border bg-card p-4">
-          <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            Attempts used
-          </span>
-          <p className="m-0 mt-1 text-lg font-semibold">{maxAttemptsLabel}</p>
-          <p className="m-0 mt-1 text-xs text-muted-foreground">
-            {lobby.format === 'FILE'
-              ? 'Single attempt with editable file uploads'
-              : 'Highest score across attempts is kept'}
-          </p>
-        </div>
-
-        <div className="rounded-lg border bg-card p-4">
-          <span className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            <Trophy className="h-3.5 w-3.5 text-warning" />
-            Best score
-          </span>
-          <p className="m-0 mt-1 text-lg font-semibold">
-            {!lobby.showResults
-              ? 'Hidden by lecturer'
-              : lobby.bestScore !== null
-                ? `${lobby.bestScore.toFixed(2)} / 10`
-                : 'No graded attempt'}
-          </p>
-          <p className="m-0 mt-1 text-xs text-muted-foreground">
-            {lobby.format === 'FILE'
-              ? 'Graded by your lecturer on a 10-point scale'
-              : lobby.showResults
-                ? 'Score & correct answers available after submit'
-                : 'Results will be visible when enabled by lecturer'}
-          </p>
-        </div>
-      </div>
-
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border bg-card p-5">
-        <div className="space-y-1">
-          <p className="m-0 font-semibold">
-            {hasActive
-              ? 'You have an attempt in progress'
-              : lobby.canStartNewAttempt
-                ? lobby.attemptsUsed === 0
-                  ? 'Ready to begin your exam?'
-                  : `Ready for Attempt #${lobby.attemptsUsed + 1}?`
+      <div className="grid gap-5 lg:grid-cols-[1fr_300px]">
+        <div className="space-y-5">
+          {/* State + primary action + best score, in one place */}
+          <section
+            className={cn(
+              'flex flex-wrap items-center justify-between gap-x-6 gap-y-4 rounded-lg border border-l-4 bg-card p-5',
+              canAct
+                ? 'border-l-primary'
                 : lobby.status === 'UPCOMING'
-                  ? 'This exam has not opened yet'
-                  : lobby.status === 'CLOSED'
-                    ? 'This exam is closed'
-                    : 'You have used all allowed attempts'}
-          </p>
-          <p className="m-0 text-sm text-muted-foreground">
-            {lobby.format === 'FILE'
-              ? 'Download the question paper, upload your work, and update your files anytime while your timer is running.'
-              : 'Your answers are saved automatically every 60 seconds and whenever you switch between 10-question pages.'}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" asChild>
-            <Link to={`/student/courses/${lobby.classId}/content`}>
-              Back to course
-            </Link>
-          </Button>
-          {(hasActive || lobby.canStartNewAttempt) && (
-            <Button disabled={isStarting} onClick={onStartOrResume}>
-              {hasActive ? (
-                <>
-                  <Play className="mr-1.5 h-4 w-4" />
-                  {isStarting ? 'Loading…' : 'Continue attempt'}
-                </>
-              ) : lobby.attemptsUsed > 0 ? (
-                <>
-                  <RotateCcw className="mr-1.5 h-4 w-4" />
+                  ? 'border-l-warning'
+                  : 'border-l-border',
+            )}
+          >
+            <div className="min-w-0 flex-1 space-y-3">
+              <div>
+                <h2 className="m-0 text-lg font-semibold">{headline}</h2>
+                <p className="m-0 mt-1 text-sm text-muted-foreground">
+                  {reason}
+                </p>
+              </div>
+              {canAct && (
+                <Button disabled={isStarting} onClick={onStartOrResume}>
+                  {hasActive ? (
+                    <Play className="mr-1.5 h-4 w-4" />
+                  ) : lobby.attemptsUsed > 0 ? (
+                    <RotateCcw className="mr-1.5 h-4 w-4" />
+                  ) : (
+                    <Play className="mr-1.5 h-4 w-4" />
+                  )}
                   {isStarting
-                    ? 'Starting…'
-                    : `Retake exam (Attempt #${lobby.attemptsUsed + 1})`}
-                </>
-              ) : (
-                <>
-                  <Play className="mr-1.5 h-4 w-4" />
-                  {isStarting ? 'Starting…' : 'Start exam'}
-                </>
+                    ? 'Loading…'
+                    : hasActive
+                      ? 'Continue attempt'
+                      : lobby.attemptsUsed > 0
+                        ? `Retake (attempt #${lobby.attemptsUsed + 1})`
+                        : 'Start exam'}
+                </Button>
               )}
-            </Button>
+            </div>
+
+            <div className="sm:text-right">
+              <p className="m-0 flex items-center gap-1.5 text-sm text-muted-foreground sm:justify-end">
+                <Trophy className="h-4 w-4 text-warning" />
+                Best score
+              </p>
+              {!lobby.showResults ? (
+                <p className="m-0 mt-1 text-sm text-muted-foreground">
+                  Hidden by lecturer
+                </p>
+              ) : lobby.bestScore !== null ? (
+                <p
+                  className={cn(
+                    'm-0 mt-1 text-4xl font-bold tabular-nums',
+                    scoreTone(lobby.bestScore),
+                  )}
+                >
+                  {lobby.bestScore.toFixed(2)}
+                  <span className="ml-1 text-base font-medium text-muted-foreground">
+                    /10
+                  </span>
+                </p>
+              ) : (
+                <p className="m-0 mt-1 text-sm text-muted-foreground">
+                  {isFile && lobby.attemptsUsed > 0
+                    ? 'Awaiting grade'
+                    : 'No score yet'}
+                </p>
+              )}
+            </div>
+          </section>
+
+          {/* Attempts history */}
+          {lobby.attempts.length > 0 && (
+            <section className="overflow-hidden rounded-lg border bg-card">
+              <h2 className="m-0 border-b px-5 py-3 text-sm font-semibold">
+                Attempts
+                <span className="ml-2 font-normal text-muted-foreground">
+                  {lobby.attemptsUsed}
+                  {lobby.maxAttempts === null ? '' : ` / ${lobby.maxAttempts}`}{' '}
+                  used
+                  {attemptsLeft !== null && attemptsLeft > 0
+                    ? ` · ${attemptsLeft} left`
+                    : ''}
+                </span>
+              </h2>
+              <ul className="m-0 list-none divide-y p-0">
+                {lobby.attempts.map((item, index) => {
+                  const done =
+                    item.status === 'COMPLETED' || Boolean(item.submittedAt);
+                  const took = tookLabel(item.startedAt, item.endedAt);
+                  return (
+                    <li
+                      key={item.id}
+                      className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="m-0 flex items-center gap-2 text-sm font-semibold">
+                          Attempt #{item.attemptNumber}
+                          {index === bestIndex && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-warning/15 px-2 py-0.5 text-xs font-medium text-warning">
+                              <Trophy className="h-3 w-3" />
+                              Best
+                            </span>
+                          )}
+                          {item.status === 'IN_PROGRESS' && (
+                            <StatusBadge status={item.status} />
+                          )}
+                        </p>
+                        <p className="m-0 mt-0.5 text-xs text-muted-foreground">
+                          {formatDateTime(item.startedAt)}
+                          {took ? ` · ${took}` : ''}
+                        </p>
+                      </div>
+
+                      {done && (
+                        <span
+                          className={cn(
+                            'text-base font-bold tabular-nums',
+                            lobby.showResults && item.score !== null
+                              ? scoreTone(item.score)
+                              : 'text-sm font-normal text-muted-foreground',
+                          )}
+                        >
+                          {!lobby.showResults
+                            ? 'Hidden'
+                            : item.score !== null
+                              ? item.score.toFixed(2)
+                              : 'Awaiting grade'}
+                          {lobby.showResults && item.score !== null && (
+                            <span className="ml-0.5 text-xs font-medium text-muted-foreground">
+                              /10
+                            </span>
+                          )}
+                        </span>
+                      )}
+
+                      {done && lobby.showResults && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => onReviewAttempt(item.id)}
+                        >
+                          <Eye className="mr-1.5 h-3.5 w-3.5" />
+                          {isFile ? 'View submission' : 'Review answers'}
+                        </Button>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
           )}
         </div>
-      </div>
 
-      {lobby.attempts.length > 0 && (
-        <div className="rounded-lg border bg-card p-5">
-          <h2 className="m-0 mb-3 text-base font-semibold">
-            Attempts history ({lobby.attempts.length})
-          </h2>
-          <div className="divide-y">
-            {lobby.attempts.map((item) => (
-              <div
-                key={item.id}
-                className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm"
-              >
-                <div>
-                  <span className="font-semibold">
-                    Attempt #{item.attemptNumber}
-                  </span>
-                  <span className="ml-3 text-xs text-muted-foreground">
-                    Started {formatDateTime(item.startedAt)}
-                    {item.submittedAt
-                      ? ` · Submitted ${formatDateTime(item.submittedAt)}`
-                      : item.endedAt
-                        ? ` · Ended ${formatDateTime(item.endedAt)}`
-                        : ''}
-                  </span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <StatusBadge status={item.status} />
-                  {(item.status === 'COMPLETED' || item.submittedAt) && (
-                    <span className="font-mono text-sm font-semibold">
-                      {!lobby.showResults
-                        ? 'Score hidden'
-                        : item.score !== null
-                          ? `${item.score.toFixed(2)} / 10`
-                          : lobby.format === 'FILE'
-                            ? 'Pending grade'
-                            : 'Score hidden'}
-                    </span>
-                  )}
-                  {(item.status === 'COMPLETED' || Boolean(item.submittedAt)) &&
-                    lobby.showResults && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => onReviewAttempt(item.id)}
-                      >
-                        <Eye className="mr-1.5 h-3.5 w-3.5" />
-                        {lobby.format === 'FILE'
-                          ? 'View submission'
-                          : 'Review answers'}
-                      </Button>
-                    )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+        {/* Static facts live in a quiet sidebar instead of three big cards */}
+        <aside className="h-fit rounded-lg border bg-card px-5 py-3 lg:sticky lg:top-4">
+          <h2 className="m-0 py-1 text-sm font-semibold">Exam details</h2>
+          <dl className="m-0 divide-y">
+            <InfoRow
+              label="Format"
+              value={isFile ? 'File submission' : 'Multiple choice'}
+            />
+            {!isFile && (
+              <InfoRow label="Questions" value={String(lobby.questionCount)} />
+            )}
+            <InfoRow
+              label="Time per attempt"
+              value={formatMinutes(lobby.durationMinutes)}
+            />
+            <InfoRow
+              label="Attempts allowed"
+              value={
+                lobby.maxAttempts === null
+                  ? 'Unlimited'
+                  : String(lobby.maxAttempts)
+              }
+            />
+            <InfoRow label="Opens" value={formatDateTime(lobby.startTime)} />
+            <InfoRow label="Closes" value={formatDateTime(lobby.endTime)} />
+            <InfoRow
+              label="Results"
+              value={lobby.showResults ? 'Shown after submit' : 'Hidden'}
+            />
+            {!isFile && (lobby.shuffleQuestions || lobby.shuffleOptions) && (
+              <InfoRow
+                label="Shuffled"
+                value={[
+                  lobby.shuffleQuestions && 'Questions',
+                  lobby.shuffleOptions && 'Answers',
+                ]
+                  .filter(Boolean)
+                  .join(' & ')}
+              />
+            )}
+          </dl>
+        </aside>
+      </div>
     </div>
   );
 };

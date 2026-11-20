@@ -160,6 +160,8 @@ export interface StudentExamAttemptItem {
 export interface StudentExamSummary {
   id: string;
   classId: string;
+  className : string;
+  classCode : string;
   examName: string;
   startTime: string;
   endTime: string;

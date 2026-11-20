@@ -35,6 +35,8 @@ export interface StudentExamAttemptItemView {
 export interface StudentExamSummaryView {
   readonly id: string;
   readonly classId: string;
+  readonly className: string | null;
+  readonly classCode: string | null;
   readonly examName: string;
   readonly startTime: Date;
   readonly endTime: Date;

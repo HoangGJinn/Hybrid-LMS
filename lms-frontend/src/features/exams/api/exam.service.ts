@@ -165,6 +165,8 @@ export const examService = {
         return {
           id: exam.id,
           classId: exam.classId,
+          className: `Lớp ${exam.classId}`, // <-- Thêm dòng này (hoặc lấy từ mockClasses nếu có)
+          classCode: exam.classId,
           examName: exam.examName,
           startTime: exam.startTime,
           endTime: exam.endTime,

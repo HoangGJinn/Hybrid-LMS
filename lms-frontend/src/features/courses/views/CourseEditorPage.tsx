@@ -2,7 +2,7 @@ import { toast } from 'sonner'
 import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useParams } from 'react-router'
-import { Check, Loader2, Plus } from 'lucide-react'
+import { Check, Loader2, PanelLeftOpen, Plus } from 'lucide-react'
 import {
   useRemoveDocument,
   useUploadDocument,
@@ -25,13 +25,16 @@ import { EmptyState } from '@shared/components/EmptyState'
 import { Button } from '@shared/components/ui/button'
 import { Input } from '@shared/components/ui/input'
 import { toAsyncState } from '@shared/utils/async-state'
+import { cn } from '@shared/utils/cn'
 import { courseKeys } from '../api/queryKeys'
 import type { NewItemInput } from '../api/section.service'
 import { AddContentDialog } from '../components/AddContentDialog'
 import { AddVideoDialog } from '../components/AddVideoDialog'
+import { CourseOutline } from '../components/CourseOutline'
 import { EditableSectionCard } from '../components/EditableSectionCard'
 import { RemoveContentConfirm } from '../components/RemoveContentConfirm'
-import { useCourseSections } from '../hooks/useCourse'
+import { useActiveSection } from '../hooks/useActiveSection'
+import { useCourse, useCourseSections } from '../hooks/useCourse'
 import { useSectionEditor } from '../hooks/useSectionEditor'
 import { moveItem } from '../utils/move-item'
 import type { Section, SectionItem } from '../types/courses.types'
@@ -78,6 +81,7 @@ const SaveStatus = ({ isSaving }: { isSaving: boolean }) => (
 const CourseEditorPage = () => {
   const { courseId = '' } = useParams()
   const state = toAsyncState(useCourseSections(courseId))
+  const courseName = useCourse(courseId).data?.name ?? ''
   const editor = useSectionEditor(courseId)
   const uploadDocument = useUploadDocument()
   const removeDocument = useRemoveDocument()
@@ -97,6 +101,11 @@ const CourseEditorPage = () => {
   const [pendingRemoval, setPendingRemoval] = useState<SectionItem | null>(null)
   // Ids deleted with "Undo" still available: hidden from the screen, not yet deleted on the server.
   const [pendingDeleteIds, setPendingDeleteIds] = useState<ReadonlySet<string>>(new Set())
+  // The index is open on wide screens and tucked away on phones.
+  const [isOutlineOpen, setIsOutlineOpen] = useState(
+    () => window.matchMedia('(min-width: 1024px)').matches,
+  )
+  const activeSectionId = useActiveSection((state.data ?? []).map((s) => s.id))
 
   /**
    * Closes a dialog only if it is still the open one. A <dialog> fires its close event after it was closed from code,
@@ -250,6 +259,17 @@ const CourseEditorPage = () => {
     setCollapsed(Object.fromEntries(sections.map((s) => [s.id, !isAllCollapsed])))
   }
 
+  /** Opens the section if it was collapsed, then scrolls to it (or to one of its items when it has an id). */
+  const handleNavigate = (sectionId: string, itemId?: string) => {
+    setCollapsed((c) => ({ ...c, [sectionId]: false }))
+    window.requestAnimationFrame(() => {
+      const target =
+        (itemId && document.getElementById(`item-${itemId}`)) ||
+        document.getElementById(`section-${sectionId}`)
+      target?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+  }
+
   const handleCreateSection = () => {
     const title = (newTitle ?? '').trim()
     if (title === '') return
@@ -263,17 +283,6 @@ const CourseEditorPage = () => {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-end gap-4">
-        {editing && <SaveStatus isSaving={editor.isSaving} />}
-        <Button
-          variant={editing ? 'outline' : 'default'}
-          onClick={editing ? handleStopEditing : () => setEditing(true)}
-          disabled={!state.data}
-        >
-          {editing ? 'Turn editing off' : 'Turn editing on'}
-        </Button>
-      </div>
-
       <AsyncView state={state}>
         {(serverSections) => {
           // Things the lecturer just deleted stay out of sight while "Undo" is still possible.
@@ -287,92 +296,133 @@ const CourseEditorPage = () => {
             }))
           const isAllCollapsed = sections.every((s) => collapsed[s.id])
           return (
-            <div className="space-y-5">
-              {sections.length === 0 && (
-                <EmptyState
-                  title="No sections yet"
-                  description="Turn editing on to add the first section."
-                />
-              )}
-              {sections.map((sec, i) => (
-                <EditableSectionCard
-                  key={sec.id}
-                  section={sec}
-                  index={i}
-                  total={sections.length}
-                  isEditing={editing}
-                  isOpen={!collapsed[sec.id]}
-                  toggleAllLabel={i === 0 ? (isAllCollapsed ? 'Expand all' : 'Collapse all') : undefined}
-                  itemHref={(item) => itemHref(courseId, item)}
-                  onToggle={() => setCollapsed((c) => ({ ...c, [sec.id]: !c[sec.id] }))}
-                  onToggleAll={() => handleToggleAll(sections)}
-                  onRename={(title) => editor.updateSection.mutate({ id: sec.id, patch: { title } })}
-                  onDescriptionChange={(description) =>
-                    editor.updateSection.mutate({ id: sec.id, patch: { description } })
-                  }
-                  onToggleVisible={() =>
-                    editor.updateSection.mutate({ id: sec.id, patch: { isVisible: sec.isVisible === false } })
-                  }
-                  onMove={(direction) =>
-                    editor.reorderSections.mutate(moveItem(sections, i, direction).map((s) => s.id))
-                  }
-                  onDelete={() => handleDeleteSection(sec)}
-                  onAddContent={() => setDialog({ kind: 'PICKER', sectionId: sec.id })}
-                  onItemRename={(item, title) =>
-                    editor.updateItem.mutate({ sectionId: sec.id, itemId: item.id, patch: { title } })
-                  }
-                  onItemToggleVisible={(item) =>
-                    editor.updateItem.mutate({
-                      sectionId: sec.id,
-                      itemId: item.id,
-                      patch: { isVisible: item.isVisible === false },
-                    })
-                  }
-                  onItemMove={(item, direction) =>
-                    editor.reorderItems.mutate({
-                      sectionId: sec.id,
-                      ids: moveItem(sec.items, sec.items.indexOf(item), direction).map((x) => x.id),
-                    })
-                  }
-                  onItemRemove={handleRemoveItem}
-                />
-              ))}
-
-              {editing && newTitle === null && (
-                <Button variant="outline" className="w-full" onClick={() => setNewTitle(`Week ${sections.length + 1}`)}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add section
-                </Button>
-              )}
-              {editing && newTitle !== null && (
-                <form
-                  className="flex flex-wrap items-center gap-2 rounded-2xl border bg-card p-4"
-                  onSubmit={(e) => {
-                    e.preventDefault()
-                    handleCreateSection()
-                  }}
-                >
-                  <Input
-                    aria-label="New section title"
-                    autoFocus
-                    maxLength={255}
-                    value={newTitle}
-                    onChange={(e) => setNewTitle(e.target.value)}
-                    className="min-w-0 flex-1"
+            // No `items-start` here: the aside must stretch to the full height of the content,
+            // otherwise the sticky outline inside it has no room to travel.
+            <div
+              className={cn('grid gap-6', isOutlineOpen && 'lg:grid-cols-[18rem_minmax(0,1fr)]')}
+            >
+              {isOutlineOpen && (
+                <aside>
+                  <CourseOutline
+                    courseName={courseName}
+                    sections={sections}
+                    activeSectionId={activeSectionId}
+                    onNavigate={handleNavigate}
+                    onClose={() => setIsOutlineOpen(false)}
+                    showProgress={false}
                   />
-                  <Button type="submit" disabled={editor.createSection.isPending || newTitle.trim() === ''}>
-                    {editor.createSection.isPending ? 'Adding…' : 'Add'}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setNewTitle(null)}
-                    disabled={editor.createSection.isPending}
-                  >
-                    Cancel
-                  </Button>
-                </form>
+                </aside>
               )}
+
+              <div className="min-w-0 space-y-5">
+                {/* Toolbar lives in the content column, level with the outline */}
+                <div className="flex items-center justify-between gap-4">
+                  {isOutlineOpen ? (
+                    <span />
+                  ) : (
+                    <Button variant="outline" size="sm" onClick={() => setIsOutlineOpen(true)}>
+                      <PanelLeftOpen className="mr-2 h-4 w-4" />
+                      Course index
+                    </Button>
+                  )}
+                  <div className="flex items-center gap-4">
+                    {editing && <SaveStatus isSaving={editor.isSaving} />}
+                    <Button
+                      variant={editing ? 'outline' : 'default'}
+                      onClick={editing ? handleStopEditing : () => setEditing(true)}
+                    >
+                      {editing ? 'Turn editing off' : 'Turn editing on'}
+                    </Button>
+                  </div>
+                </div>
+
+                {sections.length === 0 && (
+                  <EmptyState
+                    title="No sections yet"
+                    description="Turn editing on to add the first section."
+                  />
+                )}
+                {sections.map((sec, i) => (
+                  <div key={sec.id} id={`section-${sec.id}`} className="scroll-mt-20">
+                    <EditableSectionCard
+                      section={sec}
+                      index={i}
+                      total={sections.length}
+                      isEditing={editing}
+                      isOpen={!collapsed[sec.id]}
+                      toggleAllLabel={i === 0 ? (isAllCollapsed ? 'Expand all' : 'Collapse all') : undefined}
+                      itemHref={(item) => itemHref(courseId, item)}
+                      onToggle={() => setCollapsed((c) => ({ ...c, [sec.id]: !c[sec.id] }))}
+                      onToggleAll={() => handleToggleAll(sections)}
+                      onRename={(title) => editor.updateSection.mutate({ id: sec.id, patch: { title } })}
+                      onDescriptionChange={(description) =>
+                        editor.updateSection.mutate({ id: sec.id, patch: { description } })
+                      }
+                      onToggleVisible={() =>
+                        editor.updateSection.mutate({ id: sec.id, patch: { isVisible: sec.isVisible === false } })
+                      }
+                      onMove={(direction) =>
+                        editor.reorderSections.mutate(moveItem(sections, i, direction).map((s) => s.id))
+                      }
+                      onDelete={() => handleDeleteSection(sec)}
+                      onAddContent={() => setDialog({ kind: 'PICKER', sectionId: sec.id })}
+                      onItemRename={(item, title) =>
+                        editor.updateItem.mutate({ sectionId: sec.id, itemId: item.id, patch: { title } })
+                      }
+                      onItemToggleVisible={(item) =>
+                        editor.updateItem.mutate({
+                          sectionId: sec.id,
+                          itemId: item.id,
+                          patch: { isVisible: item.isVisible === false },
+                        })
+                      }
+                      onItemMove={(item, direction) =>
+                        editor.reorderItems.mutate({
+                          sectionId: sec.id,
+                          ids: moveItem(sec.items, sec.items.indexOf(item), direction).map((x) => x.id),
+                        })
+                      }
+                      onItemRemove={handleRemoveItem}
+                    />
+                  </div>
+                ))}
+
+                {editing && newTitle === null && (
+                  <Button variant="outline" className="w-full" onClick={() => setNewTitle(`Week ${sections.length + 1}`)}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add section
+                  </Button>
+                )}
+                {editing && newTitle !== null && (
+                  <form
+                    className="flex flex-wrap items-center gap-2 rounded-2xl border bg-card p-4"
+                    onSubmit={(e) => {
+                      e.preventDefault()
+                      handleCreateSection()
+                    }}
+                  >
+                    <Input
+                      aria-label="New section title"
+                      autoFocus
+                      maxLength={255}
+                      value={newTitle}
+                      onChange={(e) => setNewTitle(e.target.value)}
+                      className="min-w-0 flex-1"
+                    />
+                    <Button type="submit" disabled={editor.createSection.isPending || newTitle.trim() === ''}>
+                      {editor.createSection.isPending ? 'Adding…' : 'Add'}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setNewTitle(null)}
+                      disabled={editor.createSection.isPending}
+                    >
+                      Cancel
+                    </Button>
+                  </form>
+                )}
+              </div>
             </div>
           )
         }}

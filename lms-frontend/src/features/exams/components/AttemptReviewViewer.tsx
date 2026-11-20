@@ -10,6 +10,7 @@ import {
   MessageSquare,
   Trophy,
   XCircle,
+  Clock,
 } from 'lucide-react';
 import { PageHeader } from '@shared/components/PageHeader';
 import { Button } from '@shared/components/ui/button';
@@ -20,6 +21,7 @@ import type {
   ExamOption,
   ExamReviewQuestion,
 } from '../types/exams.types';
+import { scoreTone } from '../utils/score-tone';
 
 const OPTION_LETTERS = ['A', 'B', 'C', 'D', 'E', 'F'] as const;
 const QUESTIONS_PER_PAGE = 10;
@@ -159,113 +161,160 @@ export const AttemptReviewViewer = ({
   );
   const displayScore = review.score ?? 0;
 
+  const formatFileSize = (bytes: number): string => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+  };
+
   if (review.format === 'FILE') {
     const submittedFiles = review.submittedFiles ?? [];
+    const isGraded = review.score !== null;
     return (
-      <div className="mx-auto max-w-4xl space-y-5">
+      <div className="mx-auto max-w-5xl space-y-5">
         <PageHeader
-          title={`${review.examName} — Submission & Grade Review`}
-          subtitle={
-            review.score !== null
-              ? `Final Score: ${review.score.toFixed(2)} / 10${review.gradedAt ? ` · Graded ${formatDateTime(review.gradedAt)}` : ''}`
-              : 'Submitted · Awaiting lecturer grading'
-          }
+          title={review.examName}
+          subtitle={`Attempt #${review.attemptNumber}${
+            review.submittedAt
+              ? ` · Submitted ${formatDateTime(review.submittedAt)}`
+              : ''
+          }`}
           actions={
-            <Button variant="outline" onClick={onBack}>
+            <Button variant="outline" size="sm" onClick={onBack}>
               <ArrowLeft className="mr-1.5 h-4 w-4" />
-              Back to exam overview
+              Back to exam
             </Button>
           }
         />
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="rounded-lg border bg-card p-5">
-            <span className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              <Trophy className="h-4 w-4 text-warning" />
-              Grade
-            </span>
-            <p className="m-0 mt-2 text-2xl font-bold text-brand">
-              {review.score !== null
-                ? `${review.score.toFixed(2)} / 10`
-                : 'Pending lecturer grade'}
-            </p>
-            {review.submittedAt && (
-              <p className="m-0 mt-1 text-xs text-muted-foreground">
-                Submitted {formatDateTime(review.submittedAt)}
+        <div className="grid gap-5 lg:grid-cols-[1fr_320px]">
+          {/* Main content: what the student handed in */}
+          <section className="overflow-hidden rounded-lg border bg-card">
+            <h2 className="m-0 border-b px-5 py-3 text-sm font-semibold">
+              Your submission
+              <span className="ml-2 font-normal text-muted-foreground">
+                {submittedFiles.length}{' '}
+                {submittedFiles.length === 1 ? 'file' : 'files'}
+              </span>
+            </h2>
+            {submittedFiles.length === 0 ? (
+              <p className="m-0 px-5 py-8 text-center text-sm text-muted-foreground">
+                No files were submitted for this attempt.
               </p>
+            ) : (
+              <ul className="m-0 list-none divide-y p-0">
+                {submittedFiles.map((file) => (
+                  <li
+                    key={file.fileId}
+                    className="flex items-center gap-3 px-5 py-3"
+                  >
+                    <FileText className="h-5 w-5 shrink-0 text-brand" />
+                    <div className="min-w-0 flex-1">
+                      <p className="m-0 truncate text-sm font-medium">
+                        {file.fileName}
+                      </p>
+                      <p className="m-0 text-xs text-muted-foreground">
+                        {formatFileSize(file.size)}
+                      </p>
+                    </div>
+                    <Button asChild variant="outline" size="sm">
+                      <a
+                        href={file.downloadUrl}
+                        download={file.fileName}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        <Download className="mr-1.5 h-3.5 w-3.5" />
+                        Download
+                      </a>
+                    </Button>
+                  </li>
+                ))}
+              </ul>
             )}
-          </div>
+          </section>
 
-          <div className="rounded-lg border bg-card p-5">
-            <span className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              <MessageSquare className="h-4 w-4 text-brand" />
-              Lecturer feedback
-            </span>
-            <p className="m-0 mt-2 whitespace-pre-line text-sm">
-              {review.comment
-                ? review.comment
-                : 'No feedback comment provided yet.'}
-            </p>
-          </div>
-        </div>
+          <aside className="space-y-4">
+            {/* Grade + feedback share one card; no empty card for missing feedback */}
+            <div className="rounded-lg border bg-card p-5">
+              <h2 className="m-0 text-sm font-semibold">Grade</h2>
+              {isGraded ? (
+                <>
+                  <p
+                    className={cn(
+                      'm-0 mt-2 text-4xl font-bold tabular-nums',
+                      scoreTone(review.score as number),
+                    )}
+                  >
+                    {(review.score as number).toFixed(2)}
+                    <span className="ml-1 text-base font-medium text-muted-foreground">
+                      / 10
+                    </span>
+                  </p>
+                  {review.gradedAt && (
+                    <p className="m-0 mt-1 text-xs text-muted-foreground">
+                      Graded {formatDateTime(review.gradedAt)}
+                    </p>
+                  )}
+                </>
+              ) : (
+                <>
+                  <p className="m-0 mt-2">
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-warning/15 px-3 py-1 text-sm font-medium text-warning">
+                      <Clock className="h-3.5 w-3.5" />
+                      Awaiting grade
+                    </span>
+                  </p>
+                  <p className="m-0 mt-2 text-xs text-muted-foreground">
+                    Your lecturer hasn’t graded this submission yet. Check back
+                    later.
+                  </p>
+                </>
+              )}
 
-        {review.questionFile && (
-          <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border bg-card p-5">
-            <div className="flex items-center gap-3">
-              <FileText className="h-5 w-5 text-primary" />
-              <div>
-                <p className="m-0 text-sm font-semibold">Question Paper</p>
-                <p className="m-0 text-xs text-muted-foreground">
-                  {review.questionFile.fileName}
-                </p>
-              </div>
+              {(isGraded || review.comment) && (
+                <div className="mt-4 border-t pt-4">
+                  <p className="m-0 flex items-center gap-1.5 text-sm font-semibold">
+                    <MessageSquare className="h-4 w-4 text-brand" />
+                    Lecturer feedback
+                  </p>
+                  <p className="m-0 mt-1.5 whitespace-pre-line text-sm">
+                    {review.comment ?? (
+                      <span className="text-muted-foreground">
+                        No feedback was left.
+                      </span>
+                    )}
+                  </p>
+                </div>
+              )}
             </div>
-            <Button asChild variant="outline" size="sm">
-              <a
-                href={review.questionFile.downloadUrl}
-                target="_blank"
-                rel="noreferrer"
-              >
-                <Download className="mr-1.5 h-4 w-4" />
-                Download question paper
-              </a>
-            </Button>
-          </div>
-        )}
 
-        <div className="rounded-lg border bg-card p-5">
-          <h2 className="m-0 mb-3 text-base font-semibold">
-            Submitted Files ({submittedFiles.length})
-          </h2>
-          {submittedFiles.length === 0 ? (
-            <p className="m-0 text-sm text-muted-foreground">
-              No files were submitted for this attempt.
-            </p>
-          ) : (
-            <ul className="m-0 divide-y rounded-md border p-0 list-none">
-              {submittedFiles.map((file) => (
-                <li
-                  key={file.fileId}
-                  className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm"
+            {review.questionFile && (
+              <div className="flex items-center gap-3 rounded-lg border bg-card p-4">
+                <FileText className="h-5 w-5 shrink-0 text-muted-foreground" />
+                <div className="min-w-0 flex-1">
+                  <p className="m-0 text-sm font-medium">Question paper</p>
+                  <p className="m-0 truncate text-xs text-muted-foreground">
+                    {review.questionFile.fileName}
+                  </p>
+                </div>
+                <Button
+                  asChild
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Download question paper"
                 >
-                  <div className="flex items-center gap-2.5">
-                    <FileText className="h-4 w-4 text-brand" />
-                    <span className="font-medium">{file.fileName}</span>
-                  </div>
-                  <Button asChild variant="outline" size="sm">
-                    <a
-                      href={file.downloadUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      <Download className="mr-1.5 h-3.5 w-3.5" />
-                      Download
-                    </a>
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          )}
+                  <a
+                    href={review.questionFile.downloadUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <Download className="h-4 w-4" />
+                  </a>
+                </Button>
+              </div>
+            )}
+          </aside>
         </div>
       </div>
     );
