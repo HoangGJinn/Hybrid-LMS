@@ -32,8 +32,6 @@ const SECTION_ROW = 4;
 const LABEL_ROW = 5;
 const NAME_ROW = 6;
 const FIRST_DATA_ROW = 7;
-const BELOW_THRESHOLD_FILL = 'FFFFC7CE';
-const SUMMARY_FILL = 'FFDDEBF7';
 
 const scoreOf = (row: GradeRowView, column: GradeColumnView): number | null =>
   row.scores[column.id] ?? null;
@@ -66,7 +64,9 @@ const writeSectionHeaders = (
  * One sheet laid out like the grades tab: a row per student, a column per assignment / exam
  * (grouped by section) and the two averages. Empty cells mean "no score yet".
  */
-export const buildGradebookWorkbook = async (data: GradebookExportData): Promise<Buffer> => {
+export const buildGradebookWorkbook = async (
+  data: GradebookExportData,
+): Promise<Buffer> => {
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet('Bảng điểm');
 
@@ -107,21 +107,17 @@ export const buildGradebookWorkbook = async (data: GradebookExportData): Promise
     excelRow.getCell(2).value = row.studentCode;
     excelRow.getCell(3).value = row.fullName;
     data.columns.forEach((column, columnIndex) => {
-      excelRow.getCell(FIXED_COLUMN_COUNT + 1 + columnIndex).value = scoreOf(row, column);
+      excelRow.getCell(FIXED_COLUMN_COUNT + 1 + columnIndex).value = scoreOf(
+        row,
+        column,
+      );
     });
     for (const [columnIndex, value] of [
       [processColumn, row.processAvg],
       [testColumn, row.testAvg],
     ] as const) {
-      const cell = excelRow.getCell(columnIndex);
-      cell.value = value === null ? null : Math.round(value * 100) / 100;
-      if (value !== null && value < data.summary.threshold) {
-        cell.fill = {
-          type: 'pattern',
-          pattern: 'solid',
-          fgColor: { argb: BELOW_THRESHOLD_FILL },
-        };
-      }
+      excelRow.getCell(columnIndex).value =
+        value === null ? null : Math.round(value * 100) / 100;
     }
   });
 
@@ -133,20 +129,24 @@ export const buildGradebookWorkbook = async (data: GradebookExportData): Promise
     summary.getCell(FIXED_COLUMN_COUNT + 1 + index).value =
       value === null ? null : Math.round(value * 100) / 100;
   });
-  summary.getCell(processColumn).value = data.summary.processAvg === null
-    ? null
-    : Math.round(data.summary.processAvg * 100) / 100;
-  summary.getCell(testColumn).value = data.summary.testAvg === null
-    ? null
-    : Math.round(data.summary.testAvg * 100) / 100;
+  summary.getCell(processColumn).value =
+    data.summary.processAvg === null
+      ? null
+      : Math.round(data.summary.processAvg * 100) / 100;
+  summary.getCell(testColumn).value =
+    data.summary.testAvg === null
+      ? null
+      : Math.round(data.summary.testAvg * 100) / 100;
   for (let columnIndex = 1; columnIndex <= lastColumn; columnIndex++) {
-    const cell = summary.getCell(columnIndex);
-    cell.font = { bold: true };
-    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: SUMMARY_FILL } };
+    summary.getCell(columnIndex).font = { bold: true };
   }
 
   applyBorders(sheet, FIRST_DATA_ROW, summaryRow, 1, lastColumn);
-  for (let columnIndex = FIXED_COLUMN_COUNT + 1; columnIndex <= lastColumn; columnIndex++) {
+  for (
+    let columnIndex = FIXED_COLUMN_COUNT + 1;
+    columnIndex <= lastColumn;
+    columnIndex++
+  ) {
     const column = sheet.getColumn(columnIndex);
     column.numFmt = SCORE_FORMAT;
     column.alignment = { horizontal: 'center' };
@@ -157,7 +157,9 @@ export const buildGradebookWorkbook = async (data: GradebookExportData): Promise
     AVERAGE_COLUMN_WIDTH,
     AVERAGE_COLUMN_WIDTH,
   ]);
-  sheet.views = [{ state: 'frozen', xSplit: FIXED_COLUMN_COUNT, ySplit: NAME_ROW }];
+  sheet.views = [
+    { state: 'frozen', xSplit: FIXED_COLUMN_COUNT, ySplit: NAME_ROW },
+  ];
 
   return Buffer.from(await workbook.xlsx.writeBuffer());
 };

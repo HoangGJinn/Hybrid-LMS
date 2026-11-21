@@ -1,4 +1,4 @@
-import type { Borders, Fill, Row, Worksheet } from 'exceljs';
+import type { Borders, Row, Worksheet } from 'exceljs';
 import type { Response } from 'express';
 
 export const XLSX_MIME =
@@ -12,19 +12,11 @@ export interface ExportedFile {
 
 /** Vietnamese lecturers read these files, so timestamps are shown in local time whatever the server clock says. */
 const EXPORT_TIME_ZONE = 'Asia/Ho_Chi_Minh';
-const HEADER_FILL_COLOR = 'FF1F4E78';
-const HEADER_FONT_COLOR = 'FFFFFFFF';
 const BORDER_COLOR = 'FFBFBFBF';
 const HEADER_ROW_HEIGHT = 28;
 
 /** Characters that are not allowed in file names on common operating systems. */
 const UNSAFE_NAME_CHARS = /[\\/:*?"<>|]+/g;
-
-const HEADER_FILL: Fill = {
-  type: 'pattern',
-  pattern: 'solid',
-  fgColor: { argb: HEADER_FILL_COLOR },
-};
 
 const thinBorders = (): Partial<Borders> => {
   const side = { style: 'thin', color: { argb: BORDER_COLOR } } as const;
@@ -51,13 +43,20 @@ export const formatExportDateTime = (date: Date | null | undefined): string => {
 export const safeFileName = (name: string): string =>
   name.replace(UNSAFE_NAME_CHARS, '_').trim() || 'export';
 
-/** Blue header look for the cells of one row, optionally limited to a column range. */
-export const styleHeaderRow = (row: Row, fromColumn = 1, toColumn = row.cellCount): void => {
+/** Bold, centred header cells with a border (white background, black text), optionally limited to a column range. */
+export const styleHeaderRow = (
+  row: Row,
+  fromColumn = 1,
+  toColumn = row.cellCount,
+): void => {
   for (let column = fromColumn; column <= toColumn; column++) {
     const cell = row.getCell(column);
-    cell.font = { bold: true, color: { argb: HEADER_FONT_COLOR } };
-    cell.fill = HEADER_FILL;
-    cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+    cell.font = { bold: true };
+    cell.alignment = {
+      vertical: 'middle',
+      horizontal: 'center',
+      wrapText: true,
+    };
     cell.border = thinBorders();
   }
   row.height = HEADER_ROW_HEIGHT;
@@ -79,7 +78,10 @@ export const applyBorders = (
 };
 
 /** Sets the width of the first columns, one entry per column. */
-export const setColumnWidths = (sheet: Worksheet, widths: readonly number[]): void => {
+export const setColumnWidths = (
+  sheet: Worksheet,
+  widths: readonly number[],
+): void => {
   widths.forEach((width, index) => {
     sheet.getColumn(index + 1).width = width;
   });

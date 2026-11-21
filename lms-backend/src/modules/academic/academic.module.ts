@@ -10,6 +10,8 @@ import { ClassAccessPolicy } from './policies/class-access.policy.js';
 import { SubjectRepository } from './repositories/subject.repository.js';
 import { SemesterRepository } from './repositories/semester.repository.js';
 import { ClassService } from './services/class.service.js';
+import { ClassImportService } from './services/class-import.service.js';
+import { ClassExportService } from './services/class-export.service.js';
 import { ParticipantService } from './services/participant.service.js';
 import { SubjectService } from './services/subject.service.js';
 import { SemesterService } from './services/semester.service.js';
@@ -38,6 +40,8 @@ import { UserModule } from '../user/user.module.js';
     SemesterRepository,
     ClassAccessPolicy,
     ClassService,
+    ClassImportService,
+    ClassExportService,
     ParticipantService,
     SubjectService,
     SemesterService,

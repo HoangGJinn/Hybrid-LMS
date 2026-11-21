@@ -1,7 +1,9 @@
+import { apiClient } from '@/core/api/client';
 import { get, patch, post } from '@/core/api/http';
 import type { PaginatedResult } from '@/core/types/pagination.types';
 import type {
   CreateUserPayload,
+  ManagedRole,
   ManagedUser,
   UpdateUserPayload,
   UserListParams,
@@ -25,4 +27,17 @@ export const userService = {
 
   activateUser: (id: string): Promise<ManagedUser> =>
     patch<ManagedUser>(`/api/users/${id}/activate`),
+
+  /**
+   * Excel list of the classes a lecturer teaches / a student is enrolled in (ended ones included).
+   * It goes through the app's HTTP client because a plain link would carry no login token.
+   */
+  exportClasses: async (role: ManagedRole, userId: string): Promise<Blob> => {
+    const segment = role === 'LECTURER' ? 'lecturers' : 'students';
+    const response = await apiClient.get<Blob>(
+      `/api/classes/export/${segment}/${userId}`,
+      { responseType: 'blob' },
+    );
+    return response.data;
+  },
 };

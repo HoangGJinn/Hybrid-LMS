@@ -366,6 +366,33 @@ export class UserRepository {
     });
   }
 
+  /** Lecturers (with their user) by user id. */
+  async findLecturersByIds(userIds: string[]): Promise<Lecturer[]> {
+    if (userIds.length === 0) return [];
+    return this.lecturerRepo.find({
+      where: { userId: In(userIds) },
+      relations: { user: true },
+    });
+  }
+
+  /** Lecturers (with their user) by lecturer code. */
+  async findLecturersByCodes(codes: string[]): Promise<Lecturer[]> {
+    if (codes.length === 0) return [];
+    return this.lecturerRepo.find({
+      where: { lecturerCode: In(codes) },
+      relations: { user: true },
+    });
+  }
+
+  /** Lecturers (with their user) by email (stored in lower case). */
+  async findLecturersByEmails(emails: string[]): Promise<Lecturer[]> {
+    if (emails.length === 0) return [];
+    return this.lecturerRepo.find({
+      where: { user: { email: In(emails) } },
+      relations: { user: true },
+    });
+  }
+
   /** Active, currently studying students whose name, email or code contains `search`, by code. */
   async searchEnrollableStudents(
     search: string | undefined,
