@@ -117,3 +117,35 @@ export interface ImportResult {
   rows: ImportRowResult[];
 }
 
+/** One data row of a class import file, as sent to POST /api/classes/import. */
+export interface ClassImportRowPayload {
+  /** Row number in the file (the header is row 1). */
+  line: number;
+  classCode?: string;
+  name?: string;
+  subjectCode?: string;
+  semesterCode?: string;
+  /** Lecturer code or email. */
+  lecturer?: string;
+}
+
+export type ClassImportRowStatus = 'created' | 'skipped' | 'error';
+
+export interface ClassImportRowResult {
+  line: number;
+  /** `created` = will be created (preview) / was created (import); `skipped` = duplicate class code. */
+  status: ClassImportRowStatus;
+  classCode: string | null;
+  name: string | null;
+  message: string | null;
+}
+
+export interface ClassImportResult {
+  /** true = preview only, nothing was written. */
+  dryRun: boolean;
+  total: number;
+  created: number;
+  skipped: number;
+  failed: number;
+  rows: ClassImportRowResult[];
+}

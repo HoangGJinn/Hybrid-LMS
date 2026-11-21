@@ -12,6 +12,8 @@ export interface RoleConfig {
   /** Shown as the placeholder of the code field. */
   codeExample: string;
   addLabel: string;
+  /** Tooltip of the row action that downloads the person's classes. */
+  exportClassesLabel: string;
   /** Help text under the email field of the "add" dialog. */
   createHint: string;
 }
@@ -26,6 +28,7 @@ export const ROLE_CONFIG: Record<ManagedRole, RoleConfig> = {
     codePrefix: 'GV',
     codeExample: 'GV26000001',
     addLabel: 'Add lecturer',
+    exportClassesLabel: 'Export classes taught',
     createHint:
       'The lecturer signs in with Google using this email; the account is linked automatically and keeps the lecturer role. If this email already has an account (for example it signed in first and became a student), edit that account in the Students list and change its role.',
   },
@@ -39,6 +42,7 @@ export const ROLE_CONFIG: Record<ManagedRole, RoleConfig> = {
     codePrefix: 'SV',
     codeExample: 'SV26000001',
     addLabel: 'Add student',
+    exportClassesLabel: 'Export classes enrolled',
     createHint:
       'The student signs in with Google using this email; the account is linked automatically.',
   },

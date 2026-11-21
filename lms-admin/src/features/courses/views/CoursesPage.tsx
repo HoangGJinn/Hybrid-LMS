@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { Archive, Pencil, Plus, Search } from 'lucide-react';
+import { Archive, FileSpreadsheet, Pencil, Plus, Search } from 'lucide-react';
 import { PageHeader } from '@/shared/components/PageHeader';
 import { AsyncView } from '@/shared/components/AsyncView';
 import { EmptyState } from '@/shared/components/EmptyState';
@@ -14,6 +14,7 @@ import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue';
 import { formatDate } from '@/shared/utils/date';
 import { CourseFormModal } from '../components/CourseFormModal';
 import { DeactivateConfirm } from '../components/DeactivateConfirm';
+import { ImportClassesModal } from '../components/ImportClassesModal';
 import { useClasses } from '../hooks/useClasses';
 import { useSemesters } from '../hooks/useCourseLookups';
 import type { ClassStatusFilter, ClassView } from '../types/courses.types';
@@ -41,6 +42,7 @@ const CoursesPage = () => {
     course: null,
   });
   const [deactivating, setDeactivating] = useState<ClassView | null>(null);
+  const [importing, setImporting] = useState(false);
 
   const search = useDebouncedValue(searchInput, SEARCH_DEBOUNCE_MS);
   const classes = useClasses({ status, semesterId, search });
@@ -157,10 +159,16 @@ const CoursesPage = () => {
         title="Courses"
         subtitle="Create and manage classes for every semester."
         actions={
-          <Button onClick={openCreate}>
-            <Plus className="h-4 w-4" />
-            Add course
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setImporting(true)}>
+              <FileSpreadsheet className="h-4 w-4" />
+              Import from Excel
+            </Button>
+            <Button onClick={openCreate}>
+              <Plus className="h-4 w-4" />
+              Add course
+            </Button>
+          </div>
         }
       />
 
@@ -251,6 +259,7 @@ const CoursesPage = () => {
 
       <CourseFormModal open={form.open} course={form.course} onClose={closeForm} />
       <DeactivateConfirm course={deactivating} onClose={() => setDeactivating(null)} />
+      <ImportClassesModal open={importing} onClose={() => setImporting(false)} />
     </>
   );
 };

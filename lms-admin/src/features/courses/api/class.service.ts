@@ -1,6 +1,8 @@
 import { get, patch, post } from '@/core/api/http';
 import type {
   ClassFilters,
+  ClassImportResult,
+  ClassImportRowPayload,
   ClassView,
   CreateClassPayload,
   UpdateClassPayload,
@@ -48,4 +50,11 @@ export const classService = {
   /** Classes are never deleted: this sets `isActive=false` and `endedAt=now`. */
   deactivateClass: (id: string): Promise<ClassView> =>
     patch<ClassView>(`/api/classes/${id}/deactivate`),
+
+  /** `dryRun: true` only reports what the import would do. */
+  importClasses: (
+    rows: ClassImportRowPayload[],
+    dryRun: boolean,
+  ): Promise<ClassImportResult> =>
+    post<ClassImportResult>('/api/classes/import', { rows, dryRun }),
 };
