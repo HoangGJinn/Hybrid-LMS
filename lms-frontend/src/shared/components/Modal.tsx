@@ -5,8 +5,8 @@ interface ModalProps {
   open: boolean;
   title: string;
   onClose: () => void;
-  /** Width of the dialog; `lg` suits tables and previews, `xl` suits two-column builders. */
-  size?: 'md' | 'lg' | 'xl';
+  /** Width of the dialog; `lg` suits tables and previews, `xl`/`2xl` suit builders. */
+  size?: 'md' | 'lg' | 'xl' | '2xl';
   children: ReactNode;
 }
 
@@ -14,6 +14,7 @@ const SIZE_CLASS: Record<NonNullable<ModalProps['size']>, string> = {
   md: 'max-w-md',
   lg: 'max-w-2xl',
   xl: 'max-w-5xl',
+  '2xl': 'max-w-7xl',
 };
 
 /** Accessible modal built on the native <dialog>: focus trap, Esc to close and backdrop come from the browser. */

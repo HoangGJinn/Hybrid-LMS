@@ -2,6 +2,7 @@ import { validateExamFile } from '@features/documents';
 import type {
   ExamFormat,
   ExamQuestion,
+  ExamQuestionType,
   LecturerExam,
   NewExamInput,
   NewExamQuestion,
@@ -12,9 +13,13 @@ export const EXAM_NAME_MAX_LENGTH = 255;
 export const EXAM_MAX_QUESTIONS = 100;
 export const QUESTION_MAX_LENGTH = 2000;
 export const OPTION_MAX_LENGTH = 500;
-/** A question has between these many answers, exactly one of them correct. */
+/** A multiple-choice question has between these many options, with 1 or more marked correct. */
 export const MIN_OPTIONS = 2;
 export const MAX_OPTIONS = 6;
+/** A fill-in-the-blank question has between 1 and 6 numbered blanks (`{{1}}`..`{{6}}`). */
+export const MIN_BLANKS = 1;
+export const MAX_BLANKS = 6;
+export const BLANK_VARIANT_SEPARATOR = '|';
 /** How many empty answers a new question starts with. */
 export const DEFAULT_OPTIONS = 4;
 export const MIN_DURATION_MINUTES = 1;
@@ -23,15 +28,24 @@ export const MIN_ATTEMPTS = 1;
 export const MAX_ATTEMPTS = 100;
 
 const MS_PER_MINUTE = 60_000;
+const CLOZE_PLACEHOLDER_REGEX = /\{\{(\d+)\}\}/g;
 
 /** A question being typed; `key` keeps the list stable while questions are added and removed. */
 export interface ExamQuestionDraft {
   key: string;
+  type?: ExamQuestionType;
   content: string;
-  /** Between `MIN_OPTIONS` and `MAX_OPTIONS` texts. */
+  /**
+   * For `MULTIPLE_CHOICE`: between `MIN_OPTIONS` and `MAX_OPTIONS` option texts.
+   * For `FILL_IN_THE_BLANK`: between `MIN_BLANKS` and `MAX_BLANKS` pipe-separated acceptable answer strings (`a | b`).
+   */
   options: string[];
-  /** Index of the correct answer; `null` until the lecturer picks one. */
+  /** Primary/single correct option index; `null` until the lecturer picks one. */
   correctIndex: number | null;
+  /** All selected correct option indices for `MULTIPLE_CHOICE` (sorted ascending). */
+  correctIndices?: number[];
+  /** Configured correct answer count for `MULTIPLE_CHOICE` (1..options.length), or blank count for `FILL_IN_THE_BLANK`. */
+  correctCount?: number;
 }
 
 export interface ExamFormValues {
@@ -55,9 +69,9 @@ export interface ExamFormValues {
 
 export interface QuestionErrors {
   content?: string;
-  /** By option index. */
+  /** By option / blank index. */
   options?: Record<number, string>;
-  /** About the number of answers; the editor's buttons keep it in range, so this is a safety net. */
+  /** About the number of answers or blank slots. */
   optionCount?: string;
   correct?: string;
 }
@@ -75,6 +89,93 @@ export interface ExamFormErrors {
   file?: string;
 }
 
+export type ClozeValidationResult =
+  | { readonly valid: true; readonly count: number }
+  | { readonly valid: false; readonly reason: string };
+
+/** Extracts placeholder numbers (`{{1}}`, `{{2}}`, ...) in appearance order. */
+export const extractClozePlaceholders = (content: string): number[] => {
+  const numbers: number[] = [];
+  for (const match of content.matchAll(CLOZE_PLACEHOLDER_REGEX)) {
+    numbers.push(Number(match[1]));
+  }
+  return numbers;
+};
+
+/** Validates that a fill-in-the-blank stem contains unique sequential placeholders `{{1}}..{{k}}` (`1 <= k <= 6`). */
+export const validateClozePlaceholders = (
+  content: string,
+): ClozeValidationResult => {
+  const numbers = extractClozePlaceholders(content);
+  if (numbers.length === 0) {
+    return {
+      valid: false,
+      reason:
+        'Include at least one blank placeholder like {{1}} in the question text',
+    };
+  }
+  const seen = new Set<number>();
+  for (const num of numbers) {
+    if (seen.has(num)) {
+      return {
+        valid: false,
+        reason: `Duplicate blank placeholder {{${num}}} found`,
+      };
+    }
+    seen.add(num);
+  }
+  const sorted = [...seen].sort((a, b) => a - b);
+  for (let i = 0; i < sorted.length; i += 1) {
+    if (sorted[i] !== i + 1) {
+      return {
+        valid: false,
+        reason:
+          'Blank placeholders must be numbered sequentially starting from {{1}} (e.g., {{1}}, {{2}})',
+      };
+    }
+  }
+  if (sorted.length > MAX_BLANKS) {
+    return {
+      valid: false,
+      reason: `At most ${MAX_BLANKS} blanks are allowed per question`,
+    };
+  }
+  return { valid: true, count: sorted.length };
+};
+
+/** Normalizes a student or key blank text answer (case-insensitive, trimmed, collapsed whitespace). */
+export const normalizeBlankAnswer = (value: string): string =>
+  value.trim().replace(/\s+/g, ' ').toLowerCase();
+
+/** Splits pipe-separated acceptable variants (`a | b`) into trimmed non-empty strings. */
+export const splitBlankVariants = (rawContent: string): string[] =>
+  rawContent
+    .split(BLANK_VARIANT_SEPARATOR)
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+
+export const resolveQuestionType = (
+  question: Pick<ExamQuestionDraft, 'type'>,
+): ExamQuestionType => question.type ?? 'MULTIPLE_CHOICE';
+
+export const resolveCorrectIndices = (
+  question: Pick<ExamQuestionDraft, 'correctIndex' | 'correctIndices'>,
+): number[] => {
+  if (question.correctIndices !== undefined) return question.correctIndices;
+  if (question.correctIndex !== null) return [question.correctIndex];
+  return [];
+};
+
+export const resolveCorrectCount = (question: ExamQuestionDraft): number => {
+  if (resolveQuestionType(question) === 'FILL_IN_THE_BLANK') {
+    return Math.max(MIN_BLANKS, question.options.length);
+  }
+  return (
+    question.correctCount ??
+    Math.max(1, resolveCorrectIndices(question).length)
+  );
+};
+
 export const createEmptyQuestion = (): ExamQuestionDraft => ({
   key: crypto.randomUUID(),
   content: '',
@@ -82,18 +183,99 @@ export const createEmptyQuestion = (): ExamQuestionDraft => ({
   correctIndex: null,
 });
 
+/** Synchronizes a fill-in-the-blank question's blank slots with `{{1}}..{{k}}` placeholders in `newContent`. */
+export const syncBlanksWithContent = (
+  question: ExamQuestionDraft,
+  newContent: string,
+): ExamQuestionDraft => {
+  const numbers = extractClozePlaceholders(newContent).filter(
+    (num) => num >= MIN_BLANKS && num <= MAX_BLANKS,
+  );
+  const uniqueCount = new Set(numbers).size;
+  const maxNum = numbers.length > 0 ? Math.max(...numbers) : 0;
+  const targetCount = Math.min(
+    MAX_BLANKS,
+    Math.max(MIN_BLANKS, uniqueCount, maxNum),
+  );
+  const nextOptions = Array.from(
+    { length: targetCount },
+    (_, idx) => question.options[idx] ?? '',
+  );
+  return {
+    ...question,
+    type: 'FILL_IN_THE_BLANK',
+    content: newContent,
+    options: nextOptions,
+    correctIndex: 0,
+    correctIndices: Array.from({ length: targetCount }, (_, idx) => idx),
+    correctCount: targetCount,
+  };
+};
+
+/** Switches a draft between `MULTIPLE_CHOICE` and `FILL_IN_THE_BLANK`, resetting option/blank slots cleanly. */
+export const switchQuestionType = (
+  question: ExamQuestionDraft,
+  nextType: ExamQuestionType,
+): ExamQuestionDraft => {
+  if (resolveQuestionType(question) === nextType) return question;
+  if (nextType === 'FILL_IN_THE_BLANK') {
+    return syncBlanksWithContent(
+      { ...question, type: 'FILL_IN_THE_BLANK', options: [''] },
+      question.content,
+    );
+  }
+  return {
+    key: question.key,
+    type: 'MULTIPLE_CHOICE',
+    content: question.content,
+    options: Array.from({ length: DEFAULT_OPTIONS }, () => ''),
+    correctIndex: null,
+    correctIndices: [],
+    correctCount: 1,
+  };
+};
+
 /** Turns an existing exam's questions into editor drafts; starts with one empty question for a FILE exam. */
 export const toDraftQuestions = (
   questions: ExamQuestion[],
 ): ExamQuestionDraft[] => {
   if (questions.length === 0) return [createEmptyQuestion()];
   return questions.map((question) => {
-    const correctIndex = question.options.findIndex((option) => option.isCorrect);
+    const type = question.type ?? 'MULTIPLE_CHOICE';
+    const correctIndices = question.options.reduce<number[]>(
+      (acc, option, index) => {
+        if (option.isCorrect) acc.push(index);
+        return acc;
+      },
+      [],
+    );
+    const correctIndex = correctIndices[0] ?? null;
+    if (
+      type === 'MULTIPLE_CHOICE' &&
+      question.type === undefined &&
+      question.correctCount === undefined &&
+      correctIndices.length <= 1
+    ) {
+      return {
+        key: question.id,
+        content: question.content,
+        options: question.options.map((option) => option.content),
+        correctIndex,
+      };
+    }
+    const correctCount =
+      question.correctCount ??
+      (type === 'FILL_IN_THE_BLANK'
+        ? Math.max(MIN_BLANKS, question.options.length)
+        : Math.max(1, correctIndices.length));
     return {
       key: question.id,
+      type,
       content: question.content,
       options: question.options.map((option) => option.content),
-      correctIndex: correctIndex >= 0 ? correctIndex : null,
+      correctIndex,
+      correctIndices,
+      correctCount,
     };
   });
 };
@@ -105,24 +287,37 @@ export const addOption = (question: ExamQuestionDraft): ExamQuestionDraft =>
     : { ...question, options: [...question.options, ''] };
 
 /**
- * Removes one answer; a question that only has `MIN_OPTIONS` is returned unchanged. The correct answer
- * follows its text: it shifts up when an earlier answer goes, and is cleared when it is the one removed.
+ * Removes one answer; a question that only has `MIN_OPTIONS` is returned unchanged. The correct answer(s)
+ * follow their text: indices shift up when an earlier answer goes, and are cleared when removed.
  */
 export const removeOption = (
   question: ExamQuestionDraft,
   optionIndex: number,
 ): ExamQuestionDraft => {
   if (question.options.length <= MIN_OPTIONS) return question;
+  const nextOptions = question.options.filter((_, i) => i !== optionIndex);
   const { correctIndex } = question;
   let nextCorrect = correctIndex;
   if (correctIndex === optionIndex) nextCorrect = null;
   else if (correctIndex !== null && correctIndex > optionIndex)
     nextCorrect = correctIndex - 1;
-  return {
+
+  const updated: ExamQuestionDraft = {
     ...question,
-    options: question.options.filter((_, i) => i !== optionIndex),
+    options: nextOptions,
     correctIndex: nextCorrect,
   };
+  if (question.correctIndices !== undefined) {
+    const nextIndices = question.correctIndices
+      .filter((idx) => idx !== optionIndex)
+      .map((idx) => (idx > optionIndex ? idx - 1 : idx));
+    updated.correctIndices = nextIndices;
+    updated.correctIndex = nextIndices[0] ?? null;
+  }
+  if (question.correctCount !== undefined) {
+    updated.correctCount = Math.min(question.correctCount, nextOptions.length);
+  }
+  return updated;
 };
 
 export const hasExamFormErrors = (errors: ExamFormErrors): boolean =>
@@ -142,7 +337,31 @@ export const validateQuestion = (question: ExamQuestionDraft): QuestionErrors =>
   else if (content.length > QUESTION_MAX_LENGTH)
     errors.content = `The question can have at most ${QUESTION_MAX_LENGTH} characters`;
 
+  const type = resolveQuestionType(question);
   const optionErrors: Record<number, string> = {};
+
+  if (type === 'FILL_IN_THE_BLANK') {
+    if (content !== '' && !errors.content) {
+      const placeholderCheck = validateClozePlaceholders(content);
+      if (!placeholderCheck.valid) {
+        errors.content = placeholderCheck.reason;
+      } else if (question.options.length !== placeholderCheck.count) {
+        errors.optionCount = `This question has ${placeholderCheck.count} blank(s) in the text but ${question.options.length} answer slot(s)`;
+      }
+    }
+    question.options.forEach((option, index) => {
+      const text = option.trim();
+      if (text === '' || splitBlankVariants(text).length === 0) {
+        optionErrors[index] =
+          `Enter acceptable answer(s) for blank {{${index + 1}}}`;
+      } else if (text.length > OPTION_MAX_LENGTH) {
+        optionErrors[index] = `At most ${OPTION_MAX_LENGTH} characters`;
+      }
+    });
+    if (Object.keys(optionErrors).length > 0) errors.options = optionErrors;
+    return errors;
+  }
+
   const seen = new Set<string>();
   if (
     question.options.length < MIN_OPTIONS ||
@@ -159,12 +378,22 @@ export const validateQuestion = (question: ExamQuestionDraft): QuestionErrors =>
     if (text !== '') seen.add(normalize(text));
   });
   if (Object.keys(optionErrors).length > 0) errors.options = optionErrors;
-  if (question.correctIndex === null)
-    errors.correct = 'Choose the correct answer';
+
+  const requiredCorrect = resolveCorrectCount(question);
+  const selectedIndices = resolveCorrectIndices(question);
+  if (requiredCorrect > question.options.length) {
+    errors.correct = 'Number of correct answers cannot exceed total options';
+  } else if (requiredCorrect === 1) {
+    if (selectedIndices.length !== 1) {
+      errors.correct = 'Choose the correct answer';
+    }
+  } else if (selectedIndices.length !== requiredCorrect) {
+    errors.correct = `Select exactly ${requiredCorrect} correct answers (${selectedIndices.length}/${requiredCorrect} selected)`;
+  }
   return errors;
 };
 
-/** True when the question has its text, valid non-repeating answers (2 to 6) and a chosen correct answer. */
+/** True when the question has its text, valid options/blanks, and complete correct answers. */
 export const isQuestionComplete = (question: ExamQuestionDraft): boolean =>
   Object.keys(validateQuestion(question)).length === 0;
 
@@ -322,13 +551,42 @@ export const validateExamForm = (
   return errors;
 };
 
-const toNewQuestion = (question: ExamQuestionDraft): NewExamQuestion => ({
-  content: question.content.trim(),
-  options: question.options.map((option, index) => ({
+const toNewQuestion = (question: ExamQuestionDraft): NewExamQuestion => {
+  const type = resolveQuestionType(question);
+  if (type === 'FILL_IN_THE_BLANK') {
+    return {
+      type: 'FILL_IN_THE_BLANK',
+      correctCount: question.options.length,
+      content: question.content.trim(),
+      options: question.options.map((option) => ({
+        content: option.trim(),
+        isCorrect: true,
+      })),
+    };
+  }
+  const selected = new Set(resolveCorrectIndices(question));
+  const correctCount = resolveCorrectCount(question);
+  const mappedOptions = question.options.map((option, index) => ({
     content: option.trim(),
-    isCorrect: index === question.correctIndex,
-  })),
-});
+    isCorrect: selected.has(index),
+  }));
+  if (
+    question.type === undefined &&
+    (question.correctCount === undefined || question.correctCount === 1) &&
+    selected.size <= 1
+  ) {
+    return {
+      content: question.content.trim(),
+      options: mappedOptions,
+    };
+  }
+  return {
+    type: 'MULTIPLE_CHOICE',
+    correctCount,
+    content: question.content.trim(),
+    options: mappedOptions,
+  };
+};
 
 /** Turns a form that passed `validateExamForm` into what the service sends; only the chosen format's part is kept. */
 export const toNewExamInput = (

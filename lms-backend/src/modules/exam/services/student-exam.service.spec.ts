@@ -13,6 +13,7 @@ import type { FileFacade } from '../../../shared/file/facades/file.facade.js';
 import type { ExamSchedule } from '../entities/exam-schedule.entity.js';
 import type { ExamSession } from '../entities/exam-session.entity.js';
 import { ExamFormat } from '../enums/exam-format.enum.js';
+import { ExamQuestionType } from '../enums/exam-question-type.enum.js';
 import { ExamSessionStatus } from '../enums/exam-session-status.enum.js';
 import type {
   ExamContent,
@@ -547,6 +548,178 @@ describe('StudentExamService', () => {
           NOW,
         ),
       ).rejects.toThrow('This attempt can no longer be edited');
+    });
+  });
+
+  describe('multi-select MCQ and cloze fill-in-the-blank flow', () => {
+    const buildMixedContent = (): ExamContent => ({
+      questions: [
+        {
+          id: 'q-multi',
+          examId: EXAM_ID,
+          type: ExamQuestionType.MULTIPLE_CHOICE,
+          content: 'Pick two primes',
+          correctCount: 2,
+          orderIndex: 0,
+        },
+        {
+          id: 'q-fib',
+          examId: EXAM_ID,
+          type: ExamQuestionType.FILL_IN_THE_BLANK,
+          content: 'Thủ đô của {{1}} là {{2}}.',
+          correctCount: 2,
+          orderIndex: 1,
+        },
+      ] as ExamContent['questions'],
+      optionsByQuestionId: new Map([
+        [
+          'q-multi',
+          [
+            { id: 'o-1', questionId: 'q-multi', content: '2', isCorrect: true, orderIndex: 0 },
+            { id: 'o-2', questionId: 'q-multi', content: '4', isCorrect: false, orderIndex: 1 },
+            { id: 'o-3', questionId: 'q-multi', content: '5', isCorrect: true, orderIndex: 2 },
+          ] as never,
+        ],
+        [
+          'q-fib',
+          [
+            { id: 'b-1', questionId: 'q-fib', content: 'Việt Nam | Viet Nam', isCorrect: true, orderIndex: 0 },
+            { id: 'b-2', questionId: 'q-fib', content: 'Hà Nội | Ha Noi', isCorrect: true, orderIndex: 1 },
+          ] as never,
+        ],
+      ]),
+    });
+
+    it('hides FIB blank answers when starting an attempt even if shuffleOptions is enabled', async () => {
+      mockExamRepo.findById.mockResolvedValue(buildExam({ shuffleOptions: true }));
+      mockExamRepo.findContent.mockResolvedValue(buildMixedContent());
+
+      const attempt = await service.startOrResume(CLASS_ID, EXAM_ID, student, NOW);
+
+      expect(attempt.questions).toHaveLength(2);
+      expect(attempt.questions[0]).toMatchObject({
+        id: 'q-multi',
+        type: ExamQuestionType.MULTIPLE_CHOICE,
+        correctCount: 2,
+      });
+      expect(attempt.questions[1]).toEqual({
+        id: 'q-fib',
+        type: ExamQuestionType.FILL_IN_THE_BLANK,
+        correctCount: 2,
+        content: 'Thủ đô của {{1}} là {{2}}.',
+        orderIndex: 1,
+        options: [],
+      });
+    });
+
+    it('enforces max correctCount when saving multi-select options and validates FIB textAnswers', async () => {
+      mockExamRepo.findContent.mockResolvedValue(buildMixedContent());
+
+      await expect(
+        service.saveAnswers(
+          'session-1',
+          { answers: [{ questionId: 'q-multi', optionIds: ['o-1', 'o-2', 'o-3'] }] },
+          student,
+          NOW,
+        ),
+      ).rejects.toThrow('allows at most 2 selected answer(s)');
+
+      await expect(
+        service.saveAnswers(
+          'session-1',
+          { answers: [{ questionId: 'q-fib', textAnswers: ['a', 'b', 'c'] }] },
+          student,
+          NOW,
+        ),
+      ).rejects.toThrow('only has 2 blank(s)');
+
+      const saved = await service.saveAnswers(
+        'session-1',
+        {
+          answers: [
+            { questionId: 'q-multi', optionIds: ['o-1', 'o-3'] },
+            { questionId: 'q-fib', textAnswers: ['  Viet Nam ', 'Ha Noi'] },
+          ],
+        },
+        student,
+        NOW,
+      );
+
+      expect(saved.savedQuestionIds).toEqual(['q-multi', 'q-fib']);
+      expect(mockSessionRepo.saveAnswers).toHaveBeenCalledWith(
+        'session-1',
+        [
+          {
+            questionId: 'q-multi',
+            optionId: 'o-1',
+            optionIds: ['o-1', 'o-3'],
+            textAnswers: null,
+          },
+          {
+            questionId: 'q-fib',
+            optionId: null,
+            optionIds: null,
+            textAnswers: ['Viet Nam', 'Ha Noi'],
+          },
+        ],
+        NOW,
+      );
+    });
+
+    it('grades and reviews mixed multi-select MCQ and FIB attempts accurately', async () => {
+      mockExamRepo.findContent.mockResolvedValue(buildMixedContent());
+      const completed = buildSession({
+        status: ExamSessionStatus.COMPLETED,
+        score: 10,
+        endedAt: NOW,
+      });
+      mockSessionRepo.findById.mockResolvedValue(completed);
+      mockSessionRepo.findByStudentAndExam.mockResolvedValue([completed]);
+      mockSessionRepo.findAnswers.mockResolvedValue(
+        new Map([
+          [
+            'q-multi',
+            {
+              selectedOptionId: 'o-1',
+              selectedOptionIds: ['o-1', 'o-3'],
+              textAnswers: [],
+            },
+          ],
+          [
+            'q-fib',
+            {
+              selectedOptionId: null,
+              selectedOptionIds: [],
+              textAnswers: ['VIET NAM', 'hà nội'],
+            },
+          ],
+        ]),
+      );
+
+      const submitResult = await service.submit('session-1', {}, student, NOW);
+      expect(submitResult).toMatchObject({
+        score: 10,
+        correctCount: 2,
+        totalQuestions: 2,
+      });
+
+      const review = await service.review('session-1', student, NOW);
+      expect(review.questions[0]).toMatchObject({
+        id: 'q-multi',
+        type: ExamQuestionType.MULTIPLE_CHOICE,
+        correctCount: 2,
+        selectedOptionIds: ['o-1', 'o-3'],
+      });
+      expect(review.questions[1]).toMatchObject({
+        id: 'q-fib',
+        type: ExamQuestionType.FILL_IN_THE_BLANK,
+        correctCount: 2,
+        textAnswers: ['VIET NAM', 'hà nội'],
+      });
+      expect(review.questions[1].options.map((o) => o.content)).toEqual([
+        'Việt Nam | Viet Nam',
+        'Hà Nội | Ha Noi',
+      ]);
     });
   });
 });

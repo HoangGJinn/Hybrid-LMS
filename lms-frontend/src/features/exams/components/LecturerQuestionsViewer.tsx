@@ -4,6 +4,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Circle,
+  Download,
   FileQuestion,
   Search,
   X,
@@ -11,14 +12,29 @@ import {
 import { Button } from '@shared/components/ui/button';
 import { Input } from '@shared/components/ui/input';
 import { cn } from '@shared/utils/cn';
-import type { LecturerExam } from '../types/exams.types';
+import type { ExamQuestion, LecturerExam } from '../types/exams.types';
+import { exportQuestionsCsv } from '../utils/exam-csv';
+import { splitBlankVariants } from '../utils/exam-form';
 
 const OPTION_LETTERS = ['A', 'B', 'C', 'D', 'E', 'F'] as const;
 const QUESTIONS_PER_PAGE = 10;
+const CLOZE_SPLIT_REGEX = /(\{\{\d+\}\})/g;
 
 interface LecturerQuestionsViewerProps {
   exam: LecturerExam;
 }
+
+const getQuestionBadge = (question: ExamQuestion): string => {
+  const type = question.type ?? 'MULTIPLE_CHOICE';
+  if (type === 'FILL_IN_THE_BLANK') {
+    const count = question.options.length;
+    return `Fill in the Blank · ${count} ${count === 1 ? 'blank' : 'blanks'}`;
+  }
+  const required =
+    question.correctCount ??
+    (question.options.filter((o) => o.isCorrect).length || 1);
+  return required > 1 ? `Multiple Choice · Pick ${required}` : 'Single Choice';
+};
 
 export const LecturerQuestionsViewer = ({
   exam,
@@ -29,17 +45,31 @@ export const LecturerQuestionsViewer = ({
   const [searchQuery, setSearchQuery] = useState('');
   const pendingScrollIdRef = useRef<string | null>(null);
 
-  // Map each question to its 0-based original index and correct option letter.
+  // Map each question to its 0-based original index and navigator badge.
   const questionMeta = useMemo(
     () =>
       questions.map((q, index) => {
-        const correctOptIndex = q.options.findIndex((o) => o.isCorrect);
-        const correctLetter =
-          correctOptIndex >= 0 ? OPTION_LETTERS[correctOptIndex] : null;
+        const type = q.type ?? 'MULTIPLE_CHOICE';
+        const correctLetters =
+          type === 'FILL_IN_THE_BLANK'
+            ? []
+            : q.options
+                .map((o, optIdx) =>
+                  o.isCorrect ? OPTION_LETTERS[optIdx] : null,
+                )
+                .filter(
+                  (letter): letter is (typeof OPTION_LETTERS)[number] =>
+                    letter !== null,
+                );
+        const navBadge =
+          type === 'FILL_IN_THE_BLANK'
+            ? `FIB(${q.options.length})`
+            : correctLetters.join(',') || null;
         return {
           question: q,
           originalIndex: index,
-          correctLetter,
+          correctLetters,
+          navBadge,
         };
       }),
     [questions],
@@ -86,7 +116,6 @@ export const LecturerQuestionsViewer = ({
     const targetItem = questionMeta[targetOriginalIndex];
     if (!targetItem) return;
 
-    // If there is an active search filter that excludes this question, clear it.
     if (searchQuery.trim() !== '') {
       const isVisibleInFiltered = filtered.some(
         (item) => item.originalIndex === targetOriginalIndex,
@@ -122,6 +151,16 @@ export const LecturerQuestionsViewer = ({
     }
   };
 
+  const handleExportQuestions = () => {
+    const safeSlug =
+      exam.examName
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '') || 'exam';
+    exportQuestionsCsv(questions, `${safeSlug}-questions.csv`);
+  };
+
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
       {/* Left Column: Questions List with Pagination & Controls */}
@@ -145,6 +184,18 @@ export const LecturerQuestionsViewer = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={questions.length === 0}
+              onClick={handleExportQuestions}
+              className="text-xs"
+            >
+              <Download className="mr-1.5 h-3.5 w-3.5" />
+              Export Questions CSV
+            </Button>
+
             {filtered.length > QUESTIONS_PER_PAGE && (
               <Button
                 variant="ghost"
@@ -223,71 +274,132 @@ export const LecturerQuestionsViewer = ({
         ) : (
           <ol className="m-0 list-none space-y-4 p-0">
             {displayedQuestions.map((item) => {
-              const { question, originalIndex, correctLetter } = item;
+              const { question, originalIndex, correctLetters } = item;
+              const isFib = (question.type ?? 'MULTIPLE_CHOICE') === 'FILL_IN_THE_BLANK';
               return (
                 <li
                   key={question.id}
                   id={`lecturer-question-${question.id}`}
                   className="rounded-lg border bg-card p-5 transition-colors"
                 >
-                  <div className="mb-3 flex items-start justify-between gap-3">
-                    <span className="text-sm font-semibold text-brand">
-                      Question {originalIndex + 1} of {questions.length}
-                    </span>
-                    {correctLetter && (
+                  <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-semibold text-brand">
+                        Question {originalIndex + 1} of {questions.length}
+                      </span>
+                      <span className="rounded-full bg-muted px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">
+                        {getQuestionBadge(question)}
+                      </span>
+                    </div>
+                    {!isFib && correctLetters.length > 0 && (
                       <span className="inline-flex items-center gap-1 rounded-full bg-success/15 px-2.5 py-0.5 text-xs font-semibold text-success">
                         <CheckCircle2 className="h-3.5 w-3.5" />
-                        Key: {correctLetter}
+                        Key: {correctLetters.join(', ')}
                       </span>
                     )}
                   </div>
 
-                  <p className="mt-0 whitespace-pre-line font-medium text-foreground">
-                    {question.content}
-                  </p>
+                  {isFib ? (
+                    <>
+                      <p className="mt-0 whitespace-pre-line font-medium leading-relaxed text-foreground">
+                        {question.content
+                          .split(CLOZE_SPLIT_REGEX)
+                          .map((part, idx) => {
+                            const match = /^\{\{(\d+)\}\}$/.exec(part);
+                            if (!match) return <span key={idx}>{part}</span>;
+                            const num = Number(match[1]);
+                            const blankOption = question.options[num - 1];
+                            const variants = splitBlankVariants(
+                              blankOption?.content ?? '',
+                            );
+                            return (
+                              <span
+                                key={idx}
+                                className="mx-0.5 inline-flex items-center gap-1 rounded border border-success/60 bg-success/10 px-2 py-0.5 text-xs font-semibold text-success"
+                              >
+                                <span className="opacity-75">({num})</span>
+                                <span>{variants.join(' | ')}</span>
+                              </span>
+                            );
+                          })}
+                      </p>
+                      <ul className="m-0 list-none space-y-2 p-0">
+                        {question.options.map((blank, blankIdx) => {
+                          const variants = splitBlankVariants(blank.content);
+                          return (
+                            <li
+                              key={blank.id}
+                              className="flex flex-wrap items-center gap-2 rounded-md border border-success/40 bg-success/5 p-2.5 text-sm"
+                            >
+                              <span className="rounded bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
+                                {`Blank {{${blankIdx + 1}}}`}
+                              </span>
+                              <div className="flex flex-wrap gap-1.5">
+                                {variants.map((variant, vIdx) => (
+                                  <span
+                                    key={`${vIdx}-${variant}`}
+                                    className="rounded bg-success/15 px-2 py-0.5 text-xs font-medium text-success"
+                                  >
+                                    {variant}
+                                  </span>
+                                ))}
+                              </div>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </>
+                  ) : (
+                    <>
+                      <p className="mt-0 whitespace-pre-line font-medium text-foreground">
+                        {question.content}
+                      </p>
 
-                  <ul className="m-0 list-none space-y-2 p-0">
-                    {question.options.map((option, optionIndex) => (
-                      <li
-                        key={option.id}
-                        className={cn(
-                          'flex items-center gap-3 rounded-md border p-3 text-sm transition-colors',
-                          option.isCorrect
-                            ? 'border-success bg-success/10'
-                            : 'bg-background text-muted-foreground',
-                        )}
-                      >
-                        {option.isCorrect ? (
-                          <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />
-                        ) : (
-                          <Circle className="h-4 w-4 shrink-0 text-muted-foreground/60" />
-                        )}
-                        <span
-                          className={cn(
-                            'font-semibold',
-                            option.isCorrect
-                              ? 'text-success'
-                              : 'text-foreground',
-                          )}
-                        >
-                          {OPTION_LETTERS[optionIndex]}.
-                        </span>
-                        <span
-                          className={cn(
-                            'flex-1',
-                            option.isCorrect && 'font-medium text-foreground',
-                          )}
-                        >
-                          {option.content}
-                        </span>
-                        {option.isCorrect && (
-                          <span className="text-xs font-semibold text-success">
-                            Correct answer
-                          </span>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
+                      <ul className="m-0 list-none space-y-2 p-0">
+                        {question.options.map((option, optionIndex) => (
+                          <li
+                            key={option.id}
+                            className={cn(
+                              'flex items-center gap-3 rounded-md border p-3 text-sm transition-colors',
+                              option.isCorrect
+                                ? 'border-success bg-success/10'
+                                : 'bg-background text-muted-foreground',
+                            )}
+                          >
+                            {option.isCorrect ? (
+                              <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />
+                            ) : (
+                              <Circle className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+                            )}
+                            <span
+                              className={cn(
+                                'font-semibold',
+                                option.isCorrect
+                                  ? 'text-success'
+                                  : 'text-foreground',
+                              )}
+                            >
+                              {OPTION_LETTERS[optionIndex]}.
+                            </span>
+                            <span
+                              className={cn(
+                                'flex-1',
+                                option.isCorrect &&
+                                  'font-medium text-foreground',
+                              )}
+                            >
+                              {option.content}
+                            </span>
+                            {option.isCorrect && (
+                              <span className="text-xs font-semibold text-success">
+                                Correct answer
+                              </span>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
                 </li>
               );
             })}
@@ -389,12 +501,12 @@ export const LecturerQuestionsViewer = ({
           </div>
 
           <p className="mb-3 mt-0 text-xs text-muted-foreground">
-            Shows question number with its correct answer key letter:
+            Shows question number with its correct answer key or blank count:
           </p>
 
           <div className="grid grid-cols-5 gap-1.5">
             {questionMeta.map((item) => {
-              const { originalIndex, correctLetter } = item;
+              const { originalIndex, navBadge } = item;
               const isCurrentPage =
                 !viewAll &&
                 Math.floor(originalIndex / QUESTIONS_PER_PAGE) === safePage;
@@ -404,7 +516,7 @@ export const LecturerQuestionsViewer = ({
                   key={originalIndex}
                   type="button"
                   onClick={() => handleJumpToQuestion(originalIndex)}
-                  title={`Question ${originalIndex + 1} · Key: ${correctLetter ?? 'None'}`}
+                  title={`Question ${originalIndex + 1} · Key: ${navBadge ?? 'None'}`}
                   className={cn(
                     'flex flex-col items-center justify-center rounded-md border p-1.5 text-xs transition-colors',
                     isCurrentPage
@@ -412,12 +524,12 @@ export const LecturerQuestionsViewer = ({
                       : 'border-border bg-background text-foreground hover:border-primary/50 hover:bg-accent',
                   )}
                 >
-                  <span className="text-[11px] leading-tight font-medium">
+                  <span className="text-[11px] font-medium leading-tight">
                     {originalIndex + 1}
                   </span>
-                  {correctLetter && (
-                    <span className="text-[10px] font-bold text-success leading-tight">
-                      {correctLetter}
+                  {navBadge && (
+                    <span className="max-w-full truncate text-[9px] font-bold leading-tight text-success">
+                      {navBadge}
                     </span>
                   )}
                 </button>

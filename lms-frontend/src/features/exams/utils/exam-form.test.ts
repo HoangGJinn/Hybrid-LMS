@@ -5,9 +5,13 @@ import {
   hasExamFormErrors,
   isQuestionComplete,
   removeOption,
+  switchQuestionType,
+  syncBlanksWithContent,
   toDraftQuestions,
   toNewExamInput,
+  validateClozePlaceholders,
   validateExamForm,
+  validateQuestion,
   type ExamEditContext,
   type ExamFormValues,
   type ExamQuestionDraft,
@@ -610,6 +614,128 @@ describe('toNewExamInput', () => {
       showResults: false,
       questions: [],
       file: null,
+    });
+  });
+});
+
+describe('multi-answer MCQ and cloze fill-in-the-blank support', () => {
+  it('validates multi-answer MCQ against configured correctCount and maps to NewExamInput', () => {
+    const partial = buildQuestion({
+      type: 'MULTIPLE_CHOICE',
+      options: ['2', '4', '5', '9'],
+      correctIndex: 0,
+      correctIndices: [0],
+      correctCount: 2,
+    });
+    expect(validateQuestion(partial).correct).toMatch(/Select exactly 2 correct answers/);
+
+    const complete = buildQuestion({
+      type: 'MULTIPLE_CHOICE',
+      options: ['2', '4', '5', '9'],
+      correctIndex: 0,
+      correctIndices: [0, 2],
+      correctCount: 2,
+    });
+    expect(isQuestionComplete(complete)).toBe(true);
+
+    const payload = toNewExamInput(buildValues({ questions: [complete] }));
+    expect(payload.questions[0]).toEqual({
+      type: 'MULTIPLE_CHOICE',
+      correctCount: 2,
+      content: 'What is 2 + 2?',
+      options: [
+        { content: '2', isCorrect: true },
+        { content: '4', isCorrect: false },
+        { content: '5', isCorrect: true },
+        { content: '9', isCorrect: false },
+      ],
+    });
+  });
+
+  it('shifts correctIndices and clamps correctCount when removing an option', () => {
+    const multi = buildQuestion({
+      type: 'MULTIPLE_CHOICE',
+      options: ['A', 'B', 'C'],
+      correctIndex: 0,
+      correctIndices: [0, 2],
+      correctCount: 3,
+    });
+    const afterRemove = removeOption(multi, 1);
+    expect(afterRemove.options).toEqual(['A', 'C']);
+    expect(afterRemove.correctIndices).toEqual([0, 1]);
+    expect(afterRemove.correctCount).toBe(2);
+  });
+
+  it('validates cloze placeholders, syncs blanks with content, and maps FIB to NewExamInput', () => {
+    expect(validateClozePlaceholders('Thủ đô của {{1}} là {{2}}.')).toEqual({
+      valid: true,
+      count: 2,
+    });
+    expect(validateClozePlaceholders('No blanks')).toMatchObject({ valid: false });
+    expect(validateClozePlaceholders('{{1}} and {{3}}')).toMatchObject({ valid: false });
+
+    const switched = switchQuestionType(createEmptyQuestion(), 'FILL_IN_THE_BLANK');
+    expect(switched.type).toBe('FILL_IN_THE_BLANK');
+    expect(switched.options).toEqual(['']);
+
+    const synced = syncBlanksWithContent(switched, 'Thủ đô của {{1}} là {{2}}.');
+    expect(synced.options).toEqual(['', '']);
+    expect(validateQuestion(synced).options).toEqual({
+      0: 'Enter acceptable answer(s) for blank {{1}}',
+      1: 'Enter acceptable answer(s) for blank {{2}}',
+    });
+
+    const completedFib: ExamQuestionDraft = {
+      ...synced,
+      options: ['Việt Nam | Viet Nam', 'Hà Nội | Ha Noi'],
+    };
+    expect(isQuestionComplete(completedFib)).toBe(true);
+
+    const payload = toNewExamInput(buildValues({ questions: [completedFib] }));
+    expect(payload.questions[0]).toEqual({
+      type: 'FILL_IN_THE_BLANK',
+      correctCount: 2,
+      content: 'Thủ đô của {{1}} là {{2}}.',
+      options: [
+        { content: 'Việt Nam | Viet Nam', isCorrect: true },
+        { content: 'Hà Nội | Ha Noi', isCorrect: true },
+      ],
+    });
+  });
+
+  it('restores saved multi-answer and FIB questions via toDraftQuestions', () => {
+    const drafts = toDraftQuestions([
+      {
+        id: 'q-m',
+        type: 'MULTIPLE_CHOICE',
+        correctCount: 2,
+        content: 'Pick two',
+        orderIndex: 0,
+        options: [
+          { id: '1', content: 'A', isCorrect: true },
+          { id: '2', content: 'B', isCorrect: false },
+          { id: '3', content: 'C', isCorrect: true },
+        ],
+      },
+      {
+        id: 'q-f',
+        type: 'FILL_IN_THE_BLANK',
+        correctCount: 1,
+        content: 'Hello {{1}}',
+        orderIndex: 1,
+        options: [{ id: '4', content: 'world | World', isCorrect: true }],
+      },
+    ]);
+
+    expect(drafts[0]).toMatchObject({
+      type: 'MULTIPLE_CHOICE',
+      correctIndices: [0, 2],
+      correctCount: 2,
+    });
+    expect(drafts[1]).toMatchObject({
+      type: 'FILL_IN_THE_BLANK',
+      options: ['world | World'],
+      correctCount: 1,
     });
   });
 });

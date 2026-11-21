@@ -1,0 +1,21 @@
+Type,Question,Option A,Option B,Option C,Option D,Option E,Option F,Correct
+MCQ,"Giao thức HTTP hoạt động ở tầng nào trong mô hình OSI?","Tầng mạng (Network Layer)","Tầng giao vận (Transport Layer)","Tầng ứng dụng (Application Layer)","Tầng liên kết dữ liệu (Data Link Layer)","","",C
+MCQ,"Trong JavaScript, phương thức nào tạo ra một mảng mới bằng cách ánh xạ từng phần tử từ mảng cũ?","forEach","map","filter","reduce","","",B
+MCQ,"HTTP status code nào biểu thị tài nguyên không tìm thấy (Not Found)?","200","401","403","404","500","",D
+MCQ,"Trong PostgreSQL, kiểu dữ liệu nào lưu trữ chuỗi JSON dưới dạng nhị phân đã được phân tích sẵn và hỗ trợ đánh index hiệu quả?","TEXT","JSONB","VARCHAR","BLOB","","",B
+MCQ,"Trong TypeScript, từ khóa `interface` có thể được mở rộng (kế thừa) bằng từ khóa `extends` đúng hay sai?","Đúng","Sai","","","","",A
+MCQ,"Trong NestJS, decorator nào dùng để đánh dấu một class là Provider có thể inject qua Dependency Injection?","@Controller()","@Module()","@Injectable()","@Inject()","","",C
+MCQ,"Thuật toán sắp xếp nào có độ phức tạp trung bình là O(n log n) và thường dùng chiến lược chia để trị?","Bubble Sort","Insertion Sort","Quick Sort","Selection Sort","","",C
+MCQ,"Chọn 2 phương thức HTTP thường được xem là có tính idempotent (gọi lặp lại nhiều lần cho kết quả trạng thái tương đương)?","GET","POST","PUT","PATCH","","","A,C"
+MCQ,"Chọn 2 React Hook dùng để tối ưu hóa hiệu năng bằng cách ghi nhớ giá trị hoặc tham chiếu hàm?","useState","useMemo","useEffect","useCallback","useRef","","B,D"
+MCQ,"Chọn 3 thành phần cốt lõi trong kiến trúc của một module NestJS điển hình?","Controllers","Providers (Services)","Imports / Exports","HTML Templates","CSS Stylesheets","Webpack Config","A,B,C"
+MCQ,"Chọn 2 mệnh đề đúng về khóa chính (Primary Key) trong cơ sở dữ liệu quan hệ?","Không được chứa giá trị NULL","Có thể trùng lặp giữa các hàng","Mỗi giá trị phải là duy nhất trong bảng","Bắt buộc phải là kiểu UUID","","","A,C"
+MCQ,"Chọn 3 câu lệnh thuộc nhóm DML (Data Manipulation Language) trong SQL?","SELECT","CREATE","INSERT","ALTER","UPDATE","DROP","A,C,E"
+MCQ,"Chọn 2 lợi ích chính khi sử dụng TypeScript thay cho JavaScript thuần trong dự án lớn?","Phát hiện lỗi kiểu dữ liệu ngay lúc biên dịch","Tự động tăng tốc độ thực thi của trình duyệt gấp 10 lần","Tự động gợi ý code (IntelliSense) và refactor an toàn hơn","Không cần trình biên dịch trước khi chạy trên trình duyệt cổ điển","","","A,C"
+FIB,"Trong JavaScript, từ khóa {{1}} được dùng để khai báo hằng số không thể gán lại giá trị, còn {{2}} dùng để khai báo biến có phạm vi block có thể gán lại.","const","let","","","","",
+FIB,"Thủ đô của {{1}} là thành phố {{2}}.","Việt Nam | Viet Nam | Vietnam","Hà Nội | Ha Noi | Hanoi","","","","",
+FIB,"Trong mô hình Client-Server trên web, giao thức {{1}} chạy trên cổng mặc định {{2}} khi chưa mã hóa, và chuyển sang cổng {{3}} khi dùng HTTPS.","HTTP","80","443","","","",
+FIB,"Trong React, thuộc tính {{1}} giúp nhận diện duy nhất từng phần tử khi render danh sách mảng để tối ưu quá trình reconciliation.","key","","","","","",
+FIB,"Để chọn tất cả các cột từ bảng `users` trong SQL, ta viết câu lệnh: {{1}} * {{2}} users;","SELECT","FROM","","","","",
+FIB,"Trong CSS Flexbox, thuộc tính {{1}} căn chỉnh các phần tử theo trục chính, còn {{2}} căn chỉnh theo trục phụ (cross axis).","justify-content","align-items","","","","",
+FIB,"Chuẩn định dạng tệp {{1}} cho phép ngăn cách các cột bằng dấu phẩy và hỗ trợ mã hóa {{2}} để hiển thị đúng tiếng Việt trong Excel.","CSV","UTF-8 | UTF8","","","","",

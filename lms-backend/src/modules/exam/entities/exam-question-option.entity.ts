@@ -9,15 +9,11 @@ import {
 import { ExamQuestion } from './exam-question.entity.js';
 
 /**
- * One answer of a question. The partial unique index lets the database itself guarantee that a question
- * has at most one correct answer; "2 to 6 options" is enforced by the service.
+ * One option of a multiple-choice question (with one or more marked `isCorrect`),
+ * or one numbered blank's acceptable answer variants (pipe-separated) for a fill-in-the-blank question.
  */
 @Index('uq_exam_question_options_question_order', ['questionId', 'orderIndex'], {
   unique: true,
-})
-@Index('uq_exam_question_options_one_correct', ['questionId'], {
-  unique: true,
-  where: '"is_correct" = true',
 })
 @Entity('exam_question_options')
 export class ExamQuestionOption {

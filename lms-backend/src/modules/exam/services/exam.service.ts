@@ -27,6 +27,7 @@ import type {
 } from '../dto/create-exam.dto.js';
 import type { ExamSchedule } from '../entities/exam-schedule.entity.js';
 import { ExamFormat } from '../enums/exam-format.enum.js';
+import { ExamQuestionType } from '../enums/exam-question-type.enum.js';
 import { ExamStatus } from '../enums/exam-status.enum.js';
 import {
   ExamRepository,
@@ -35,6 +36,10 @@ import {
 } from '../repositories/exam.repository.js';
 import { ExamQuestionView } from '../types/exam-question-view.type.js';
 import { ExamView } from '../types/exam-view.type.js';
+import {
+  splitBlankVariants,
+  validateClozePlaceholders,
+} from '../utils/exam-grading.util.js';
 import { isContentLocked, resolveExamStatus } from '../utils/exam-status.util.js';
 
 const CONTENT_LOCKED_MESSAGE =
@@ -398,6 +403,37 @@ export class ExamService {
     question: CreateExamQuestionDto,
     position: number,
   ): void {
+    const type = question.type ?? ExamQuestionType.MULTIPLE_CHOICE;
+    if (type === ExamQuestionType.FILL_IN_THE_BLANK) {
+      const placeholderCheck = validateClozePlaceholders(question.content);
+      if (!placeholderCheck.valid) {
+        throw new BadRequestException(
+          `Question ${position}: ${placeholderCheck.reason}`,
+        );
+      }
+      if (question.options.length !== placeholderCheck.count) {
+        throw new BadRequestException(
+          `Question ${position} has ${placeholderCheck.count} blank(s) in the text but ${question.options.length} blank answer(s) provided`,
+        );
+      }
+      if (
+        question.correctCount !== undefined &&
+        question.correctCount !== placeholderCheck.count
+      ) {
+        throw new BadRequestException(
+          `Question ${position} correctCount (${question.correctCount}) must match its ${placeholderCheck.count} blank(s)`,
+        );
+      }
+      question.options.forEach((option, index) => {
+        if (splitBlankVariants(option.content).length === 0) {
+          throw new BadRequestException(
+            `Question ${position} blank {{${index + 1}}} needs at least one valid answer`,
+          );
+        }
+      });
+      return;
+    }
+
     if (
       question.options.length < MIN_OPTIONS ||
       question.options.length > MAX_OPTIONS
@@ -406,10 +442,26 @@ export class ExamService {
         `Question ${position} needs ${MIN_OPTIONS} to ${MAX_OPTIONS} answers`,
       );
     }
-    const correctCount = question.options.filter((option) => option.isCorrect).length;
-    if (correctCount !== 1) {
+    const expectedCorrectCount = question.correctCount ?? 1;
+    if (expectedCorrectCount > question.options.length) {
+      throw new BadRequestException(
+        `Question ${position} cannot require more correct answers than total options`,
+      );
+    }
+    const actualCorrectCount = question.options.filter(
+      (option) => option.isCorrect,
+    ).length;
+    if (expectedCorrectCount === 1 && actualCorrectCount !== 1) {
       throw new BadRequestException(
         `Question ${position} needs exactly one correct answer`,
+      );
+    }
+    if (
+      expectedCorrectCount > 1 &&
+      actualCorrectCount !== expectedCorrectCount
+    ) {
+      throw new BadRequestException(
+        `Question ${position} needs exactly ${expectedCorrectCount} correct answers`,
       );
     }
     const distinct = new Set(

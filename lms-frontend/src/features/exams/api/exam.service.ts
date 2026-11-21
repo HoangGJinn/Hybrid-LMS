@@ -31,6 +31,10 @@ import { resolveContentType } from '@features/documents';
 import { apiClient } from '@core/api/client';
 import { del, get, patch, post, put } from '@core/api/http';
 import { uploadFileToS3 } from '@core/api/s3-upload';
+import {
+  normalizeBlankAnswer,
+  splitBlankVariants,
+} from '../utils/exam-form';
 
 const resolveStatus = (startTime: string, endTime: string): ExamStatus => {
   const now = Date.now();
@@ -39,8 +43,66 @@ const resolveStatus = (startTime: string, endTime: string): ExamStatus => {
   return 'CLOSED';
 };
 
-/** Mock storage for saved answers by sessionId -> questionId -> optionId. */
-const mockSessionAnswers = new Map<string, Map<string, string>>();
+interface MockSavedAnswer {
+  optionId: string | null;
+  optionIds: string[];
+  textAnswers: string[];
+}
+
+/** Mock storage for saved answers by sessionId -> questionId -> MockSavedAnswer. */
+const mockSessionAnswers = new Map<string, Map<string, MockSavedAnswer>>();
+
+const applyMockAnswerWrites = (
+  map: Map<string, MockSavedAnswer>,
+  answers: ExamAnswerInput[],
+): void => {
+  for (const item of answers) {
+    const optionIds =
+      item.optionIds && item.optionIds.length > 0
+        ? [...item.optionIds]
+        : item.optionId
+          ? [item.optionId]
+          : [];
+    const textAnswers = (item.textAnswers ?? []).map((t) => t.trim());
+    const hasContent =
+      optionIds.length > 0 || textAnswers.some((t) => t !== '');
+    if (!hasContent) {
+      map.delete(item.questionId);
+    } else {
+      map.set(item.questionId, {
+        optionId: optionIds[0] ?? null,
+        optionIds,
+        textAnswers,
+      });
+    }
+  }
+};
+
+const isMockQuestionCorrect = (
+  q: ExamQuestion,
+  saved: MockSavedAnswer | undefined,
+): boolean => {
+  if (!saved) return false;
+  if ((q.type ?? 'MULTIPLE_CHOICE') === 'FILL_IN_THE_BLANK') {
+    if (q.options.length === 0 || saved.textAnswers.length < q.options.length) {
+      return false;
+    }
+    return q.options.every((blank, idx) => {
+      const studentNorm = normalizeBlankAnswer(saved.textAnswers[idx] ?? '');
+      if (studentNorm === '') return false;
+      return splitBlankVariants(blank.content)
+        .map(normalizeBlankAnswer)
+        .includes(studentNorm);
+    });
+  }
+  const correctIds = q.options.filter((o) => o.isCorrect).map((o) => o.id);
+  const selectedSet = new Set(saved.optionIds);
+  return (
+    correctIds.length > 0 &&
+    selectedSet.size === correctIds.length &&
+    correctIds.every((id) => selectedSet.has(id))
+  );
+};
 
 const resolveMockQuestions = (examId: string): ExamQuestion[] => {
   const lecturerExam = mockLecturerExams.find((item) => item.id === examId);
@@ -115,6 +177,12 @@ const toMockExam = (
       input.format === 'MULTIPLE_CHOICE'
         ? input.questions.map((question, index) => ({
             id: crypto.randomUUID(),
+            type: question.type ?? 'MULTIPLE_CHOICE',
+            correctCount:
+              question.correctCount ??
+              (question.type === 'FILL_IN_THE_BLANK'
+                ? question.options.length || 1
+                : question.options.filter((o) => o.isCorrect).length || 1),
             content: question.content,
             orderIndex: index,
             options: question.options.map((option) => ({
@@ -269,15 +337,36 @@ export const examService = {
     }
     const session = sessions[activeIndex];
     const savedMap = mockSessionAnswers.get(session.id) ?? new Map();
-    const questions: StudentExamQuestion[] = exam.questions.map((q, index) => ({
-      id: q.id,
-      content: q.content,
-      orderIndex: index,
-      options: q.options.map((opt) => ({
-        id: opt.id,
-        content: opt.content,
-      })),
-    }));
+    const questions: StudentExamQuestion[] = exam.questions.map((q, index) => {
+      const type = q.type ?? 'MULTIPLE_CHOICE';
+      const correctCount =
+        q.correctCount ??
+        (type === 'FILL_IN_THE_BLANK'
+          ? q.options.length || 1
+          : q.options.filter((opt) => opt.isCorrect).length || 1);
+      return {
+        id: q.id,
+        type,
+        correctCount,
+        content: q.content,
+        orderIndex: index,
+        options:
+          type === 'FILL_IN_THE_BLANK'
+            ? []
+            : q.options.map((opt) => ({
+                id: opt.id,
+                content: opt.content,
+              })),
+      };
+    });
+    const savedAnswers: Record<string, string> = {};
+    const savedMultiAnswers: Record<string, string[]> = {};
+    const savedTextAnswers: Record<string, string[]> = {};
+    for (const [qId, val] of savedMap.entries()) {
+      if (val.optionId) savedAnswers[qId] = val.optionId;
+      if (val.optionIds.length > 0) savedMultiAnswers[qId] = val.optionIds;
+      if (val.textAnswers.length > 0) savedTextAnswers[qId] = val.textAnswers;
+    }
     const startedMs = new Date(session.startedAt).getTime();
     const deadlineMs = startedMs + exam.durationMinutes * 60_000;
     return delay({
@@ -304,7 +393,9 @@ export const examService = {
       deadline: new Date(deadlineMs).toISOString(),
       serverNow: new Date().toISOString(),
       questions,
-      savedAnswers: Object.fromEntries(savedMap),
+      savedAnswers,
+      savedMultiAnswers,
+      savedTextAnswers,
       questionFile: exam.file,
       submittedFiles: [],
     });
@@ -357,11 +448,9 @@ export const examService = {
     if (!USE_MOCK) {
       return put(`/api/exam-sessions/${sessionId}/answers`, { answers });
     }
-    const map = mockSessionAnswers.get(sessionId) ?? new Map<string, string>();
-    for (const item of answers) {
-      if (item.optionId === null) map.delete(item.questionId);
-      else map.set(item.questionId, item.optionId);
-    }
+    const map =
+      mockSessionAnswers.get(sessionId) ?? new Map<string, MockSavedAnswer>();
+    applyMockAnswerWrites(map, answers);
     mockSessionAnswers.set(sessionId, map);
     const session = mockExamSessions.find((s) => s.id === sessionId);
     const exam = session ? findMockSchedule(session.examScheduleId) : undefined;
@@ -383,20 +472,16 @@ export const examService = {
     if (!USE_MOCK) {
       return post(`/api/exam-sessions/${sessionId}/submit`, { answers });
     }
-    const map = mockSessionAnswers.get(sessionId) ?? new Map<string, string>();
-    for (const item of answers) {
-      if (item.optionId === null) map.delete(item.questionId);
-      else map.set(item.questionId, item.optionId);
-    }
+    const map =
+      mockSessionAnswers.get(sessionId) ?? new Map<string, MockSavedAnswer>();
+    applyMockAnswerWrites(map, answers);
     mockSessionAnswers.set(sessionId, map);
     const session = mockExamSessions.find((s) => s.id === sessionId);
     const exam = session ? findMockSchedule(session.examScheduleId) : undefined;
     const questions = exam?.questions ?? [];
-    const correctCount = questions.filter((q) => {
-      const selected = map.get(q.id);
-      const correct = q.options.find((opt) => opt.isCorrect);
-      return selected !== undefined && selected === correct?.id;
-    }).length;
+    const correctCount = questions.filter((q) =>
+      isMockQuestionCorrect(q, map.get(q.id)),
+    ).length;
     const score =
       questions.length === 0
         ? 0
@@ -434,12 +519,11 @@ export const examService = {
     const session = mockExamSessions.find((s) => s.id === sessionId);
     const exam = session ? findMockSchedule(session.examScheduleId) : undefined;
     if (!session || !exam) throw new Error('Attempt not found');
-    const saved = mockSessionAnswers.get(sessionId) ?? new Map<string, string>();
-    const correctCount = exam.questions.filter((q) => {
-      const selected = saved.get(q.id);
-      const correct = q.options.find((opt) => opt.isCorrect);
-      return selected !== undefined && selected === correct?.id;
-    }).length;
+    const saved =
+      mockSessionAnswers.get(sessionId) ?? new Map<string, MockSavedAnswer>();
+    const correctCount = exam.questions.filter((q) =>
+      isMockQuestionCorrect(q, saved.get(q.id)),
+    ).length;
     return delay({
       sessionId: session.id,
       examId: exam.id,
@@ -451,12 +535,19 @@ export const examService = {
       score: session.score ?? 0,
       correctCount,
       totalQuestions: exam.questions.length,
-      questions: exam.questions.map((q) => ({
-        id: q.id,
-        content: q.content,
-        selectedOptionId: saved.get(q.id) ?? null,
-        options: q.options,
-      })),
+      questions: exam.questions.map((q) => {
+        const entry = saved.get(q.id);
+        return {
+          id: q.id,
+          type: q.type ?? 'MULTIPLE_CHOICE',
+          correctCount: q.correctCount,
+          content: q.content,
+          selectedOptionId: entry?.optionId ?? null,
+          selectedOptionIds: entry?.optionIds ?? [],
+          textAnswers: entry?.textAnswers ?? [],
+          options: q.options,
+        };
+      }),
     });
   },
 
