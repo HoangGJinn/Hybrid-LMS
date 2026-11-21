@@ -1,14 +1,17 @@
 import { useMemo, useState } from 'react';
 import { useParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
+import { FileSpreadsheet } from 'lucide-react';
+import { toast } from 'sonner';
 import { AsyncView } from '@shared/components/AsyncView';
 import { EmptyState } from '@shared/components/EmptyState';
+import { Button } from '@shared/components/ui/button';
 import { toAsyncState } from '@shared/utils/async-state';
 import { classService } from '../api/class.service';
 import { GradePagination } from '../components/GradePagination';
 import { GradeStatCards } from '../components/GradeStatCards';
 import { GradeTable } from '../components/GradeTable';
-import { PAGE_SIZE, useGradebook } from '../hooks/useGradebook';
+import { PAGE_SIZE, useExportGradebook, useGradebook } from '../hooks/useGradebook';
 
 const courseCodeOf = (classCode: string) => classCode.split('.')[0];
 
@@ -32,6 +35,7 @@ const LecturerCourseGradesPage = () => {
 
   const gradebookQuery = useGradebook(classId, search, page);
   const state = toAsyncState(gradebookQuery);
+  const exportGradebook = useExportGradebook();
 
   return (
     <div className="space-y-4">
@@ -77,8 +81,24 @@ const LecturerCourseGradesPage = () => {
             <GradeStatCards summary={book.summary} />
             <section className="rounded-2xl border border-border">
               <header className="flex items-center justify-between px-4 py-3">
-                <h2 className="text-sm font-semibold text-foreground">Bảng điểm lớp {book.classCode}</h2>
-                <p className="text-xs text-muted-foreground">Thang điểm 10 · "--" là chưa có điểm</p>
+                <div>
+                  <h2 className="text-sm font-semibold text-foreground">Bảng điểm lớp {book.classCode}</h2>
+                  <p className="text-xs text-muted-foreground">Thang điểm 10 · "--" là chưa có điểm</p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={exportGradebook.isPending}
+                  onClick={() =>
+                    exportGradebook.mutate(
+                      { classId: book.classId, classCode: book.classCode },
+                      { onError: () => toast.error('Không thể xuất bảng điểm. Vui lòng thử lại.') },
+                    )
+                  }
+                >
+                  <FileSpreadsheet />
+                  {exportGradebook.isPending ? 'Đang xuất…' : 'Xuất bảng điểm (.xlsx)'}
+                </Button>
               </header>
               {book.rows.length === 0 ? (
                 <EmptyState title="Không tìm thấy sinh viên phù hợp" />

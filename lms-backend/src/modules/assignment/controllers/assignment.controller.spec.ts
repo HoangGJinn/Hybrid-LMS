@@ -2,6 +2,7 @@ import type { Response } from 'express';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Role } from '../../../common/enums/role.enum.js';
 import type { AuthenticatedUser } from '../../../common/types/authenticated-user.type.js';
+import type { AssignmentExportService } from '../services/assignment-export.service.js';
 import type { AssignmentService } from '../services/assignment.service.js';
 import type { SubmissionReviewService } from '../services/submission-review.service.js';
 import type { SubmissionService } from '../services/submission.service.js';
@@ -20,6 +21,7 @@ describe('AssignmentController', () => {
   let assignmentService: Record<keyof AssignmentService, Mock>;
   let submissionService: Record<keyof SubmissionService, Mock>;
   let reviewService: Record<keyof SubmissionReviewService, Mock>;
+  let exportService: Record<keyof AssignmentExportService, Mock>;
 
   beforeEach(() => {
     assignmentService = {
@@ -41,11 +43,17 @@ describe('AssignmentController', () => {
       grade: vi.fn().mockResolvedValue({ id: SUBMISSION_ID, score: 9 }),
       streamZip: vi.fn().mockResolvedValue(undefined),
     };
+    exportService = {
+      exportResults: vi
+        .fn()
+        .mockResolvedValue({ fileName: 'Ket-qua.xlsx', buffer: Buffer.from('xlsx') }),
+    };
 
     controller = new AssignmentController(
       assignmentService as unknown as AssignmentService,
       submissionService as unknown as SubmissionService,
       reviewService as unknown as SubmissionReviewService,
+      exportService as unknown as AssignmentExportService,
     );
   });
 
@@ -131,5 +139,17 @@ describe('AssignmentController', () => {
       ),
     ).toEqual({ id: SUBMISSION_ID, score: 9 });
   });
-});
+  it('sends the Excel export as a download without the JSON envelope', async () => {
+    const response = { set: vi.fn(), end: vi.fn() } as unknown as Response;
 
+    await controller.exportResults(CLASS_ID, ASSIGNMENT_ID, user, response);
+
+    expect(exportService.exportResults).toHaveBeenCalledWith(CLASS_ID, ASSIGNMENT_ID, user);
+    expect(response.set).toHaveBeenCalledWith(
+      expect.objectContaining({
+        'Content-Disposition': "attachment; filename*=UTF-8''Ket-qua.xlsx",
+      }),
+    );
+    expect(response.end).toHaveBeenCalledWith(Buffer.from('xlsx'));
+  });
+});

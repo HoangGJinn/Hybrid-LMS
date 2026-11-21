@@ -149,6 +149,7 @@ export class TypeOrmGradebookRepository extends GradebookRepository {
           id: a.id,
           kind: 'assignment',
           label: `BT${++assignmentNo}`,
+          title: a.title,
           order: order++,
         });
       }
@@ -160,6 +161,7 @@ export class TypeOrmGradebookRepository extends GradebookRepository {
           id: e.id,
           kind,
           label: kind === 'midterm' ? 'Giữa kỳ' : `KT${++quizNo}`,
+          title: e.examName,
           order: order++,
         });
       }

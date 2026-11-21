@@ -332,6 +332,27 @@ export const assignmentService = {
     );
     return response.data;
   },
+  /**
+   * Lecturer: an Excel file with the assignment's details and every student's result, including
+   * students who have not submitted. It goes through the app's HTTP client because a plain link
+   * would carry no login token.
+   */
+  exportResults: async (
+    classId: string,
+    assignmentId: string,
+  ): Promise<Blob> => {
+    if (USE_MOCK)
+      return delay(
+        new Blob(['mock xlsx'], {
+          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        }),
+      );
+    const response = await apiClient.get<Blob>(
+      `/api/classes/${classId}/assignments/${assignmentId}/export`,
+      { responseType: 'blob' },
+    );
+    return response.data;
+  },
   /** Submissions of the signed-in student across all classes. */
   getMySubmissions: (): Promise<AssignmentSubmission[]> =>
     USE_MOCK

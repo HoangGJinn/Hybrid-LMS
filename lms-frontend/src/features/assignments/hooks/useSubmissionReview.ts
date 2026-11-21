@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { downloadBlob } from '@shared/utils/download';
 import { assignmentService } from '../api/assignment.service';
 import { assignmentKeys } from '../api/queryKeys';
 
@@ -75,5 +76,21 @@ export const useDownloadSubmissions = () =>
       link.download = `${fileName}.zip`;
       link.click();
       URL.revokeObjectURL(url);
+    },
+  });
+
+interface ExportResultsInput {
+  classId: string;
+  assignmentId: string;
+  /** Name of the saved file, without `.xlsx`. */
+  fileName: string;
+}
+
+/** Lecturer: downloads the assignment's details and every student's result as an Excel file. */
+export const useExportAssignmentResults = () =>
+  useMutation({
+    mutationFn: async ({ classId, assignmentId, fileName }: ExportResultsInput) => {
+      const blob = await assignmentService.exportResults(classId, assignmentId);
+      downloadBlob(blob, `${fileName}.xlsx`);
     },
   });

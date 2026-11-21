@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query';
+import { downloadBlob } from '@shared/utils/download';
 import { gradebookService } from '../api/gradebook.service';
 
 const useDebouncedValue = <T,>(value: T, delay = 300): T => {
@@ -27,3 +28,12 @@ export const useGradebook = (classId: string, search: string, page: number) => {
     placeholderData: keepPreviousData,
   });
 };
+
+/** Lecturer: downloads the whole gradebook of the class as an Excel file. */
+export const useExportGradebook = () =>
+  useMutation({
+    mutationFn: async ({ classId, classCode }: { classId: string; classCode: string }) => {
+      const blob = await gradebookService.exportGradebook(classId);
+      downloadBlob(blob, `Bang-diem-${classCode}.xlsx`);
+    },
+  });
