@@ -7,6 +7,7 @@ import { ExamQuestion } from '../entities/exam-question.entity.js';
 import { ExamSchedule } from '../entities/exam-schedule.entity.js';
 import { ExamSession } from '../entities/exam-session.entity.js';
 import type { ExamFormat } from '../enums/exam-format.enum.js';
+import { ExamQuestionType } from '../enums/exam-question-type.enum.js';
 
 export interface NewExamOption {
   readonly content: string;
@@ -14,7 +15,9 @@ export interface NewExamOption {
 }
 
 export interface NewExamQuestion {
+  readonly type?: ExamQuestionType;
   readonly content: string;
+  readonly correctCount?: number;
   readonly options: readonly NewExamOption[];
 }
 
@@ -152,21 +155,34 @@ export class ExamRepository {
     questions: readonly NewExamQuestion[],
   ): Promise<void> {
     if (questions.length === 0) return;
-    const questionRows = questions.map((question, index) => ({
-      id: randomUUID(),
-      examId,
-      content: question.content,
-      orderIndex: index,
-    }));
+    const questionRows = questions.map((question, index) => {
+      const type = question.type ?? ExamQuestionType.MULTIPLE_CHOICE;
+      const correctCount =
+        question.correctCount ??
+        (type === ExamQuestionType.FILL_IN_THE_BLANK
+          ? question.options.length || 1
+          : question.options.filter((option) => option.isCorrect).length || 1);
+      return {
+        id: randomUUID(),
+        examId,
+        type,
+        content: question.content,
+        correctCount,
+        orderIndex: index,
+      };
+    });
     await manager.insert(ExamQuestion, questionRows);
-    const optionRows = questions.flatMap((question, index) =>
-      question.options.map((option, optionIndex) => ({
+    const optionRows = questions.flatMap((question, index) => {
+      const isFib =
+        (question.type ?? ExamQuestionType.MULTIPLE_CHOICE) ===
+        ExamQuestionType.FILL_IN_THE_BLANK;
+      return question.options.map((option, optionIndex) => ({
         questionId: questionRows[index].id,
         content: option.content,
-        isCorrect: option.isCorrect,
+        isCorrect: isFib ? true : option.isCorrect,
         orderIndex: optionIndex,
-      })),
-    );
+      }));
+    });
     await manager.insert(ExamQuestionOption, optionRows);
   }
 

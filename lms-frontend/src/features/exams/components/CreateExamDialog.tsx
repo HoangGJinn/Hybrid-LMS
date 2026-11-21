@@ -332,8 +332,8 @@ export const CreateExamDialog = ({
               <TypeCard
                 active={format === 'MULTIPLE_CHOICE'}
                 icon={<ListChecks className="h-5 w-5" />}
-                title="Multiple choice"
-                hint="Type the questions; 2–6 answers each, one correct"
+                title="Interactive questions"
+                hint="Multiple choice (1 or more correct) & fill-in-the-blank (cloze)"
                 onClick={() => setFormat('MULTIPLE_CHOICE')}
               />
               <TypeCard
