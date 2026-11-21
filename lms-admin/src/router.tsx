@@ -3,7 +3,7 @@ import AdminShell from '@/core/layouts/AdminShell';
 import { lazyPage } from '@/core/router/lazyPage';
 import { ProtectedRoute } from '@/features/auth';
 import { loginRoute } from '@/features/auth/routes';
-import { coursesRoute } from '@/features/courses/routes';
+import { coursesRoute, importDataRoute } from '@/features/courses/routes';
 import { dashboardRoute } from '@/features/dashboard/routes';
 import { lecturersRoute, studentsRoute } from '@/features/users/routes';
 import FullPageLoader from '@/shared/components/FullPageLoader';
@@ -29,6 +29,7 @@ export const router = createBrowserRouter([
             children: [
               dashboardRoute,
               coursesRoute,
+              importDataRoute,
               lecturersRoute,
               studentsRoute,
               {
