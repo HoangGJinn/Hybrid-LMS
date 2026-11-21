@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ClassController } from './class.controller.js';
 import { ClassService } from '../services/class.service.js';
+import { ClassDataImportService } from '../services/class-data-import.service.js';
 import { ClassExportService } from '../services/class-export.service.js';
 import { ClassImportService } from '../services/class-import.service.js';
 import { AcademicFacade } from '../facades/academic.facade.js';
@@ -16,6 +17,7 @@ describe('ClassController', () => {
     Record<keyof ClassService, ReturnType<typeof vi.fn>>
   >;
   let mockImportService: Record<keyof ClassImportService, ReturnType<typeof vi.fn>>;
+  let mockDataImportService: Record<keyof ClassDataImportService, ReturnType<typeof vi.fn>>;
   let mockExportService: Record<keyof ClassExportService, ReturnType<typeof vi.fn>>;
   let mockAcademicFacade: Partial<
     Record<keyof AcademicFacade, ReturnType<typeof vi.fn>>
@@ -91,7 +93,8 @@ describe('ClassController', () => {
       deactivate: vi.fn(),
       findMyClasses: vi.fn(),
     };
-    mockImportService = { importClasses: vi.fn() };
+    mockImportService = { importClasses: vi.fn(), plan: vi.fn() };
+    mockDataImportService = { importData: vi.fn() };
     const file = { fileName: 'Classes.xlsx', buffer: Buffer.from('xlsx') };
     mockExportService = {
       exportLecturerClasses: vi.fn().mockResolvedValue(file),
@@ -105,6 +108,7 @@ describe('ClassController', () => {
     controller = new ClassController(
       mockClassService as unknown as ClassService,
       mockImportService as unknown as ClassImportService,
+      mockDataImportService as unknown as ClassDataImportService,
       mockExportService as unknown as ClassExportService,
       mockAcademicFacade as unknown as AcademicFacade,
     );
@@ -301,6 +305,16 @@ describe('ClassController', () => {
 
       expect(mockExportService.exportStudentClasses).toHaveBeenCalledWith('stu-uuid');
       expect(response.end).toHaveBeenCalledWith(Buffer.from('xlsx'));
+    });
+  });
+  describe('importClassData', () => {
+    it('delegates the files to ClassDataImportService and returns its result', async () => {
+      const dto = { files: [], dryRun: true };
+      const result = { dryRun: true, files: [] };
+      mockDataImportService.importData.mockResolvedValue(result);
+
+      await expect(controller.importClassData(dto as never)).resolves.toBe(result);
+      expect(mockDataImportService.importData).toHaveBeenCalledWith(dto);
     });
   });
 });
