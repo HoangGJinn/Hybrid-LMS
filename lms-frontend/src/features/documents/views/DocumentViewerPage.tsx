@@ -13,6 +13,7 @@ import { useMarkDocumentSeen } from '../hooks/useMarkDocumentSeen';
 /** Student view of a document: the file, plus a practice panel that never blocks the file from showing. */
 const DocumentViewerPage = () => {
   const { courseId = '', docId = '' } = useParams();
+  const courseBase = `/student/courses/${courseId}`;
   const state = toAsyncState(useDocument(courseId, docId));
   // Practice quizzes are secondary: if they fail to load, the document must still open.
   const quizzes = useMyQuizzes();
