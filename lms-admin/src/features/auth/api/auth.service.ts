@@ -1,3 +1,4 @@
+import { isAxiosError } from 'axios';
 import { get, post } from '@/core/api/http';
 import type { SessionUser } from '@/core/types/auth.types';
 
@@ -7,22 +8,30 @@ export interface AuthSession {
 }
 
 const MISSING_TOKEN_MESSAGE = 'Sign-in failed: no token received.';
+const FORBIDDEN_STATUS = 403;
 
-export const authService = {
-  login: async (username: string, password: string): Promise<AuthSession> => {
-    const session = await post<AuthSession>('/api/auth/login', {
-      username,
-      password,
-    });
+const postAdminLogin = async (
+  url: string,
+  body: unknown,
+): Promise<AuthSession> => {
+  try {
+    const session = await post<AuthSession>(url, body);
     if (!session.accessToken) throw new Error(MISSING_TOKEN_MESSAGE);
     if (session.user.role !== 'ADMIN') throw new NotAdminError();
     return session;
-  },
-  loginWithGoogle: async (idToken: string): Promise<AuthSession> => {
-    const session = await post<AuthSession>('/api/auth/google', { idToken });
-    if (!session.accessToken) throw new Error(MISSING_TOKEN_MESSAGE);
-    return session;
-  },
+  } catch (error) {
+    if (isAxiosError(error) && error.response?.status === FORBIDDEN_STATUS) {
+      throw new NotAdminError();
+    }
+    throw error;
+  }
+};
+
+export const authService = {
+  login: (username: string, password: string): Promise<AuthSession> =>
+    postAdminLogin('/api/auth/login', { username, password }),
+  loginWithGoogle: (idToken: string): Promise<AuthSession> =>
+    postAdminLogin('/api/auth/google', { idToken }),
   getMe: (): Promise<SessionUser> => get<SessionUser>('/api/auth/me'),
   logout: (): Promise<void> => post<void>('/api/auth/logout'),
 };

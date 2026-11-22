@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { Eye, EyeOff, Lock, User } from 'lucide-react';
 import campusBg from '@core/assets/campus-bg.jpg';
+import { getErrorMessage } from '@core/api/errors';
 import { Input } from '@shared/components/ui/input';
 import { Button } from '@shared/components/ui/button';
 import { useLogin, useLoginWithGoogle } from '../hooks/useAuthMutations';
@@ -31,7 +32,12 @@ const Login = () => {
       {
         onSuccess: () => navigate('/', { replace: true }),
         onError: (err) =>
-          toast.error(err.message || 'Invalid username or password. Please try again.'),
+          toast.error(
+            getErrorMessage(
+              err,
+              'Invalid username or password. Please try again.',
+            ),
+          ),
       },
     );
   };
@@ -40,8 +46,13 @@ const Login = () => {
     if (!credential) return;
     loginWithGoogle(credential, {
       onSuccess: () => navigate('/', { replace: true }),
-      onError: () =>
-        toast.error('Sign-in failed. Please check your connection and try again.'),
+      onError: (err) =>
+        toast.error(
+          getErrorMessage(
+            err,
+            'Sign-in failed. Please check your connection and try again.',
+          ),
+        ),
     });
   };
 

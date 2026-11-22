@@ -1,4 +1,9 @@
-import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  Logger,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import bcrypt from 'bcryptjs';
 import { UserFacade } from '../../user/facades/user.facade.js';
@@ -30,7 +35,10 @@ export class AuthService {
     return this.refreshTokenService.getTtlMs();
   }
 
-  async loginWithGoogle(idToken: string): Promise<AuthSession> {
+  async loginWithGoogle(
+    idToken: string,
+    allowedRoles?: readonly Role[],
+  ): Promise<AuthSession> {
     this.logger.log(`Attempting Google login...`);
     const googleUser = await this.googleAuthService.verifyToken(idToken);
     const user = await this.findOrCreateGoogleUser(googleUser);
@@ -39,13 +47,17 @@ export class AuthService {
       this.logger.warn(`Login refused, account is disabled: ${user.email}`);
       throw new UnauthorizedException('Account is disabled');
     }
+    this.assertAllowedRole(user, allowedRoles);
     return this.startSession(
       user,
       await this.refreshTokenService.issue(user.id),
     );
   }
 
-  async loginWithCredentials(dto: LoginDto): Promise<AuthSession> {
+  async loginWithCredentials(
+    dto: LoginDto,
+    allowedRoles?: readonly Role[],
+  ): Promise<AuthSession> {
     this.logger.log(`Attempting password login for: ${dto.username}`);
     const account = await this.userFacade.findForPasswordAuth(dto.username);
     if (!account?.passwordHash) {
@@ -68,6 +80,7 @@ export class AuthService {
       );
       throw new UnauthorizedException('Account is disabled');
     }
+    this.assertAllowedRole(account.user, allowedRoles);
     return this.startSession(
       account.user,
       await this.refreshTokenService.issue(account.user.id),
@@ -179,6 +192,20 @@ export class AuthService {
       refreshToken,
       user: await this.toSessionUser(user),
     };
+  }
+
+  private assertAllowedRole(
+    user: UserView,
+    allowedRoles?: readonly Role[],
+  ): void {
+    if (!allowedRoles || allowedRoles.includes(user.role)) return;
+    this.logger.warn(
+      `Login refused, role ${user.role} is not allowed on this portal: ${user.email}`,
+    );
+    const message = allowedRoles.includes(Role.ADMIN)
+      ? 'This account does not have administrator access.'
+      : 'Administrator accounts must sign in through the administration portal.';
+    throw new ForbiddenException(message);
   }
 
   private async toSessionUser(user: UserView): Promise<SessionUser> {

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { UnauthorizedException } from '@nestjs/common';
+import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service.js';
 import { UserFacade } from '../../user/facades/user.facade.js';
@@ -216,6 +216,37 @@ describe('AuthService', () => {
         }),
       );
     });
+
+    it('throws ForbiddenException without issuing tokens when non-admin logs in with ADMIN-only roles', async () => {
+      mockGoogleAuthService.verifyToken!.mockResolvedValue(sampleGoogleProfile);
+      mockUserFacade.findBySsoId!.mockResolvedValue({
+        ...sampleUserView,
+        role: Role.LECTURER,
+      });
+
+      await expect(
+        service.loginWithGoogle('google-id-token', [Role.ADMIN]),
+      ).rejects.toThrow(ForbiddenException);
+      expect(mockRefreshTokenService.issue).not.toHaveBeenCalled();
+      expect(mockTokenService.generateAccessToken).not.toHaveBeenCalled();
+    });
+
+    it('throws ForbiddenException without issuing tokens when ADMIN logs in with learning portal roles', async () => {
+      mockGoogleAuthService.verifyToken!.mockResolvedValue(sampleGoogleProfile);
+      mockUserFacade.findBySsoId!.mockResolvedValue({
+        ...sampleUserView,
+        role: Role.ADMIN,
+      });
+
+      await expect(
+        service.loginWithGoogle('google-id-token', [
+          Role.STUDENT,
+          Role.LECTURER,
+        ]),
+      ).rejects.toThrow(ForbiddenException);
+      expect(mockRefreshTokenService.issue).not.toHaveBeenCalled();
+      expect(mockTokenService.generateAccessToken).not.toHaveBeenCalled();
+    });
   });
 
   describe('loginWithCredentials', () => {
@@ -290,6 +321,22 @@ describe('AuthService', () => {
           password: 'admine123456',
         }),
       ).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('throws ForbiddenException without issuing tokens when ADMIN logs in with learning portal roles', async () => {
+      mockUserFacade.findForPasswordAuth!.mockResolvedValue({
+        user: { ...sampleUserView, role: Role.ADMIN },
+        passwordHash,
+      });
+
+      await expect(
+        service.loginWithCredentials(
+          { username: 'admin1', password: 'admine123456' },
+          [Role.STUDENT, Role.LECTURER],
+        ),
+      ).rejects.toThrow(ForbiddenException);
+      expect(mockRefreshTokenService.issue).not.toHaveBeenCalled();
+      expect(mockTokenService.generateAccessToken).not.toHaveBeenCalled();
     });
   });
 
