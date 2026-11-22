@@ -20,7 +20,7 @@ export class ClassExportService {
   ) {}
 
   /** Every class the lecturer teaches, ended ones included. */
-  async exportLecturerClasses(lecturerId: string): Promise<ExportedFile> {
+  async getLecturerClasses(lecturerId: string): Promise<ClassListExportRow[]> {
     const [lecturer] = await this.userFacade.findLecturersByIds([lecturerId]);
     if (!lecturer) throw new NotFoundException('Lecturer not found');
 
@@ -28,7 +28,30 @@ export class ClassExportService {
     const counts = await this.classRepo.countStudentsBatch(
       classes.map((cls) => cls.id),
     );
-    const rows = classes.map((cls) => this.toRow(cls, counts, null));
+    return classes.map((cls) => this.toRow(cls, counts, null));
+  }
+
+  /** Every class the student is enrolled in, ended ones included. */
+  async getStudentClasses(studentId: string): Promise<ClassListExportRow[]> {
+    const [student] = await this.userFacade.findStudentsByIds([studentId]);
+    if (!student) throw new NotFoundException('Student not found');
+
+    const enrollments =
+      await this.classRepo.findEnrollmentsByStudentId(studentId);
+    const counts = await this.classRepo.countStudentsBatch(
+      enrollments.map((enrollment) => enrollment.classId),
+    );
+    return enrollments.map((enrollment) =>
+      this.toRow(enrollment.class, counts, enrollment.joinedAt),
+    );
+  }
+
+  /** Every class the lecturer teaches, ended ones included. */
+  async exportLecturerClasses(lecturerId: string): Promise<ExportedFile> {
+    const [lecturer] = await this.userFacade.findLecturersByIds([lecturerId]);
+    if (!lecturer) throw new NotFoundException('Lecturer not found');
+
+    const rows = await this.getLecturerClasses(lecturerId);
     return {
       fileName: `${safeFileName(`Classes-taught-${lecturer.lecturerCode}`)}.xlsx`,
       buffer: await buildClassListWorkbook('LECTURER', rows),
@@ -40,14 +63,7 @@ export class ClassExportService {
     const [student] = await this.userFacade.findStudentsByIds([studentId]);
     if (!student) throw new NotFoundException('Student not found');
 
-    const enrollments =
-      await this.classRepo.findEnrollmentsByStudentId(studentId);
-    const counts = await this.classRepo.countStudentsBatch(
-      enrollments.map((enrollment) => enrollment.classId),
-    );
-    const rows = enrollments.map((enrollment) =>
-      this.toRow(enrollment.class, counts, enrollment.joinedAt),
-    );
+    const rows = await this.getStudentClasses(studentId);
     return {
       fileName: `${safeFileName(`Classes-enrolled-${student.studentCode}`)}.xlsx`,
       buffer: await buildClassListWorkbook('STUDENT', rows),
@@ -60,6 +76,7 @@ export class ClassExportService {
     joinedAt: Date | null,
   ): ClassListExportRow {
     return {
+      id: cls.id,
       classCode: cls.classCode,
       name: cls.name,
       subjectCode: cls.subject?.subjectCode ?? '',

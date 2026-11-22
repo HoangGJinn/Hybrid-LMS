@@ -6,10 +6,15 @@ interface ModalProps {
   title: string;
   onClose: () => void;
   children: ReactNode;
-  size?: 'md' | 'lg';
+  size?: 'md' | 'lg' | 'xl' | '2xl';
 }
 
-const sizeClasses = { md: 'max-w-md', lg: 'max-w-lg' };
+const sizeClasses = {
+  md: 'max-w-md',
+  lg: 'max-w-lg',
+  xl: 'max-w-2xl',
+  '2xl': 'max-w-4xl',
+};
 
 /** Accessible modal built on the native <dialog>: focus trap, Esc to close and backdrop come from the browser. */
 export const Modal = ({

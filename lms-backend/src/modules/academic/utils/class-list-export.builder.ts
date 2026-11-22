@@ -10,6 +10,7 @@ import {
 export type ClassListAudience = 'LECTURER' | 'STUDENT';
 
 export interface ClassListExportRow {
+  readonly id?: string;
   readonly classCode: string;
   readonly name: string;
   readonly subjectCode: string;
