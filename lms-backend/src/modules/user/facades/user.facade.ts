@@ -3,6 +3,7 @@ import { UserService } from '../services/user.service.js';
 import { UserView } from '../types/user-view.type.js';
 import { CreateUserDto } from '../dto/create-user.dto.js';
 import { GoogleAccountData } from '../types/google-account-data.type.js';
+import { LecturerSummary } from '../types/lecturer-summary.type.js';
 import { StudentSummary } from '../types/student-summary.type.js';
 import { Role } from '../../../common/enums/role.enum.js';
 
@@ -40,6 +41,12 @@ export class UserFacade {
     return user ? UserView.fromEntity(user) : null;
   }
 
+  async findForPasswordAuth(
+    identifier: string,
+  ): Promise<{ user: UserView; passwordHash: string | null } | null> {
+    return this.userService.findForPasswordAuth(identifier);
+  }
+
   async getUserById(id: string): Promise<UserView> {
     const user = await this.userService.getUserById(id);
     return UserView.fromEntity(user);
@@ -56,6 +63,18 @@ export class UserFacade {
 
   async findStudentsByEmails(emails: string[]): Promise<StudentSummary[]> {
     return this.userService.findStudentsByEmails(emails);
+  }
+
+  async findLecturersByIds(ids: string[]): Promise<LecturerSummary[]> {
+    return this.userService.findLecturersByIds(ids);
+  }
+
+  async findLecturersByCodes(codes: string[]): Promise<LecturerSummary[]> {
+    return this.userService.findLecturersByCodes(codes);
+  }
+
+  async findLecturersByEmails(emails: string[]): Promise<LecturerSummary[]> {
+    return this.userService.findLecturersByEmails(emails);
   }
 
   /** Students that can still join a class: active account and status STUDYING. */

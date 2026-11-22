@@ -1,0 +1,1 @@
+export interface ItemSchedule { openAt: Date; closeAt: Date }

@@ -29,6 +29,7 @@ describe('AuthController', () => {
   beforeEach(() => {
     mockAuthService = {
       loginWithGoogle: vi.fn(),
+      loginWithCredentials: vi.fn(),
       refresh: vi.fn(),
       getMe: vi.fn(),
       logout: vi.fn(),
@@ -57,6 +58,35 @@ describe('AuthController', () => {
       expect(mockAuthService.loginWithGoogle).toHaveBeenCalledWith(
         'google.id.token',
       );
+      expect(mockResponse.cookie).toHaveBeenCalledWith(
+        REFRESH_COOKIE_NAME,
+        'refresh.uuid',
+        expect.objectContaining({ httpOnly: true }),
+      );
+      expect(result).toEqual({
+        accessToken: 'access.jwt',
+        user: sampleSessionUser,
+      });
+    });
+  });
+
+  describe('login', () => {
+    it('authenticates user with credentials and sets httpOnly refresh cookie', async () => {
+      mockAuthService.loginWithCredentials!.mockResolvedValue({
+        accessToken: 'access.jwt',
+        refreshToken: 'refresh.uuid',
+        user: sampleSessionUser,
+      });
+
+      const result = await controller.login(
+        { username: 'student1', password: 'admine123456' },
+        mockResponse as unknown as Response,
+      );
+
+      expect(mockAuthService.loginWithCredentials).toHaveBeenCalledWith({
+        username: 'student1',
+        password: 'admine123456',
+      });
       expect(mockResponse.cookie).toHaveBeenCalledWith(
         REFRESH_COOKIE_NAME,
         'refresh.uuid',

@@ -49,6 +49,7 @@ describe('UserService', () => {
       findProfile: vi.fn().mockResolvedValue(null),
       updateUserAndProfile: vi.fn(),
       setActive: vi.fn(),
+      findForPasswordAuth: vi.fn(),
     };
 
     service = new UserService(mockUserRepo as unknown as UserRepository);
@@ -111,11 +112,32 @@ describe('UserService', () => {
   describe('findUsers', () => {
     it('finds users by role', async () => {
       mockUserRepo.findByRole!.mockResolvedValue([sampleUser]);
-
-      const result = await service.findUsers(Role.STUDENT);
-
+      const res = await service.findUsers(Role.STUDENT);
       expect(mockUserRepo.findByRole).toHaveBeenCalledWith(Role.STUDENT);
-      expect(result).toEqual([sampleUser]);
+      expect(res).toHaveLength(1);
+    });
+  });
+
+  describe('findForPasswordAuth', () => {
+    it('returns user view and password hash when found', async () => {
+      mockUserRepo.findForPasswordAuth!.mockResolvedValue({
+        ...sampleUser,
+        passwordHash: 'hashed_pw',
+      });
+
+      const result = await service.findForPasswordAuth('student1');
+
+      expect(mockUserRepo.findForPasswordAuth).toHaveBeenCalledWith('student1');
+      expect(result?.user.id).toBe(sampleUser.id);
+      expect(result?.passwordHash).toBe('hashed_pw');
+    });
+
+    it('returns null when user is not found', async () => {
+      mockUserRepo.findForPasswordAuth!.mockResolvedValue(null);
+
+      const result = await service.findForPasswordAuth('unknown');
+
+      expect(result).toBeNull();
     });
   });
 

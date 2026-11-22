@@ -1,4 +1,5 @@
 import { useRef } from 'react'
+import { Link } from 'react-router'
 import {
   ArrowDown,
   ArrowUp,
@@ -6,6 +7,7 @@ import {
   ClipboardList,
   FileText,
   PenSquare,
+  PlayCircle,
   Plus,
   Trash2,
 } from 'lucide-react'
@@ -14,16 +16,34 @@ import { Button } from '@shared/components/ui/button'
 import { Input } from '@shared/components/ui/input'
 import { cn } from '@shared/utils/cn'
 import { moveItem } from '../utils/move-item'
-import type { ItemType, Section, SectionItem } from '../types/courses.types'
+import type { Section, SectionItem } from '../types/courses.types'
 
 const itemIcon = {
   DOCUMENT: FileText,
   ASSIGNMENT: ClipboardList,
   EXAM: PenSquare,
+  VIDEO: PlayCircle,
 }
 
-// Documents are added by uploading a file, so they have their own button.
-const itemTypes: ItemType[] = ['ASSIGNMENT', 'EXAM']
+/** Where a lecturer opens an item from the read-only view; plain items have no page yet. */
+const itemLink = (classId: string, item: SectionItem): string | null => {
+  if (item.itemType === 'DOCUMENT' && item.documentId)
+    return `/lecturer/classes/${classId}/documents/${item.documentId}`
+  if (item.itemType === 'ASSIGNMENT' && item.assignmentId)
+    return `/lecturer/classes/${classId}/assignments/${item.assignmentId}`
+  if (item.itemType === 'EXAM' && item.examId)
+    return `/lecturer/classes/${classId}/exams/${item.examId}`
+  if (item.itemType === 'VIDEO')
+
+    return `/lecturer/classes/${classId}/videos/${item.id}`
+  return null
+}
+
+/** Documents, assignments and exams own stored data, so removing them asks for confirmation first. */
+const isConfirmed = (item: SectionItem): boolean =>
+  item.itemType === 'DOCUMENT' ||
+  item.itemType === 'ASSIGNMENT' ||
+  item.itemType === 'EXAM'
 
 interface SectionCardProps {
   section: Section
@@ -36,10 +56,12 @@ interface SectionCardProps {
   onTitleChange: (title: string) => void
   onDescriptionChange: (description: string) => void
   onItemsChange: (items: SectionItem[]) => void
-  onAddItem: (itemType: ItemType) => void
   onAddDocument: (file: File) => void
+  onAddVideo: () => void
+  onAddAssignment: () => void
+  onAddExam: () => void
   /** Asks for confirmation first; plain items are deleted straight away. */
-  onRemoveDocument: (item: SectionItem) => void
+  onRemoveContent: (item: SectionItem) => void
   isUploadingDocument: boolean
   onMoveUp: () => void
   onMoveDown: () => void
@@ -49,6 +71,7 @@ interface SectionCardProps {
 /** One rounded week card: circular chevron, large title, then its items. */
 export const SectionCard = ({
   section,
+
   isOpen,
   isEditing,
   toggleAllLabel,
@@ -57,9 +80,11 @@ export const SectionCard = ({
   onTitleChange,
   onDescriptionChange,
   onItemsChange,
-  onAddItem,
   onAddDocument,
-  onRemoveDocument,
+  onAddVideo,
+  onAddAssignment,
+  onAddExam,
+  onRemoveContent,
   isUploadingDocument,
   onMoveUp,
   onMoveDown,
@@ -80,6 +105,7 @@ export const SectionCard = ({
         <button
           type="button"
           aria-expanded={isOpen}
+
           aria-label={isOpen ? 'Collapse section' : 'Expand section'}
           onClick={onToggle}
           className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-0 bg-accent text-brand"
@@ -112,6 +138,7 @@ export const SectionCard = ({
           </div>
         )}
         {toggleAllLabel && (
+
           <button
             type="button"
             onClick={onToggleAll}
@@ -122,27 +149,29 @@ export const SectionCard = ({
         )}
       </div>
       {isOpen && (isEditing || hasDescription) && (
-      <div className="mx-5 pt-4">
-        {isEditing ? (
-          <textarea
-            aria-label="Section description"
-            placeholder="Section description (optional)"
-            rows={4}
-            value={section.description ?? ''}
-            onChange={(e) => onDescriptionChange(e.target.value)}
-            className="w-full rounded-md border bg-background p-3 text-sm"
-          />
-        ) : (
-          <p className="m-0 whitespace-pre-line text-sm text-muted-foreground">
-            {section.description}
-          </p>
-        )}
-      </div>
-    )}
+        <div className="mx-5 pt-4">
+          {isEditing ? (
+            <textarea
+              aria-label="Section description"
+              placeholder="Section description (optional)"
+              rows={4}
+              value={section.description ?? ''}
+              onChange={(e) => onDescriptionChange(e.target.value)}
+              className="w-full rounded-md border bg-background p-3 text-sm"
+            />
+          ) : (
+            <p className="m-0 whitespace-pre-line text-sm text-muted-foreground">
+              {section.description}
+            </p>
+          )}
+        </div>
+      )}
       {hasBody && (
         <ul className="m-0 list-none space-y-1 px-5 py-4">
           {items.map((item, index) => {
             const Icon = itemIcon[item.itemType]
+            const link = itemLink(section.classId, item)
+
             return (
               <li
                 key={item.id}
@@ -162,12 +191,20 @@ export const SectionCard = ({
                     }
                     className="h-8 flex-1"
                   />
+                ) : link ? (
+                  <Link
+                    to={link}
+                    className="flex-1 text-sm text-brand hover:underline"
+                  >
+                    {item.title}
+                  </Link>
                 ) : (
                   <span className="flex-1 text-sm text-brand">{item.title}</span>
                 )}
                 <span className="text-xs text-muted-foreground">{item.itemType}</span>
                 {isEditing && (
                   <div className="flex gap-1">
+
                     <Button size="icon" variant="ghost" aria-label="Move item up" onClick={() => onItemsChange(moveItem(items, index, -1))}>
                       <ArrowUp className="h-3 w-3" />
                     </Button>
@@ -177,10 +214,10 @@ export const SectionCard = ({
                     <Button
                       size="icon"
                       variant="ghost"
-                      aria-label={item.itemType === 'DOCUMENT' ? 'Remove document' : 'Delete item'}
+                      aria-label={isConfirmed(item) ? 'Remove item' : 'Delete item'}
                       onClick={() =>
-                        item.itemType === 'DOCUMENT'
-                          ? onRemoveDocument(item)
+                        isConfirmed(item)
+                          ? onRemoveContent(item)
                           : onItemsChange(items.filter((x) => x.id !== item.id))
                       }
                     >
@@ -200,6 +237,7 @@ export const SectionCard = ({
                 aria-label="Document file"
                 accept={DOCUMENT_ACCEPT}
                 onChange={(e) => {
+
                   const file = e.target.files?.[0]
                   // Clear the input so choosing the same file again still fires onChange.
                   e.target.value = ''
@@ -215,12 +253,18 @@ export const SectionCard = ({
                 <Plus className="mr-1 h-3 w-3" />
                 {isUploadingDocument ? 'Uploading…' : 'Add document'}
               </Button>
-              {itemTypes.map((type) => (
-                <Button key={type} size="sm" variant="outline" onClick={() => onAddItem(type)}>
-                  <Plus className="mr-1 h-3 w-3" />
-                  {type.charAt(0) + type.slice(1).toLowerCase()}
-                </Button>
-              ))}
+              <Button size="sm" variant="outline" onClick={onAddVideo}>
+                <Plus className="mr-1 h-3 w-3" />
+                Add video
+              </Button>
+              <Button size="sm" variant="outline" onClick={onAddAssignment}>
+                <Plus className="mr-1 h-3 w-3" />
+                Add assignment
+              </Button>
+              <Button size="sm" variant="outline" onClick={onAddExam}>
+                <Plus className="mr-1 h-3 w-3" />
+                Add exam
+              </Button>
             </li>
           )}
         </ul>

@@ -30,4 +30,9 @@ export class SaveSectionItemDto {
   @IsOptional()
   @IsUUID()
   readonly assignmentId?: string | null
+
+  /** Required for EXAM items, forbidden for every other type. */
+  @IsOptional()
+  @IsUUID()
+  readonly examId?: string | null
 }

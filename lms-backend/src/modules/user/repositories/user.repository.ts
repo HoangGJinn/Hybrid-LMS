@@ -175,6 +175,57 @@ export class UserRepository {
   }
 
   /**
+   * Finds a user by email, student code, lecturer code, or email prefix,
+   * explicitly selecting the password_hash column (which is excluded by default).
+   */
+  async findForPasswordAuth(identifier: string): Promise<User | null> {
+    const trimmed = identifier.trim();
+    if (!trimmed) return null;
+
+    // 1. Direct email lookup
+    const userByEmail = await this.userRepo
+      .createQueryBuilder('u')
+      .addSelect('u.passwordHash')
+      .where('LOWER(u.email) = LOWER(:email)', { email: trimmed })
+      .getOne();
+    if (userByEmail) return userByEmail;
+
+    // 2. Student code lookup (e.g. SV26000001)
+    const student = await this.studentRepo.findOne({
+      where: { studentCode: trimmed.toUpperCase() },
+    });
+    if (student) {
+      return this.userRepo
+        .createQueryBuilder('u')
+        .addSelect('u.passwordHash')
+        .where('u.id = :id', { id: student.userId })
+        .getOne();
+    }
+
+    // 3. Lecturer code lookup (e.g. GV26000001)
+    const lecturer = await this.lecturerRepo.findOne({
+      where: { lecturerCode: trimmed.toUpperCase() },
+    });
+    if (lecturer) {
+      return this.userRepo
+        .createQueryBuilder('u')
+        .addSelect('u.passwordHash')
+        .where('u.id = :id', { id: lecturer.userId })
+        .getOne();
+    }
+
+    // 4. Quick username prefix lookup (e.g. 'student1' matches 'student1@%')
+    const userByPrefix = await this.userRepo
+      .createQueryBuilder('u')
+      .addSelect('u.passwordHash')
+      .where('LOWER(u.email) LIKE LOWER(:prefix)', { prefix: `${trimmed}@%` })
+      .getOne();
+    if (userByPrefix) return userByPrefix;
+
+    return null;
+  }
+
+  /**
    * Attaches a Google account to a user that has none yet. The `sso_id IS NULL` condition makes it
    * atomic: of two simultaneous first logins only one wins. Returns null when the account was
    * already claimed.
@@ -310,6 +361,33 @@ export class UserRepository {
   async findStudentsByEmails(emails: string[]): Promise<Student[]> {
     if (emails.length === 0) return [];
     return this.studentRepo.find({
+      where: { user: { email: In(emails) } },
+      relations: { user: true },
+    });
+  }
+
+  /** Lecturers (with their user) by user id. */
+  async findLecturersByIds(userIds: string[]): Promise<Lecturer[]> {
+    if (userIds.length === 0) return [];
+    return this.lecturerRepo.find({
+      where: { userId: In(userIds) },
+      relations: { user: true },
+    });
+  }
+
+  /** Lecturers (with their user) by lecturer code. */
+  async findLecturersByCodes(codes: string[]): Promise<Lecturer[]> {
+    if (codes.length === 0) return [];
+    return this.lecturerRepo.find({
+      where: { lecturerCode: In(codes) },
+      relations: { user: true },
+    });
+  }
+
+  /** Lecturers (with their user) by email (stored in lower case). */
+  async findLecturersByEmails(emails: string[]): Promise<Lecturer[]> {
+    if (emails.length === 0) return [];
+    return this.lecturerRepo.find({
       where: { user: { email: In(emails) } },
       relations: { user: true },
     });

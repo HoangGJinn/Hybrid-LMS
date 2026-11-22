@@ -19,6 +19,16 @@ export class User {
   @Column({ name: 'full_name' })
   fullName: string;
 
+  /** Bcrypt-hashed password for local auth. Null for accounts using pure Google SSO. */
+  @Column({
+    name: 'password_hash',
+    type: 'varchar',
+    length: 255,
+    nullable: true,
+    select: false,
+  })
+  passwordHash: string | null;
+
   /** Google account id. Null while the account is pre-provisioned and nobody has signed in yet. */
   @Column({ name: 'sso_id', type: 'varchar', unique: true, nullable: true })
   ssoId: string | null;

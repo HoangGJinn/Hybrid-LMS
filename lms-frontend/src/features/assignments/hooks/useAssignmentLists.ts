@@ -15,11 +15,3 @@ export const useMySubmissions = () =>
     queryKey: assignmentKeys.mySubmissions,
     queryFn: () => assignmentService.getMySubmissions(),
   });
-
-/** Every submission of one assignment. */
-export const useAssignmentSubmissions = (assignmentId: string) =>
-  useQuery({
-    queryKey: assignmentKeys.submissions(assignmentId),
-    queryFn: () => assignmentService.getSubmissions(assignmentId),
-    enabled: assignmentId !== '',
-  });

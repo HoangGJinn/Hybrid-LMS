@@ -18,10 +18,7 @@ const MasteryPage = () => {
   const state = toAsyncState(useMasteryOverview());
   return (
     <div>
-      <PageHeader
-        title="Knowledge Mastery"
-        subtitle="Your mastery of each knowledge component (KC)"
-      />
+      <PageHeader title="Knowledge Mastery" />
       <AsyncView
         state={state}
         isEmpty={(d) => d.kcs.length === 0}

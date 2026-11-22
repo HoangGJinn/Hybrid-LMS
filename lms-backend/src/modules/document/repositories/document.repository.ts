@@ -39,4 +39,9 @@ export class DocumentRepository {
   async findById(id: string): Promise<Document | null> {
     return this.documentOrmRepository.findOne({ where: { id } });
   }
+    /** Deletes the document; its text segments go with it through the database cascade. */
+  async deleteById(id: string): Promise<void> {
+    await this.documentOrmRepository.delete({ id });
+  }
 }
+

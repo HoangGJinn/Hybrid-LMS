@@ -1,7 +1,8 @@
 -- ============================================================
 -- 002-seed.sql
--- Sample data for development / demo.
--- Run AFTER 001-initial-schema.sql on a fresh database.
+-- Sample data for development / demo / testing.
+-- Run AFTER 001-sequences.sql and 004-add-password-hash.sql.
+-- Password for all 16 accounts: admine123456
 -- ============================================================
 
 -- ── Subjects ─────────────────────────────────────────────────
@@ -23,55 +24,100 @@ VALUES
    '2027-01-15 00:00:00+07', '2027-05-31 23:59:59+07')
 ON CONFLICT (semester_code) DO NOTHING;
 
--- ── Sample lecturers ─────────────────────────────────────────
--- Codes: GV + YY(26) + 6-digit sequential (GV26000001, GV26000002)
-INSERT INTO users (id, email, full_name, sso_id, sso_provider, role, is_active)
+-- ── 1. Admin Account ───────────────────────────────────────────
+-- Password: admine123456 ($2b$10$0efWZrLo4lZBp7tCszn/uO6qAY7r4MX8XsWK3We8JG9gYKGqbbW0e)
+INSERT INTO users (id, email, full_name, password_hash, role, is_active)
 VALUES
-  ('a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d',
-   'lecturer.an@hcmute.edu.vn', 'TS. Nguyễn Văn An',
-   'sso_lecturer_an', 'GOOGLE', 'LECTURER', true),
-  ('b2c3d4e5-f6a7-4b6c-9d0e-1f2a3b4c5d6e',
-   'lecturer.binh@hcmute.edu.vn', 'ThS. Trần Thị Bình',
-   'sso_lecturer_binh', 'GOOGLE', 'LECTURER', true)
-ON CONFLICT (email) DO NOTHING;
+  ('00000000-0000-4000-a000-000000000001',
+   'admin@lms.edu.vn', 'Quản trị viên Hệ thống',
+   '$2b$10$0efWZrLo4lZBp7tCszn/uO6qAY7r4MX8XsWK3We8JG9gYKGqbbW0e', 'ADMIN', true)
+ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash;
+
+-- ── 2. 5 Lecturer Accounts ─────────────────────────────────────
+-- Codes: GV26000001 to GV26000005
+INSERT INTO users (id, email, full_name, password_hash, role, is_active)
+VALUES
+  ('10000000-0000-4000-a000-000000000001',
+   'teacher1@lms.edu.vn', 'TS. Nguyễn Văn An',
+   '$2b$10$0efWZrLo4lZBp7tCszn/uO6qAY7r4MX8XsWK3We8JG9gYKGqbbW0e', 'LECTURER', true),
+  ('10000000-0000-4000-a000-000000000002',
+   'teacher2@lms.edu.vn', 'ThS. Trần Thị Bình',
+   '$2b$10$0efWZrLo4lZBp7tCszn/uO6qAY7r4MX8XsWK3We8JG9gYKGqbbW0e', 'LECTURER', true),
+  ('10000000-0000-4000-a000-000000000003',
+   'teacher3@lms.edu.vn', 'TS. Lê Hoàng Cường',
+   '$2b$10$0efWZrLo4lZBp7tCszn/uO6qAY7r4MX8XsWK3We8JG9gYKGqbbW0e', 'LECTURER', true),
+  ('10000000-0000-4000-a000-000000000004',
+   'teacher4@lms.edu.vn', 'ThS. Phạm Thu Dung',
+   '$2b$10$0efWZrLo4lZBp7tCszn/uO6qAY7r4MX8XsWK3We8JG9gYKGqbbW0e', 'LECTURER', true),
+  ('10000000-0000-4000-a000-000000000005',
+   'teacher5@lms.edu.vn', 'TS. Hoàng Gia Em',
+   '$2b$10$0efWZrLo4lZBp7tCszn/uO6qAY7r4MX8XsWK3We8JG9gYKGqbbW0e', 'LECTURER', true)
+ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash;
 
 INSERT INTO lecturers (user_id, lecturer_code, status)
 VALUES
-  ('a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d', 'GV26000001', 'WORKING'),
-  ('b2c3d4e5-f6a7-4b6c-9d0e-1f2a3b4c5d6e', 'GV26000002', 'WORKING')
+  ('10000000-0000-4000-a000-000000000001', 'GV26000001', 'WORKING'),
+  ('10000000-0000-4000-a000-000000000002', 'GV26000002', 'WORKING'),
+  ('10000000-0000-4000-a000-000000000003', 'GV26000003', 'WORKING'),
+  ('10000000-0000-4000-a000-000000000004', 'GV26000004', 'WORKING'),
+  ('10000000-0000-4000-a000-000000000005', 'GV26000005', 'WORKING')
 ON CONFLICT (user_id) DO NOTHING;
 
--- Advance the lecturer sequence past the manually-seeded codes so the next
--- auto-generated lecturer code starts at GV26000003.
-SELECT setval('lecturer_code_seq', 2, true);
+SELECT setval('lecturer_code_seq', 5, true);
 
--- ── Sample students ──────────────────────────────────────────
--- Codes: SV + YY(26) + 6-digit sequential (SV26000001, SV26000002, SV26000003)
-INSERT INTO users (id, email, full_name, sso_id, sso_provider, role, is_active)
+-- ── 3. 10 Student Accounts ─────────────────────────────────────
+-- Codes: SV26000001 to SV26000010
+INSERT INTO users (id, email, full_name, password_hash, role, is_active)
 VALUES
-  ('01e8172e-a0a6-4fe1-9ecb-6faf10ea0aa7',
-   'nguyenhoanggiap2005@gmail.com', 'Nguyễn Hoàng Giáp',
-   NULL, NULL, 'STUDENT', true),
-  ('c3d4e5f6-a7b8-4c9d-8e1f-2a3b4c5d6e7f',
-   'thanhtratik@gmail.com', 'Thanh Trà',
-   'sso_thanhtratik', 'GOOGLE', 'STUDENT', true),
-  ('d4e5f6a7-b8c9-4d0e-9f2a-3b4c5d6e7f8a',
-   'ngochuynh150905@gmail.com', 'Ngọc Huỳnh',
-   'sso_ngochuynh', 'GOOGLE', 'STUDENT', true)
-ON CONFLICT (email) DO NOTHING;
+  ('20000000-0000-4000-a000-000000000001',
+   'student1@lms.edu.vn', 'Nguyễn Văn Nam',
+   '$2b$10$0efWZrLo4lZBp7tCszn/uO6qAY7r4MX8XsWK3We8JG9gYKGqbbW0e', 'STUDENT', true),
+  ('20000000-0000-4000-a000-000000000002',
+   'student2@lms.edu.vn', 'Phạm Quỳnh Anh',
+   '$2b$10$0efWZrLo4lZBp7tCszn/uO6qAY7r4MX8XsWK3We8JG9gYKGqbbW0e', 'STUDENT', true),
+  ('20000000-0000-4000-a000-000000000003',
+   'student3@lms.edu.vn', 'Huỳnh Ngọc Mai',
+   '$2b$10$0efWZrLo4lZBp7tCszn/uO6qAY7r4MX8XsWK3We8JG9gYKGqbbW0e', 'STUDENT', true),
+  ('20000000-0000-4000-a000-000000000004',
+   'student4@lms.edu.vn', 'Lê Quốc Bảo',
+   '$2b$10$0efWZrLo4lZBp7tCszn/uO6qAY7r4MX8XsWK3We8JG9gYKGqbbW0e', 'STUDENT', true),
+  ('20000000-0000-4000-a000-000000000005',
+   'student5@lms.edu.vn', 'Phạm Minh Duy',
+   '$2b$10$0efWZrLo4lZBp7tCszn/uO6qAY7r4MX8XsWK3We8JG9gYKGqbbW0e', 'STUDENT', true),
+  ('20000000-0000-4000-a000-000000000006',
+   'student6@lms.edu.vn', 'Võ Hoàng Yến',
+   '$2b$10$0efWZrLo4lZBp7tCszn/uO6qAY7r4MX8XsWK3We8JG9gYKGqbbW0e', 'STUDENT', true),
+  ('20000000-0000-4000-a000-000000000007',
+   'student7@lms.edu.vn', 'Đặng Thùy Dung',
+   '$2b$10$0efWZrLo4lZBp7tCszn/uO6qAY7r4MX8XsWK3We8JG9gYKGqbbW0e', 'STUDENT', true),
+  ('20000000-0000-4000-a000-000000000008',
+   'student8@lms.edu.vn', 'Bùi Anh Tuấn',
+   '$2b$10$0efWZrLo4lZBp7tCszn/uO6qAY7r4MX8XsWK3We8JG9gYKGqbbW0e', 'STUDENT', true),
+  ('20000000-0000-4000-a000-000000000009',
+   'student9@lms.edu.vn', 'Đỗ Hữu Thắng',
+   '$2b$10$0efWZrLo4lZBp7tCszn/uO6qAY7r4MX8XsWK3We8JG9gYKGqbbW0e', 'STUDENT', true),
+  ('20000000-0000-4000-a000-000000000010',
+   'student10@lms.edu.vn', 'Ngô Trọng Nghĩa',
+   '$2b$10$0efWZrLo4lZBp7tCszn/uO6qAY7r4MX8XsWK3We8JG9gYKGqbbW0e', 'STUDENT', true)
+ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash;
 
 INSERT INTO students (user_id, student_code, status)
 VALUES
-  ((SELECT id FROM users WHERE email = 'nguyenhoanggiap2005@gmail.com'), 'SV26000001', 'STUDYING'),
-  ((SELECT id FROM users WHERE email = 'thanhtratik@gmail.com'),          'SV26000002', 'STUDYING'),
-  ((SELECT id FROM users WHERE email = 'ngochuynh150905@gmail.com'),       'SV26000003', 'STUDYING')
+  ('20000000-0000-4000-a000-000000000001', 'SV26000001', 'STUDYING'),
+  ('20000000-0000-4000-a000-000000000002', 'SV26000002', 'STUDYING'),
+  ('20000000-0000-4000-a000-000000000003', 'SV26000003', 'STUDYING'),
+  ('20000000-0000-4000-a000-000000000004', 'SV26000004', 'STUDYING'),
+  ('20000000-0000-4000-a000-000000000005', 'SV26000005', 'STUDYING'),
+  ('20000000-0000-4000-a000-000000000006', 'SV26000006', 'STUDYING'),
+  ('20000000-0000-4000-a000-000000000007', 'SV26000007', 'STUDYING'),
+  ('20000000-0000-4000-a000-000000000008', 'SV26000008', 'STUDYING'),
+  ('20000000-0000-4000-a000-000000000009', 'SV26000009', 'STUDYING'),
+  ('20000000-0000-4000-a000-000000000010', 'SV26000010', 'STUDYING')
 ON CONFLICT (user_id) DO NOTHING;
 
--- Advance the student sequence past the manually-seeded codes so the next
--- auto-generated student code starts at SV26000004.
-SELECT setval('student_code_seq', 3, true);
+SELECT setval('student_code_seq', 10, true);
 
--- ── Classes ──────────────────────────────────────────────────
+-- ── 4. Sample Class WEB26 ──────────────────────────────────────
 INSERT INTO classes (id, class_code, name, subject_id, semester_id, lecturer_id, is_active)
 VALUES (
   '415cb5b1-216d-4c5e-8a78-2a3f043ab638',
@@ -79,21 +125,17 @@ VALUES (
   'Lập trình Web - Nhóm 26',
   (SELECT id FROM subjects WHERE subject_code = 'CS102'),
   (SELECT id FROM semesters WHERE semester_code = 'HK1-2026'),
-  (SELECT id FROM users WHERE email = 'lecturer.an@hcmute.edu.vn'),
+  '10000000-0000-4000-a000-000000000001', -- TS. Nguyễn Văn An (teacher1)
   true
 )
 ON CONFLICT (class_code) DO NOTHING;
 
--- ── Enroll students into WEB26 ───────────────────────────────
+-- ── 5. Enroll all 10 students into WEB26 ────────────────────────
 INSERT INTO class_students (class_id, student_id, joined_at)
 SELECT
   '415cb5b1-216d-4c5e-8a78-2a3f043ab638',
   u.id,
   NOW()
 FROM users u
-WHERE u.email IN (
-  'nguyenhoanggiap2005@gmail.com',
-  'thanhtratik@gmail.com',
-  'ngochuynh150905@gmail.com'
-)
+WHERE u.email LIKE 'student%@lms.edu.vn'
 ON CONFLICT (class_id, student_id) DO NOTHING;

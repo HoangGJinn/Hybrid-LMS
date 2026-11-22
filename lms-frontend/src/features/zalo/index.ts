@@ -1,0 +1,1 @@
+export { default as ZaloLinkCard } from './components/ZaloLinkCard';

@@ -11,6 +11,11 @@ Thumbs.db
 # Global node_modules (just in case)
 node_modules/
 
+# Archives
+*.zip
+*.tar.gz
+*.rar
+
 # Project specific ignores
 # nestJS-modular-monolith-architecture-template/
 

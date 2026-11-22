@@ -1,7 +1,9 @@
 import {
   IsEnum,
   IsInt,
+  IsOptional,
   IsString,
+  IsUUID,
   MaxLength,
   Min,
   MinLength,
@@ -26,4 +28,8 @@ export class RequestUploadDto {
   @IsInt()
   @Min(1)
   readonly size: number;
+
+  @IsOptional()
+  @IsUUID()
+  readonly assignmentId?: string;
 }

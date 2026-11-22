@@ -1,7 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ClassController } from './class.controller.js';
 import { ClassService } from '../services/class.service.js';
+import { ClassDataImportService } from '../services/class-data-import.service.js';
+import { ClassExportService } from '../services/class-export.service.js';
+import { ClassImportService } from '../services/class-import.service.js';
 import { AcademicFacade } from '../facades/academic.facade.js';
+import type { Response } from 'express';
 import { Role } from '../../../common/enums/role.enum.js';
 import { AuthenticatedUser } from '../../../common/types/authenticated-user.type.js';
 import { ClassView } from '../types/class-view.type.js';
@@ -12,6 +16,9 @@ describe('ClassController', () => {
   let mockClassService: Partial<
     Record<keyof ClassService, ReturnType<typeof vi.fn>>
   >;
+  let mockImportService: Record<keyof ClassImportService, ReturnType<typeof vi.fn>>;
+  let mockDataImportService: Record<keyof ClassDataImportService, ReturnType<typeof vi.fn>>;
+  let mockExportService: Record<keyof ClassExportService, ReturnType<typeof vi.fn>>;
   let mockAcademicFacade: Partial<
     Record<keyof AcademicFacade, ReturnType<typeof vi.fn>>
   >;
@@ -65,6 +72,7 @@ describe('ClassController', () => {
         email: 'lec@school.edu.vn',
         fullName: 'TS. Nguyễn Văn An',
         role: Role.LECTURER,
+        passwordHash: null,
         ssoId: 'sso-1',
         ssoProvider: 'GOOGLE',
         avatarUrl: null,
@@ -85,6 +93,13 @@ describe('ClassController', () => {
       deactivate: vi.fn(),
       findMyClasses: vi.fn(),
     };
+    mockImportService = { importClasses: vi.fn(), plan: vi.fn() };
+    mockDataImportService = { importData: vi.fn() };
+    const file = { fileName: 'Classes.xlsx', buffer: Buffer.from('xlsx') };
+    mockExportService = {
+      exportLecturerClasses: vi.fn().mockResolvedValue(file),
+      exportStudentClasses: vi.fn().mockResolvedValue(file),
+    };
     mockAcademicFacade = {
       getClassesByStudent: vi.fn(),
       getClassesByLecturer: vi.fn(),
@@ -92,6 +107,9 @@ describe('ClassController', () => {
 
     controller = new ClassController(
       mockClassService as unknown as ClassService,
+      mockImportService as unknown as ClassImportService,
+      mockDataImportService as unknown as ClassDataImportService,
+      mockExportService as unknown as ClassExportService,
       mockAcademicFacade as unknown as AcademicFacade,
     );
   });
@@ -251,6 +269,52 @@ describe('ClassController', () => {
 
       expect(mockClassService.deactivate).toHaveBeenCalledWith('cls-uuid-1');
       expect(result.isActive).toBe(false);
+    });
+  });
+  describe('importClasses', () => {
+    it('delegates the rows to ClassImportService and returns its result', async () => {
+      const dto = { rows: [{ line: 2, classCode: 'WEB26.01' }], dryRun: true };
+      const result = { dryRun: true, total: 1, created: 1, skipped: 0, failed: 0, rows: [] };
+      mockImportService.importClasses.mockResolvedValue(result);
+
+      await expect(controller.importClasses(dto)).resolves.toBe(result);
+      expect(mockImportService.importClasses).toHaveBeenCalledWith(dto);
+    });
+  });
+  describe('class list export', () => {
+    const makeResponse = () => ({ set: vi.fn(), end: vi.fn() }) as unknown as Response;
+
+    it('sends the lecturer class list as a download', async () => {
+      const response = makeResponse();
+
+      await controller.exportLecturerClasses('lec-uuid', response);
+
+      expect(mockExportService.exportLecturerClasses).toHaveBeenCalledWith('lec-uuid');
+      expect(response.set).toHaveBeenCalledWith(
+        expect.objectContaining({
+          'Content-Disposition': "attachment; filename*=UTF-8''Classes.xlsx",
+        }),
+      );
+      expect(response.end).toHaveBeenCalledWith(Buffer.from('xlsx'));
+    });
+
+    it('sends the student class list as a download', async () => {
+      const response = makeResponse();
+
+      await controller.exportStudentClasses('stu-uuid', response);
+
+      expect(mockExportService.exportStudentClasses).toHaveBeenCalledWith('stu-uuid');
+      expect(response.end).toHaveBeenCalledWith(Buffer.from('xlsx'));
+    });
+  });
+  describe('importClassData', () => {
+    it('delegates the files to ClassDataImportService and returns its result', async () => {
+      const dto = { files: [], dryRun: true };
+      const result = { dryRun: true, files: [] };
+      mockDataImportService.importData.mockResolvedValue(result);
+
+      await expect(controller.importClassData(dto as never)).resolves.toBe(result);
+      expect(mockDataImportService.importData).toHaveBeenCalledWith(dto);
     });
   });
 });

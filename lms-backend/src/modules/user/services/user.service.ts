@@ -25,7 +25,9 @@ import { LecturerStatus } from '../enums/lecturer-status.enum.js';
 import { StudentStatus } from '../enums/student-status.enum.js';
 import { GoogleAccountData } from '../types/google-account-data.type.js';
 import { ManagedUserView } from '../types/managed-user-view.type.js';
+import { LecturerSummary } from '../types/lecturer-summary.type.js';
 import { StudentSummary } from '../types/student-summary.type.js';
+import { UserView } from '../types/user-view.type.js';
 import { deriveDisplayName } from '../utils/display-name.util.js';
 import { profilePrefixFor } from '../utils/profile-code.util.js';
 import { PaginatedResult } from '../../../common/types/paginated-result.type.js';
@@ -76,6 +78,17 @@ export class UserService {
 
   async findBySsoId(ssoId: string): Promise<User | null> {
     return this.userRepository.findBySsoId(ssoId);
+  }
+
+  async findForPasswordAuth(
+    identifier: string,
+  ): Promise<{ user: UserView; passwordHash: string | null } | null> {
+    const user = await this.userRepository.findForPasswordAuth(identifier);
+    if (!user) return null;
+    return {
+      user: UserView.fromEntity(user),
+      passwordHash: user.passwordHash,
+    };
   }
 
   async getUserById(id: string): Promise<User> {
@@ -179,6 +192,21 @@ export class UserService {
   async findStudentsByEmails(emails: string[]): Promise<StudentSummary[]> {
     const students = await this.userRepository.findStudentsByEmails(emails);
     return students.map((s) => StudentSummary.fromEntity(s));
+  }
+
+  async findLecturersByIds(ids: string[]): Promise<LecturerSummary[]> {
+    const lecturers = await this.userRepository.findLecturersByIds(ids);
+    return lecturers.map((l) => LecturerSummary.fromEntity(l));
+  }
+
+  async findLecturersByCodes(codes: string[]): Promise<LecturerSummary[]> {
+    const lecturers = await this.userRepository.findLecturersByCodes(codes);
+    return lecturers.map((l) => LecturerSummary.fromEntity(l));
+  }
+
+  async findLecturersByEmails(emails: string[]): Promise<LecturerSummary[]> {
+    const lecturers = await this.userRepository.findLecturersByEmails(emails);
+    return lecturers.map((l) => LecturerSummary.fromEntity(l));
   }
 
   /** Students who can still be added to a class (active account, status STUDYING). */

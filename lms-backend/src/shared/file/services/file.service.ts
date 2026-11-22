@@ -9,12 +9,14 @@ import type { AuthenticatedUser } from '../../../common/types/authenticated-user
 import { UPLOAD_RULES } from '../constants/upload-rules.constant.js';
 import type { RequestUploadDto } from '../dto/request-upload.dto.js';
 import type { FileAttachment } from '../entities/file-attachment.entity.js';
+import type { FilePurpose } from '../enums/file-purpose.enum.js';
 import { FileStatus } from '../enums/file-status.enum.js';
 import { FileRepository } from '../repositories/file.repository.js';
 import { FileConfirmView } from '../types/file-confirm-view.type.js';
 import { FileDownloadView } from '../types/file-download-view.type.js';
 import { UploadRequestView } from '../types/upload-request-view.type.js';
 import { FileStorageService } from './file-storage.service.js';
+import type { Readable } from 'node:stream';
 
 /** Business rules for uploading and reading stored files. */
 @Injectable()
@@ -45,8 +47,12 @@ export class FileService {
     if (dto.size > rule.maxSizeBytes) {
       throw new BadRequestException('This file is too large');
     }
+        if (rule.isScopedToAssignment && !dto.assignmentId) {
+      throw new BadRequestException('An assignment is required for this upload');
+    }
     const fileId = randomUUID();
-    const storageKey = `${rule.keyPrefix}/${user.id}/${fileId}.${extension}`;
+    const scope = rule.isScopedToAssignment ? `${dto.assignmentId}/` : '';
+    const storageKey = `${rule.keyPrefix}/${scope}${user.id}/${fileId}.${extension}`;
     await this.fileRepository.createPending({
       id: fileId,
       ownerId: user.id,
@@ -102,6 +108,83 @@ export class FileService {
   }
 
   /**
+   * Like assertOwnedReadyFile, and the file must also have been uploaded for the given purpose, so a
+   * submission or a course document cannot be passed off as an exam's question file.
+   * The purpose is read from the S3 key prefix, which the backend itself chose at upload time.
+   */
+  async assertOwnedReadyFileOfPurpose(
+    fileId: string,
+    ownerId: string,
+    purpose: FilePurpose,
+  ): Promise<void> {
+    const file = await this.findOwnedFile(fileId, ownerId);
+    if (file.status !== FileStatus.READY) {
+      throw new BadRequestException('The file upload has not been confirmed');
+    }
+    if (!file.storageKey.startsWith(`${UPLOAD_RULES[purpose].keyPrefix}/`)) {
+      throw new BadRequestException('This file cannot be used here');
+    }
+  }
+
+    /** Like assertOwnedReadyFile, for many files at once; every id must pass. */
+  async assertOwnedReadyFiles(fileIds: string[], ownerId: string): Promise<void> {
+    const files = await this.fileRepository.findByIds(fileIds);
+    const isValid =
+      files.length === new Set(fileIds).size &&
+      files.every(
+        (file) => file.ownerId === ownerId && file.status === FileStatus.READY,
+      );
+    if (!isValid) {
+      throw new BadRequestException('One or more files are missing or not confirmed');
+    }
+  }
+
+    /**
+   * Opens a READY file for reading. PENDING files are treated as missing, like in getDownloadLink.
+   * The caller must already have checked who may read it.
+   */
+  async openReadStream(
+    fileId: string,
+  ): Promise<{ fileName: string; stream: Readable }> {
+    const file = await this.fileRepository.findById(fileId);
+    if (!file || file.status !== FileStatus.READY) {
+      throw new NotFoundException('File not found');
+    }
+    return {
+      fileName: file.fileName,
+      stream: await this.fileStorageService.openReadStream(file.storageKey),
+    };
+  }
+
+  /** Signed download links for the given files, in the given order; files that are missing or not READY are skipped. */
+  async getDownloadLinks(fileIds: string[]): Promise<FileDownloadView[]> {
+    const files = await this.fileRepository.findByIds(fileIds);
+    const readyById = new Map(
+      files.filter((file) => file.status === FileStatus.READY).map((file) => [file.id, file]),
+    );
+    const links = await Promise.all(
+      fileIds.map(async (fileId) => {
+        const file = readyById.get(fileId);
+        if (!file) return null;
+        const downloadUrl = await this.fileStorageService.createDownloadUrl({
+          storageKey: file.storageKey,
+          fileName: file.fileName,
+          contentType: file.fileType,
+        });
+        return FileDownloadView.fromEntity(file, downloadUrl);
+      }),
+    );
+    return links.filter((link) => link !== null);
+  }
+
+  /** Deletes every given file from S3 and the database, one after another. */
+  async deleteFiles(fileIds: string[]): Promise<void> {
+    for (const fileId of fileIds) {
+      await this.deleteFile(fileId);
+    }
+  }
+
+  /**
    * Returns a presigned download link for a READY file.
    * PENDING files are treated as missing: their upload was never confirmed, so S3 may not hold them.
    */
@@ -128,5 +211,16 @@ export class FileService {
       throw new NotFoundException('File not found');
     }
     return file;
+  }
+
+    /**
+   * Permanently deletes the object from S3 and then its record. The object goes first, so a failure
+   * leaves the record in place and the deletion can simply be retried. A missing file is a no-op.
+   */
+  async deleteFile(fileId: string): Promise<void> {
+    const file = await this.fileRepository.findById(fileId);
+    if (!file) return;
+    await this.fileStorageService.deleteObject(file.storageKey);
+    await this.fileRepository.deleteById(file.id);
   }
 }

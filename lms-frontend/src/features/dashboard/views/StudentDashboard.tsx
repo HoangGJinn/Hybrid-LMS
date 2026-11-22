@@ -6,6 +6,7 @@ import { StatusBadge } from '@shared/components/ui/badge';
 import { toAsyncState } from '@shared/utils/async-state';
 import { useStudentDashboard } from '../hooks/useStudentDashboard';
 import { useCurrentUser } from '@features/auth';
+import { ZaloLinkCard } from '@features/zalo';
 import { formatDate, formatPercentage } from '@shared/utils/format';
 
 const Stat = ({ label, value }: { label: string; value: string | number }) => (
@@ -21,10 +22,7 @@ const StudentDashboard = () => {
   const state = toAsyncState(useStudentDashboard());
   return (
     <div>
-      <HeroHeader
-        title={`Welcome back, ${name}`}
-        subtitle="Here is your learning overview"
-      />
+      <HeroHeader title={`Welcome back, ${name}`} />
       <AsyncView state={state}>
         {({ classes, assignments, kcs }) => {
           const pending = assignments.filter((a) => a.status === 'OPEN');
@@ -133,6 +131,11 @@ const StudentDashboard = () => {
           );
         }}
       </AsyncView>
+
+      {/* Nằm ngoài AsyncView để luôn hiện, kể cả khi dữ liệu dashboard lỗi */}
+      <div className="mt-6 max-w-2xl">
+        <ZaloLinkCard />
+      </div>
     </div>
   );
 };

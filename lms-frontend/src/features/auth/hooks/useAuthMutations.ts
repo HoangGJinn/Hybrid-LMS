@@ -4,6 +4,25 @@ import { useAuthStore } from '@core/store/useAuthStore';
 import { authService } from '../api/auth.service';
 import { authKeys } from '../api/queryKeys';
 
+/** Authenticates with username/email and password. */
+export const useLogin = () => {
+  const queryClient = useQueryClient();
+  const setToken = useAuthStore((state) => state.setToken);
+  return useMutation({
+    mutationFn: ({
+      username,
+      password,
+    }: {
+      username: string;
+      password: string;
+    }) => authService.login(username, password),
+    onSuccess: ({ user, accessToken }) => {
+      setToken(accessToken);
+      queryClient.setQueryData(authKeys.me(), user);
+    },
+  });
+};
+
 /** Exchanges a Google ID token for a session and stores it. */
 export const useLoginWithGoogle = () => {
   const queryClient = useQueryClient();

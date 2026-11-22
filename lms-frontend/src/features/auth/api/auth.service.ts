@@ -9,6 +9,14 @@ export interface AuthSession {
 const MISSING_TOKEN_MESSAGE = 'Sign-in failed: no token received.';
 
 export const authService = {
+  login: async (username: string, password: string): Promise<AuthSession> => {
+    const session = await post<AuthSession>('/api/auth/login', {
+      username,
+      password,
+    });
+    if (!session.accessToken) throw new Error(MISSING_TOKEN_MESSAGE);
+    return session;
+  },
   loginWithGoogle: async (idToken: string): Promise<AuthSession> => {
     const session = await post<AuthSession>('/api/auth/google', { idToken });
     if (!session.accessToken) throw new Error(MISSING_TOKEN_MESSAGE);

@@ -1,26 +1,119 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { toast } from 'sonner';
-import { Flag } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  Eye,
+  Flag,
+  Info,
+  Play,
+  RefreshCw,
+  RotateCcw,
+  Trophy,
+} from 'lucide-react';
 import { AsyncView } from '@shared/components/AsyncView';
 import { EmptyState } from '@shared/components/EmptyState';
 import { PageHeader } from '@shared/components/PageHeader';
+import { StatusBadge } from '@shared/components/ui/badge';
 import { Button } from '@shared/components/ui/button';
 import { toAsyncState } from '@shared/utils/async-state';
-import { pad } from '@shared/utils/format';
+import { formatDateTime, pad } from '@shared/utils/format';
 import { useCountdown } from '@shared/hooks/useCountdown';
 import { cn } from '@shared/utils/cn';
-import { useExamRoom } from '../hooks/useExamRoom';
-import { useSubmitExamSession } from '../hooks/useExamSession';
-import type { ExamSchedule, ExamSession } from '../types/exams.types';
-import type { QuizQuestion } from '@features/quizzes';
 import { readStoredJson } from '@shared/utils/storage';
+import { useExamRoom } from '../hooks/useExamRoom';
+import { useAttemptReview } from '../hooks/useExams';
+import {
+  useStartExamSession,
+  useSubmitExamSession,
+} from '../hooks/useExamSession';
+import {
+  buildSubmitPayload,
+  getQuestionAnswerState,
+  hasAnyDraftContent,
+  useExamAutosave,
+  type StudentQuestionDraftAnswer,
+} from '../hooks/useExamAutosave';
+import type {
+  ExamAttempt,
+  StudentExamLobby,
+  StudentExamQuestion,
+} from '../types/exams.types';
 import QuestionPalette from '../components/QuestionPalette';
 import SubmitReviewDialog from '../components/SubmitReviewDialog';
+import { AttemptReviewViewer } from '../components/AttemptReviewViewer';
+import { FileExamWorkspace } from '../components/FileExamWorkspace';
+import { scoreTone } from '../utils/score-tone';
+
+/** UTEx-style fixed 10-question batch per page. */
+const QUESTIONS_PER_PAGE = 10;
+const OPTION_LETTERS = ['A', 'B', 'C', 'D', 'E', 'F'];
+const CLOZE_SPLIT_REGEX = /(\{\{\d+\}\})/g;
 
 const ExamRoomPage = () => {
-  const { examId = '' } = useParams();
-  const state = toAsyncState(useExamRoom(examId));
+  const { courseId = '', examId = '' } = useParams();
+  const lobbyQuery = useExamRoom(courseId, examId);
+  const state = toAsyncState(lobbyQuery);
+  const [activeAttempt, setActiveAttempt] = useState<ExamAttempt | null>(null);
+  const [reviewSessionId, setReviewSessionId] = useState<string | null>(null);
+  const startMutation = useStartExamSession();
+
+  const handleStartOrResume = () => {
+    startMutation.mutate(
+      { classId: courseId, examId },
+      {
+        onSuccess: (attempt) => {
+          setReviewSessionId(null);
+          setActiveAttempt(attempt);
+        },
+        onError: (err) => toast.error(err.message),
+      },
+    );
+  };
+
+  if (activeAttempt) {
+    if (activeAttempt.exam.format === 'FILE') {
+      return (
+        <FileExamWorkspace
+          key={activeAttempt.session.id}
+          attempt={activeAttempt}
+          onExitToLobby={() => {
+            setActiveAttempt(null);
+            void lobbyQuery.refetch();
+          }}
+        />
+      );
+    }
+    return (
+      <ActiveAttemptRoom
+        key={activeAttempt.session.id}
+        attempt={activeAttempt}
+        onSubmitted={(completedSessionId, canReview) => {
+          setActiveAttempt(null);
+          void lobbyQuery.refetch();
+          if (canReview) setReviewSessionId(completedSessionId);
+        }}
+        onExitToLobby={() => {
+          setActiveAttempt(null);
+          void lobbyQuery.refetch();
+        }}
+      />
+    );
+  }
+
+  if (reviewSessionId) {
+    return (
+      <AttemptReviewPanel
+        sessionId={reviewSessionId}
+        onBack={() => setReviewSessionId(null)}
+      />
+    );
+  }
+
   return (
     <AsyncView
       state={state}
@@ -31,57 +124,420 @@ const ExamRoomPage = () => {
         />
       }
     >
-      {(d) => <Room key={d.session.id} {...d} />}
+      {(lobby) => (
+        <LobbyView
+          lobby={lobby}
+          isStarting={startMutation.isPending}
+          onStartOrResume={handleStartOrResume}
+          onReviewAttempt={(sessionId) => setReviewSessionId(sessionId)}
+        />
+      )}
     </AsyncView>
   );
 };
 
-const isTypingTarget = (target: EventTarget | null) =>
-  target instanceof HTMLTextAreaElement ||
-  target instanceof HTMLSelectElement ||
-  (target instanceof HTMLInputElement &&
-    target.type !== 'radio' &&
-    target.type !== 'checkbox');
+const formatMinutes = (minutes: number): string => {
+  if (minutes < 60) return `${minutes} min`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m === 0 ? `${h} h` : `${h} h ${m} min`;
+};
 
-const Room = ({
-  exam,
-  questions,
-  session,
-}: {
-  exam: ExamSchedule;
-  questions: QuizQuestion[];
-  session: ExamSession;
-}) => {
-  const draftKey = `exam-draft-${exam.id}`;
-  const flagsKey = `${draftKey}-flags`;
-  const duration = +new Date(exam.endTime) - +new Date(exam.startTime);
-  const [deadline] = useState(() => {
-    const saved = localStorage.getItem(`${draftKey}-deadline`);
-    const d = saved ? Number(saved) : Date.now() + duration;
-    localStorage.setItem(`${draftKey}-deadline`, String(d));
-    return d;
-  });
-  const [answers, setAnswers] = useState<Record<string, number>>(() =>
-    readStoredJson(draftKey, {}),
+const tookLabel = (startedAt: string, endedAt: string | null): string | null => {
+  if (!endedAt) return null;
+  const minutes = Math.max(
+    1,
+    Math.round((+new Date(endedAt) - +new Date(startedAt)) / 60_000),
   );
+  return `took ${formatMinutes(minutes)}`;
+};
+
+const InfoRow = ({ label, value }: { label: string; value: string }) => (
+  <div className="flex items-baseline justify-between gap-4 py-2.5 text-sm">
+    <dt className="text-muted-foreground">{label}</dt>
+    <dd className="m-0 text-right font-medium">{value}</dd>
+  </div>
+);
+
+const LobbyView = ({
+  lobby,
+  isStarting,
+  onStartOrResume,
+  onReviewAttempt,
+}: {
+  lobby: StudentExamLobby;
+  isStarting: boolean;
+  onStartOrResume: () => void;
+  onReviewAttempt: (sessionId: string) => void;
+}) => {
+  const hasActive = lobby.activeSessionId !== null;
+  const canAct = hasActive || lobby.canStartNewAttempt;
+  const isFile = lobby.format === 'FILE';
+  const attemptsLeft =
+    lobby.maxAttempts === null ? null : lobby.maxAttempts - lobby.attemptsUsed;
+
+  const headline = hasActive
+    ? 'You have an attempt in progress'
+    : lobby.canStartNewAttempt
+      ? lobby.attemptsUsed === 0
+        ? 'Ready to begin'
+        : `Ready for attempt #${lobby.attemptsUsed + 1}`
+      : lobby.status === 'UPCOMING'
+        ? 'Not open yet'
+        : lobby.status === 'CLOSED'
+          ? 'This exam is closed'
+          : 'No attempts left';
+  const reason = hasActive
+    ? 'Pick up where you left off. Your timer is still running.'
+    : lobby.canStartNewAttempt
+      ? isFile
+        ? 'Download the paper, upload your files, and update them any time while the timer runs.'
+        : 'Answers are saved automatically while you work.'
+      : lobby.status === 'UPCOMING'
+        ? `Opens ${formatDateTime(lobby.startTime)}.`
+        : lobby.status === 'CLOSED'
+          ? `Closed ${formatDateTime(lobby.endTime)}.`
+          : 'You have used every attempt allowed for this exam.';
+
+  const bestIndex =
+    lobby.showResults && lobby.bestScore !== null
+      ? lobby.attempts.findIndex((a) => a.score === lobby.bestScore)
+      : -1;
+
+  return (
+    <div className="mx-auto max-w-5xl space-y-5">
+      <PageHeader
+        title={lobby.examName}
+        subtitle={
+          isFile
+            ? 'File submission exam'
+            : `${lobby.questionCount} ${lobby.questionCount === 1 ? 'question' : 'questions'}`
+        }
+        actions={
+          <div className="flex items-center gap-2">
+            <StatusBadge status={lobby.status} />
+            <Button variant="outline" size="sm" asChild>
+              <Link to={`/student/courses/${lobby.classId}/content`}>
+                <ArrowLeft className="mr-1.5 h-4 w-4" />
+                Back to course
+              </Link>
+            </Button>
+          </div>
+        }
+      />
+
+      <div className="grid gap-5 lg:grid-cols-[1fr_300px]">
+        <div className="space-y-5">
+          {/* State + primary action + best score, in one place */}
+          <section
+            className={cn(
+              'flex flex-wrap items-center justify-between gap-x-6 gap-y-4 rounded-lg border border-l-4 bg-card p-5',
+              canAct
+                ? 'border-l-primary'
+                : lobby.status === 'UPCOMING'
+                  ? 'border-l-warning'
+                  : 'border-l-border',
+            )}
+          >
+            <div className="min-w-0 flex-1 space-y-3">
+              <div>
+                <h2 className="m-0 text-lg font-semibold">{headline}</h2>
+                <p className="m-0 mt-1 text-sm text-muted-foreground">
+                  {reason}
+                </p>
+              </div>
+              {canAct && (
+                <Button disabled={isStarting} onClick={onStartOrResume}>
+                  {hasActive ? (
+                    <Play className="mr-1.5 h-4 w-4" />
+                  ) : lobby.attemptsUsed > 0 ? (
+                    <RotateCcw className="mr-1.5 h-4 w-4" />
+                  ) : (
+                    <Play className="mr-1.5 h-4 w-4" />
+                  )}
+                  {isStarting
+                    ? 'Loading…'
+                    : hasActive
+                      ? 'Continue attempt'
+                      : lobby.attemptsUsed > 0
+                        ? `Retake (attempt #${lobby.attemptsUsed + 1})`
+                        : 'Start exam'}
+                </Button>
+              )}
+            </div>
+
+            <div className="sm:text-right">
+              <p className="m-0 flex items-center gap-1.5 text-sm text-muted-foreground sm:justify-end">
+                <Trophy className="h-4 w-4 text-warning" />
+                Best score
+              </p>
+              {!lobby.showResults ? (
+                <p className="m-0 mt-1 text-sm text-muted-foreground">
+                  Hidden by lecturer
+                </p>
+              ) : lobby.bestScore !== null ? (
+                <p
+                  className={cn(
+                    'm-0 mt-1 text-4xl font-bold tabular-nums',
+                    scoreTone(lobby.bestScore),
+                  )}
+                >
+                  {lobby.bestScore.toFixed(2)}
+                  <span className="ml-1 text-base font-medium text-muted-foreground">
+                    /10
+                  </span>
+                </p>
+              ) : (
+                <p className="m-0 mt-1 text-sm text-muted-foreground">
+                  {isFile && lobby.attemptsUsed > 0
+                    ? 'Awaiting grade'
+                    : 'No score yet'}
+                </p>
+              )}
+            </div>
+          </section>
+
+          {/* Answering & grading rules */}
+          {!isFile && (
+            <section className="rounded-lg border bg-card p-5">
+              <h2 className="m-0 flex items-center gap-2 text-sm font-semibold">
+                <Info className="h-4 w-4 text-brand" />
+                Answering &amp; grading rules
+              </h2>
+              <ul className="m-0 mt-2.5 list-disc space-y-1.5 pl-5 text-xs text-muted-foreground">
+                <li>
+                  <strong className="text-foreground">Single-choice:</strong>{' '}
+                  Select the one best option.
+                </li>
+                <li>
+                  <strong className="text-foreground">Multiple-answer:</strong>{' '}
+                  Select the exact number of correct options requested (you
+                  cannot exceed the limit). You must select all correct options
+                  to earn points for that question.
+                </li>
+                <li>
+                  <strong className="text-foreground">
+                    Fill-in-the-blank (Cloze):
+                  </strong>{' '}
+                  Type your answer directly into each numbered blank{' '}
+                  <code>(1)</code>, <code>(2)</code>… inside the text. Answers
+                  are <strong>not case-sensitive</strong> and extra spaces are
+                  ignored, but{' '}
+                  <strong>every blank in the question must be correct</strong>{' '}
+                  to earn points.
+                </li>
+              </ul>
+            </section>
+          )}
+
+          {/* Attempts history */}
+          {lobby.attempts.length > 0 && (
+            <section className="overflow-hidden rounded-lg border bg-card">
+              <h2 className="m-0 border-b px-5 py-3 text-sm font-semibold">
+                Attempts
+                <span className="ml-2 font-normal text-muted-foreground">
+                  {lobby.attemptsUsed}
+                  {lobby.maxAttempts === null ? '' : ` / ${lobby.maxAttempts}`}{' '}
+                  used
+                  {attemptsLeft !== null && attemptsLeft > 0
+                    ? ` · ${attemptsLeft} left`
+                    : ''}
+                </span>
+              </h2>
+              <ul className="m-0 list-none divide-y p-0">
+                {lobby.attempts.map((item, index) => {
+                  const done =
+                    item.status === 'COMPLETED' || Boolean(item.submittedAt);
+                  const took = tookLabel(item.startedAt, item.endedAt);
+                  return (
+                    <li
+                      key={item.id}
+                      className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="m-0 flex items-center gap-2 text-sm font-semibold">
+                          Attempt #{item.attemptNumber}
+                          {index === bestIndex && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-warning/15 px-2 py-0.5 text-xs font-medium text-warning">
+                              <Trophy className="h-3 w-3" />
+                              Best
+                            </span>
+                          )}
+                          {item.status === 'IN_PROGRESS' && (
+                            <StatusBadge status={item.status} />
+                          )}
+                        </p>
+                        <p className="m-0 mt-0.5 text-xs text-muted-foreground">
+                          {formatDateTime(item.startedAt)}
+                          {took ? ` · ${took}` : ''}
+                        </p>
+                      </div>
+
+                      {done && (
+                        <span
+                          className={cn(
+                            'text-base font-bold tabular-nums',
+                            lobby.showResults && item.score !== null
+                              ? scoreTone(item.score)
+                              : 'text-sm font-normal text-muted-foreground',
+                          )}
+                        >
+                          {!lobby.showResults
+                            ? 'Hidden'
+                            : item.score !== null
+                              ? item.score.toFixed(2)
+                              : 'Awaiting grade'}
+                          {lobby.showResults && item.score !== null && (
+                            <span className="ml-0.5 text-xs font-medium text-muted-foreground">
+                              /10
+                            </span>
+                          )}
+                        </span>
+                      )}
+
+                      {done && lobby.showResults && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => onReviewAttempt(item.id)}
+                        >
+                          <Eye className="mr-1.5 h-3.5 w-3.5" />
+                          {isFile ? 'View submission' : 'Review answers'}
+                        </Button>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          )}
+        </div>
+
+        {/* Static facts sidebar */}
+        <aside className="h-fit rounded-lg border bg-card px-5 py-3 lg:sticky lg:top-4">
+          <h2 className="m-0 py-1 text-sm font-semibold">Exam details</h2>
+          <dl className="m-0 divide-y">
+            <InfoRow
+              label="Format"
+              value={isFile ? 'File submission' : 'Interactive questions'}
+            />
+            {!isFile && (
+              <InfoRow label="Questions" value={String(lobby.questionCount)} />
+            )}
+            <InfoRow
+              label="Time per attempt"
+              value={formatMinutes(lobby.durationMinutes)}
+            />
+            <InfoRow
+              label="Attempts allowed"
+              value={
+                lobby.maxAttempts === null
+                  ? 'Unlimited'
+                  : String(lobby.maxAttempts)
+              }
+            />
+            <InfoRow label="Opens" value={formatDateTime(lobby.startTime)} />
+            <InfoRow label="Closes" value={formatDateTime(lobby.endTime)} />
+            <InfoRow
+              label="Results"
+              value={lobby.showResults ? 'Shown after submit' : 'Hidden'}
+            />
+            {!isFile && (lobby.shuffleQuestions || lobby.shuffleOptions) && (
+              <InfoRow
+                label="Shuffled"
+                value={[
+                  lobby.shuffleQuestions && 'Questions',
+                  lobby.shuffleOptions && 'Answers',
+                ]
+                  .filter(Boolean)
+                  .join(' & ')}
+              />
+            )}
+          </dl>
+        </aside>
+      </div>
+    </div>
+  );
+};
+
+const ActiveAttemptRoom = ({
+  attempt,
+  onSubmitted,
+  onExitToLobby,
+}: {
+  attempt: ExamAttempt;
+  onSubmitted: (sessionId: string, canReview: boolean) => void;
+  onExitToLobby: () => void;
+}) => {
+  const { session, exam, questions } = attempt;
+  const flagsKey = `exam-draft-${session.id}-flags`;
+
+  const {
+    draftAnswers,
+    savedQuestionIds,
+    dirtyQuestionIds,
+    isSaving,
+    isOfflineError,
+    deadlineMs,
+    selectSingleOption,
+    toggleMultiOption,
+    updateBlankText,
+    clearQuestionAnswer,
+    flushDirty,
+    clearLocalDraft,
+  } = useExamAutosave({
+    sessionId: session.id,
+    questions,
+    initialSavedAnswers: attempt.savedAnswers,
+    initialSavedMultiAnswers: attempt.savedMultiAnswers,
+    initialSavedTextAnswers: attempt.savedTextAnswers,
+    initialDeadlineIso: attempt.deadline,
+    initialServerNowIso: attempt.serverNow,
+  });
+
   const [flags, setFlags] = useState<Record<string, boolean>>(() =>
     readStoredJson(flagsKey, {}),
   );
-  const [current, setCurrent] = useState(0);
-  const [result, setResult] = useState<ExamSession | null>(null);
+  const [page, setPage] = useState(0);
+  const [isReviewOpen, setIsReviewOpen] = useState(false);
+  const pendingScrollQuestionIdRef = useRef<string | null>(null);
+
   const { mutate: submitSession, isPending: submitting } =
     useSubmitExamSession();
-  const [isReviewOpen, setIsReviewOpen] = useState(false);
-  const cd = useCountdown(deadline);
+  const cd = useCountdown(deadlineMs);
   const submitted = useRef(false);
-  const currentQuestionId = questions[current]?.id;
 
-  useEffect(() => {
-    localStorage.setItem(draftKey, JSON.stringify(answers));
-  }, [answers, draftKey]);
+  const totalPages = Math.max(
+    1,
+    Math.ceil(questions.length / QUESTIONS_PER_PAGE),
+  );
+  const safePage = Math.min(page, totalPages - 1);
+  const pageStart = safePage * QUESTIONS_PER_PAGE;
+  const pageEnd = Math.min(pageStart + QUESTIONS_PER_PAGE, questions.length);
+  const pageQuestions = questions.slice(pageStart, pageEnd);
+
   useEffect(() => {
     localStorage.setItem(flagsKey, JSON.stringify(flags));
   }, [flags, flagsKey]);
+
+  useEffect(() => {
+    toast.info('Your answers are automatically saved as you make progress.', {
+      id: `autosave-info-${session.id}`,
+      description:
+        'Your responses are backed up locally and synced to the server automatically.',
+      duration: 5000,
+    });
+  }, [session.id]);
+
+  useEffect(() => {
+    const questionId = pendingScrollQuestionIdRef.current;
+    if (!questionId) return;
+    pendingScrollQuestionIdRef.current = null;
+    const el = document.getElementById(`exam-question-${questionId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [safePage]);
 
   const toggleFlag = useCallback(
     (questionId: string) =>
@@ -89,43 +545,25 @@ const Room = ({
     [],
   );
 
-  // "F" toggles the flag of the current question (radios keep their native arrow-key behaviour).
-  useEffect(() => {
-    if (!currentQuestionId) return;
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (
-        event.key.toLowerCase() !== 'f' ||
-        event.ctrlKey ||
-        event.metaKey ||
-        event.altKey ||
-        isTypingTarget(event.target)
-      )
-        return;
-      toggleFlag(currentQuestionId);
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentQuestionId, toggleFlag]);
-
   const submit = useCallback(() => {
     if (submitted.current) return;
     submitted.current = true;
+    const payload = buildSubmitPayload(questions, draftAnswers);
     submitSession(
       {
         sessionId: session.id,
-        answers: Object.entries(answers).map(([questionId, selectedIndex]) => ({
-          questionId,
-          selectedIndex,
-        })),
+        answers: payload,
       },
       {
         onSuccess: (res) => {
-          localStorage.removeItem(draftKey);
-          localStorage.removeItem(`${draftKey}-deadline`);
-          localStorage.removeItem(flagsKey);
+          clearLocalDraft();
           setIsReviewOpen(false);
-          setResult(res);
-          toast.success('Exam submitted');
+          toast.success(
+            res.showResults && res.score !== null
+              ? `Exam submitted — Score: ${res.score.toFixed(2)} / 10`
+              : 'Exam submitted',
+          );
+          onSubmitted(session.id, res.showResults);
         },
         onError: () => {
           submitted.current = false;
@@ -133,143 +571,504 @@ const Room = ({
         },
       },
     );
-  }, [answers, draftKey, flagsKey, session.id, submitSession]);
+  }, [
+    clearLocalDraft,
+    draftAnswers,
+    onSubmitted,
+    questions,
+    session.id,
+    submitSession,
+  ]);
 
   useEffect(() => {
     if (cd.expired) submit();
   }, [cd.expired, submit]);
 
-  const handleJump = (index: number) => {
-    setCurrent(index);
-    setIsReviewOpen(false);
+  const handleChangePage = (nextPage: number) => {
+    const clamped = Math.min(Math.max(nextPage, 0), totalPages - 1);
+    if (clamped === safePage) return;
+    void flushDirty();
+    setPage(clamped);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  if (result)
-    return (
-      <div className="mx-auto max-w-lg rounded-lg border bg-card p-8 text-center">
-        <h1 className="mt-0 text-2xl font-bold">Exam submitted</h1>
-        <p className="text-muted-foreground">
-          Your answers for {exam.examName} have been recorded. Results will be
-          published by your lecturer.
-        </p>
-        <Button asChild>
-          <Link to="/student/exams">Back to Exams</Link>
-        </Button>
-      </div>
-    );
+  const handleJumpToQuestion = (questionIndex: number) => {
+    const targetPage = Math.floor(questionIndex / QUESTIONS_PER_PAGE);
+    const targetQuestion = questions[questionIndex];
+    setIsReviewOpen(false);
+    if (!targetQuestion) return;
+    if (targetPage !== safePage) {
+      pendingScrollQuestionIdRef.current = targetQuestion.id;
+      void flushDirty();
+      setPage(targetPage);
+    } else {
+      requestAnimationFrame(() => {
+        const el = document.getElementById(`exam-question-${targetQuestion.id}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      });
+    }
+  };
 
-  if (questions.length === 0)
+  const handleOpenSubmitReview = () => {
+    void flushDirty();
+    setIsReviewOpen(true);
+  };
+
+  if (questions.length === 0) {
     return <EmptyState title="This exam has no questions" />;
-  const q = questions[current];
-  const answered = Object.keys(answers).length;
-  const flaggedCount = questions.filter((x) => flags[x.id]).length;
+  }
+
+  const answeredCount = questions.filter(
+    (q) => getQuestionAnswerState(q, draftAnswers[q.id]) === 'ANSWERED',
+  ).length;
+  const flaggedCount = questions.filter((q) => flags[q.id]).length;
   const low = cd.ms < 5 * 60 * 1000;
+  const saveStatusText = isOfflineError
+    ? 'Auto-save paused (offline)'
+    : isSaving
+      ? 'Saving answers…'
+      : dirtyQuestionIds.size > 0
+        ? `${dirtyQuestionIds.size} pending auto-save`
+        : 'All answers saved';
 
   return (
-    <div>
-      <PageHeader
-        title={exam.examName}
-        subtitle={`${answered}/${questions.length} answered · ${flaggedCount} flagged · draft auto-saved`}
-        actions={
-          <div
-            role="timer"
-            aria-label="Time remaining"
-            className={cn(
-              'rounded-md border px-4 py-2 font-mono text-xl font-bold',
-              low ? 'border-destructive text-destructive' : 'text-brand',
-            )}
+    <div className="space-y-4">
+      {isOfflineError && (
+        <div
+          role="alert"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-destructive bg-destructive/10 px-4 py-3 text-sm text-destructive"
+        >
+          <span className="flex items-center gap-2 font-medium">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            Connection lost — automatic saving is paused. Your answers are kept
+            on this device and will sync when reconnected.
+          </span>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={isSaving}
+            onClick={() => void flushDirty()}
           >
-            {pad(cd.hours + cd.days * 24)}:{pad(cd.minutes)}:{pad(cd.seconds)}
-          </div>
-        }
-      />
-      <div className="grid gap-6 lg:grid-cols-[1fr_280px]">
-        <div className="rounded-lg border bg-card p-5">
-          <div className="mb-3 flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">
-              Question {current + 1} of {questions.length}
-            </span>
+            <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+            Retry now
+          </Button>
+        </div>
+      )}
+
+      <PageHeader
+        title={`${exam.examName} (Attempt #${session.attemptNumber})`}
+        subtitle={`${answeredCount}/${questions.length} answered · ${flaggedCount} flagged · ${saveStatusText}`}
+        actions={
+          <div className="flex items-center gap-2">
             <Button
               variant="outline"
               size="sm"
-              aria-pressed={Boolean(flags[q.id])}
-              title="Shortcut: F"
-              onClick={() => toggleFlag(q.id)}
+              onClick={() => {
+                void flushDirty();
+                onExitToLobby();
+              }}
             >
-              <Flag
-                className={cn(
-                  'h-4 w-4',
-                  flags[q.id] && 'fill-warning text-warning',
-                )}
-              />
-              {flags[q.id] ? 'Flagged' : 'Flag for review'}
+              <ArrowLeft className="mr-1.5 h-4 w-4" />
+              Overview
             </Button>
+            <div
+              role="timer"
+              aria-label="Time remaining"
+              className={cn(
+                'flex items-center gap-1.5 rounded-md border px-4 py-2 font-mono text-xl font-bold',
+                low ? 'border-destructive text-destructive' : 'text-brand',
+              )}
+            >
+              <Clock className="h-4 w-4" />
+              {pad(cd.hours + cd.days * 24)}:{pad(cd.minutes)}:{pad(cd.seconds)}
+            </div>
           </div>
-          <p className="mt-0 font-medium">{q.content}</p>
-          <div className="space-y-2">
-            {q.options.map((opt, oi) => (
-              <label
-                key={oi}
-                className={cn(
-                  'flex cursor-pointer items-center gap-3 rounded-md border p-3 text-sm',
-                  answers[q.id] === oi && 'border-primary bg-primary/15',
-                )}
+        }
+      />
+
+      <div className="grid gap-6 lg:grid-cols-[1fr_290px]">
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-card px-4 py-3 text-sm">
+            <span className="font-semibold">
+              Page {safePage + 1} of {totalPages}{' '}
+              <span className="font-normal text-muted-foreground">
+                (Questions {pageStart + 1}–{pageEnd} of {questions.length})
+              </span>
+            </span>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={safePage === 0}
+                onClick={() => handleChangePage(safePage - 1)}
               >
-                <input
-                  type="radio"
-                  name={q.id}
-                  checked={answers[q.id] === oi}
-                  onChange={() => setAnswers((a) => ({ ...a, [q.id]: oi }))}
-                />
-                {opt}
-              </label>
-            ))}
+                <ChevronLeft className="mr-1 h-4 w-4" />
+                Previous 10
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={safePage >= totalPages - 1}
+                onClick={() => handleChangePage(safePage + 1)}
+              >
+                Next 10
+                <ChevronRight className="ml-1 h-4 w-4" />
+              </Button>
+            </div>
           </div>
-          <div className="mt-5 flex justify-between">
+
+          <ol className="m-0 list-none space-y-4 p-0">
+            {pageQuestions.map((q, offset) => {
+              const globalIndex = pageStart + offset;
+              const draft = draftAnswers[q.id];
+              const answerState = getQuestionAnswerState(q, draft);
+              const hasDraft = hasAnyDraftContent(draft);
+              const isSaved =
+                answerState === 'ANSWERED' &&
+                savedQuestionIds.has(q.id) &&
+                !dirtyQuestionIds.has(q.id);
+              const isDirty = hasDraft && dirtyQuestionIds.has(q.id);
+
+              return (
+                <QuestionAttemptCard
+                  key={q.id}
+                  question={q}
+                  globalIndex={globalIndex}
+                  totalQuestions={questions.length}
+                  draft={draft}
+                  answerState={answerState}
+                  hasDraft={hasDraft}
+                  isSaved={isSaved}
+                  isDirty={isDirty}
+                  isFlagged={Boolean(flags[q.id])}
+                  onSelectSingle={(optId) => selectSingleOption(q.id, optId)}
+                  onToggleMulti={(optId, max) =>
+                    toggleMultiOption(q.id, optId, max)
+                  }
+                  onUpdateBlank={(blankIdx, val, count) =>
+                    updateBlankText(q.id, blankIdx, val, count)
+                  }
+                  onBlurBlank={() => void flushDirty()}
+                  onClear={() => clearQuestionAnswer(q.id)}
+                  onToggleFlag={() => toggleFlag(q.id)}
+                />
+              );
+            })}
+          </ol>
+
+          <div className="flex items-center justify-between rounded-lg border bg-card px-4 py-3">
             <Button
               variant="outline"
-              disabled={current === 0}
-              onClick={() => setCurrent((c) => c - 1)}
+              disabled={safePage === 0}
+              onClick={() => handleChangePage(safePage - 1)}
             >
-              Previous
+              <ChevronLeft className="mr-1 h-4 w-4" />
+              Previous page
             </Button>
-            <Button
-              variant="outline"
-              disabled={current === questions.length - 1}
-              onClick={() => setCurrent((c) => c + 1)}
-            >
-              Next
-            </Button>
+            <span className="text-xs text-muted-foreground">
+              Page {safePage + 1} of {totalPages}
+            </span>
+            {safePage < totalPages - 1 ? (
+              <Button
+                variant="outline"
+                onClick={() => handleChangePage(safePage + 1)}
+              >
+                Next page
+                <ChevronRight className="ml-1 h-4 w-4" />
+              </Button>
+            ) : (
+              <Button disabled={submitting} onClick={handleOpenSubmitReview}>
+                Review &amp; submit
+              </Button>
+            )}
           </div>
         </div>
-        <aside className="h-fit rounded-lg border bg-card p-4">
+
+        <aside className="h-fit rounded-lg border bg-card p-4 lg:sticky lg:top-4">
           <QuestionPalette
             questions={questions}
-            answers={answers}
+            draftAnswers={draftAnswers}
+            savedQuestionIds={savedQuestionIds}
+            dirtyQuestionIds={dirtyQuestionIds}
             flags={flags}
-            current={current}
-            onSelect={setCurrent}
+            pageStart={pageStart}
+            pageEnd={pageEnd}
+            onSelect={handleJumpToQuestion}
           />
           <Button
             className="mt-4 w-full"
             disabled={submitting}
-            onClick={() => setIsReviewOpen(true)}
+            onClick={handleOpenSubmitReview}
           >
             Review &amp; submit
           </Button>
         </aside>
       </div>
+
       <SubmitReviewDialog
         open={isReviewOpen}
         questions={questions}
-        answers={answers}
+        draftAnswers={draftAnswers}
         flags={flags}
         isSubmitting={submitting}
         onClose={() => setIsReviewOpen(false)}
-        onJump={handleJump}
+        onJump={handleJumpToQuestion}
         onConfirm={submit}
       />
     </div>
+  );
+};
+
+interface QuestionAttemptCardProps {
+  question: StudentExamQuestion;
+  globalIndex: number;
+  totalQuestions: number;
+  draft: StudentQuestionDraftAnswer | undefined;
+  answerState: 'UNANSWERED' | 'PARTIAL' | 'ANSWERED';
+  hasDraft: boolean;
+  isSaved: boolean;
+  isDirty: boolean;
+  isFlagged: boolean;
+  onSelectSingle: (optionId: string) => void;
+  onToggleMulti: (optionId: string, maxAllowed: number) => void;
+  onUpdateBlank: (blankIdx: number, value: string, blankCount: number) => void;
+  onBlurBlank: () => void;
+  onClear: () => void;
+  onToggleFlag: () => void;
+}
+
+const QuestionAttemptCard = ({
+  question,
+  globalIndex,
+  totalQuestions,
+  draft,
+  answerState,
+  hasDraft,
+  isSaved,
+  isDirty,
+  isFlagged,
+  onSelectSingle,
+  onToggleMulti,
+  onUpdateBlank,
+  onBlurBlank,
+  onClear,
+  onToggleFlag,
+}: QuestionAttemptCardProps) => {
+  const type = question.type ?? 'MULTIPLE_CHOICE';
+  const requiredCount = question.correctCount ?? 1;
+  const isFib = type === 'FILL_IN_THE_BLANK';
+  const isMulti = !isFib && requiredCount > 1;
+  const selectedIds = draft?.optionIds ?? [];
+  const textAnswers = draft?.textAnswers ?? [];
+  const filledBlanksCount = Array.from(
+    { length: requiredCount },
+    (_, i) => (textAnswers[i] ?? '').trim(),
+  ).filter((t) => t !== '').length;
+
+  const typeBadgeLabel = isFib
+    ? `Fill in the blank · ${filledBlanksCount}/${requiredCount} filled`
+    : isMulti
+      ? `Multiple answers · Select ${requiredCount} (${selectedIds.length}/${requiredCount})`
+      : 'Single choice';
+
+  return (
+    <li
+      id={`exam-question-${question.id}`}
+      className="rounded-lg border bg-card p-5"
+    >
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm font-semibold">
+            Question {globalIndex + 1} of {totalQuestions}
+          </span>
+          <span className="rounded-full bg-muted px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">
+            {typeBadgeLabel}
+          </span>
+          {answerState === 'PARTIAL' && (
+            <span className="rounded-full bg-warning/15 px-2 py-0.5 text-xs font-medium text-warning">
+              Incomplete
+            </span>
+          )}
+          {isSaved && (
+            <span className="rounded-full bg-success/15 px-2 py-0.5 text-xs font-medium text-success">
+              Answer saved
+            </span>
+          )}
+          {isDirty && (
+            <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+              Pending save
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          {hasDraft && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onClear}
+              className="text-xs text-muted-foreground"
+            >
+              {isFib || isMulti ? 'Clear answer' : 'Clear choice'}
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            aria-pressed={isFlagged}
+            onClick={onToggleFlag}
+          >
+            <Flag
+              className={cn(
+                'mr-1 h-4 w-4',
+                isFlagged && 'fill-warning text-warning',
+              )}
+            />
+            {isFlagged ? 'Flagged' : 'Flag'}
+          </Button>
+        </div>
+      </div>
+
+      {/* Per-question Rule Note for Fill-in-the-Blank and Multi-answer MCQ */}
+      {isFib && (
+        <div className="mb-3 flex items-start gap-2 rounded-md border border-brand/25 bg-brand/5 px-3 py-2 text-xs text-muted-foreground">
+          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand" />
+          <span>
+            <strong className="text-foreground">Rule:</strong> Fill in all{' '}
+            {requiredCount === 1
+              ? 'numbered blank'
+              : `${requiredCount} numbered blanks`}{' '}
+            directly inside the text below. Answers are{' '}
+            <strong className="text-foreground">not case-sensitive</strong> and
+            extra spaces are ignored. All blanks must be correct to earn points.
+          </span>
+        </div>
+      )}
+
+      {isMulti && (
+        <div className="mb-3 flex items-start gap-2 rounded-md border border-brand/25 bg-brand/5 px-3 py-2 text-xs text-muted-foreground">
+          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand" />
+          <span>
+            <strong className="text-foreground">Rule:</strong> Select exactly{' '}
+            <strong className="text-foreground">{requiredCount}</strong> correct
+            answers (maximum {requiredCount} selections allowed). All{' '}
+            {requiredCount} selections must be correct to earn points.
+          </span>
+        </div>
+      )}
+
+      {isFib ? (
+        <div className="whitespace-pre-line font-medium leading-loose text-foreground">
+          {question.content.split(CLOZE_SPLIT_REGEX).map((part, idx) => {
+            const match = /^\{\{(\d+)\}\}$/.exec(part);
+            if (!match) return <span key={idx}>{part}</span>;
+            const blankNum = Number(match[1]);
+            const blankIndex = blankNum - 1;
+            const value = textAnswers[blankIndex] ?? '';
+            const chWidth = Math.min(28, Math.max(10, value.length + 3));
+            return (
+              <span
+                key={idx}
+                className="mx-1 inline-flex items-center gap-1 rounded-md border border-input bg-background px-2 py-0.5 align-baseline shadow-xs focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20"
+              >
+                <span className="select-none text-[11px] font-bold text-primary">
+                  ({blankNum})
+                </span>
+                <input
+                  type="text"
+                  aria-label={`Blank ${blankNum} for question ${globalIndex + 1}`}
+                  placeholder={`Blank ${blankNum}`}
+                  maxLength={500}
+                  value={value}
+                  style={{ width: `${chWidth}ch` }}
+                  onChange={(e) =>
+                    onUpdateBlank(blankIndex, e.target.value, requiredCount)
+                  }
+                  onBlur={onBlurBlank}
+                  className="border-0 bg-transparent p-0 text-sm font-normal text-foreground outline-none placeholder:text-muted-foreground/60"
+                />
+              </span>
+            );
+          })}
+        </div>
+      ) : (
+        <>
+          <p className="mt-0 whitespace-pre-line font-medium">
+            {question.content}
+          </p>
+          <div className="space-y-2">
+            {question.options.map((opt, oi) => {
+              const isSelected = selectedIds.includes(opt.id);
+              const isCapped =
+                isMulti && !isSelected && selectedIds.length >= requiredCount;
+              return (
+                <label
+                  key={opt.id}
+                  title={
+                    isCapped
+                      ? `Maximum ${requiredCount} selections reached. Uncheck one first to change.`
+                      : undefined
+                  }
+                  className={cn(
+                    'flex items-center gap-3 rounded-md border p-3 text-sm transition-colors',
+                    isCapped
+                      ? 'cursor-not-allowed opacity-60'
+                      : 'cursor-pointer',
+                    isSelected
+                      ? 'border-primary bg-primary/15 font-medium'
+                      : !isCapped && 'hover:bg-accent/50',
+                  )}
+                >
+                  {isMulti ? (
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      disabled={isCapped}
+                      onChange={() => onToggleMulti(opt.id, requiredCount)}
+                    />
+                  ) : (
+                    <input
+                      type="radio"
+                      name={`q-${question.id}`}
+                      checked={isSelected}
+                      onChange={() => onSelectSingle(opt.id)}
+                    />
+                  )}
+                  <span className="font-semibold text-muted-foreground">
+                    {OPTION_LETTERS[oi]}.
+                  </span>
+                  <span className="flex-1">{opt.content}</span>
+                </label>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </li>
+  );
+};
+
+const AttemptReviewPanel = ({
+  sessionId,
+  onBack,
+}: {
+  sessionId: string;
+  onBack: () => void;
+}) => {
+  const reviewState = toAsyncState(useAttemptReview(sessionId));
+  return (
+    <AsyncView
+      state={reviewState}
+      empty={
+        <EmptyState
+          title="Review not available"
+          action={<Button onClick={onBack}>Back to exam</Button>}
+        />
+      }
+    >
+      {(review) => <AttemptReviewViewer review={review} onBack={onBack} />}
+    </AsyncView>
   );
 };
 

@@ -25,13 +25,20 @@ import {
   lecturerMembersTabRoute,
   studentRosterRoute,
 } from '@features/participants/routes';
-import { documentRoute } from '@features/documents/routes';
+import {
+  documentRoute,
+  lecturerDocumentRoute,
+} from '@features/documents/routes';
 import { quizRoute } from '@features/quizzes/routes';
 import {
   assignmentDetailRoute,
   studentAssignmentsRoute,
 } from '@features/assignments/routes';
-import { examRoomRoute, studentExamsRoute } from '@features/exams/routes';
+import {
+  examRoomRoute,
+  lecturerExamRoute,
+  studentExamsRoute,
+} from '@features/exams/routes';
 import { calendarRoute } from '@features/calendar/routes';
 import { masteryRoute } from '@features/mastery/routes';
 import { roadmapRoute } from '@features/roadmap/routes';
@@ -88,7 +95,15 @@ export const router = createBrowserRouter([
                 ...crumb('Lecturer'),
                 children: [
                   lecturerDashboardRoute,
-                  createLecturerClassRoutes({ tabs: [lecturerMembersTabRoute] }),                  gradingDeskRoute,
+                  createLecturerClassRoutes({
+                    tabs: [lecturerMembersTabRoute],
+                    detailPages: [
+                      lecturerDocumentRoute,
+                      assignmentDetailRoute,
+                      lecturerExamRoute,
+                    ],
+                  }),          
+                  gradingDeskRoute,
                   studentRosterRoute,
                   analyticsRoute,
                   aiGeneratorRoute,

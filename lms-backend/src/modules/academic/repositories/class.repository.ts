@@ -9,6 +9,9 @@ import {
   QueryMyClassesDto,
 } from '../dto/query-my-classes.dto.js';
 
+/** Rows per INSERT, to stay far below the database's limit on bind parameters. */
+const ENROLL_CHUNK = 1000;
+
 @Injectable()
 export class ClassRepository {
   constructor(
@@ -72,6 +75,28 @@ export class ClassRepository {
     return this.classRepo.findOne({ where: { classCode } });
   }
 
+  /**
+   * The lower-cased class codes from `codes` that already exist. Compared ignoring case, so `web26`
+   * is a duplicate of `WEB26` even though the unique index alone would accept both.
+   */
+  async findExistingCodes(codes: string[]): Promise<Set<string>> {
+    if (codes.length === 0) return new Set();
+    const rows = await this.classRepo
+      .createQueryBuilder('c')
+      .select('c.classCode', 'classCode')
+      .where('LOWER(c.classCode) IN (:...codes)', {
+        codes: codes.map((code) => code.toLowerCase()),
+      })
+      .getRawMany<{ classCode: string }>();
+    return new Set(rows.map((row) => row.classCode.toLowerCase()));
+  }
+
+  /** Inserts all classes in one statement, so either every one of them is created or none. */
+  async createMany(data: Partial<Class>[]): Promise<void> {
+    if (data.length === 0) return;
+    await this.classRepo.insert(data);
+  }
+
   async findByLecturerId(lecturerId: string): Promise<Class[]> {
     return this.classRepo.find({
       where: { lecturerId, isActive: true },
@@ -102,6 +127,56 @@ export class ClassRepository {
     return enrollments
       .map((e) => e.class)
       .filter((c): c is Class => Boolean(c?.isActive));
+  }
+
+  /**
+   * Creates the classes and enrols each one's students in a single transaction, so either every
+   * class with its students is created or nothing is.
+   */
+  async createWithStudents(
+    entries: ReadonlyArray<{
+      data: Partial<Class>;
+      studentIds: readonly string[];
+    }>,
+  ): Promise<void> {
+    if (entries.length === 0) return;
+    await this.classRepo.manager.transaction(async (manager) => {
+      const inserted = await manager.insert(
+        Class,
+        entries.map((entry) => entry.data),
+      );
+      const enrollments = entries.flatMap((entry, index) => {
+        const classId = String(inserted.identifiers[index]?.id ?? '');
+        if (!classId) throw new Error('A created class returned no id');
+        return entry.studentIds.map((studentId) => ({ classId, studentId }));
+      });
+      for (let start = 0; start < enrollments.length; start += ENROLL_CHUNK) {
+        await manager.insert(
+          ClassStudent,
+          enrollments.slice(start, start + ENROLL_CHUNK),
+        );
+      }
+    });
+  }
+
+  /** Every class the lecturer has, ended ones included, with the relations a class list needs. */
+  async findAllByLecturerId(lecturerId: string): Promise<Class[]> {
+    return this.classRepo.find({
+      where: { lecturerId },
+      relations: { subject: true, semester: true, lecturer: { user: true } },
+      order: { classCode: 'ASC' },
+    });
+  }
+
+  /** Every enrolment of the student, in classes that have ended too, with the class and its relations. */
+  async findEnrollmentsByStudentId(studentId: string): Promise<ClassStudent[]> {
+    return this.classStudentRepo.find({
+      where: { studentId },
+      relations: {
+        class: { subject: true, semester: true, lecturer: { user: true } },
+      },
+      order: { class: { classCode: 'ASC' } },
+    });
   }
 
   async findMyClasses(

@@ -17,7 +17,6 @@ const ClassAnalyticsPage = () => {
     <div>
       <PageHeader
         title="Class Analytics"
-        subtitle="Scores, knowledge component mastery and engagement"
         actions={
           classes.data && (
             <ClassSelect

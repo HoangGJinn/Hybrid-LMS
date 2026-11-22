@@ -1,5 +1,5 @@
 ---
-name: TypeScript Guidelines
+name: typescript-guidelines
 description: "TypeScript coding standards and best practices for modern web development"
 ---
 # TypeScript Best Practices

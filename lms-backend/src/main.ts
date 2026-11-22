@@ -1,13 +1,17 @@
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module.js';
 import { LoggerService } from './common/logger/logger.service.js';
 
 const bootstrap = async (): Promise<void> => {
-  const app = await NestFactory.create(AppModule, {
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     bufferLogs: true,
   });
+
+  // The default JSON limit (100kb) is too small for an exam with many typed questions.
+  app.useBodyParser('json', { limit: '1mb' });
 
   // Use custom Winston logger
   app.useLogger(app.get(LoggerService));

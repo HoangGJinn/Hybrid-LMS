@@ -1,5 +1,13 @@
 import { useState } from 'react';
-import { Archive, Pencil, Plus, RotateCcw, Search } from 'lucide-react';
+import {
+  Archive,
+  FileSpreadsheet,
+  Pencil,
+  Plus,
+  RotateCcw,
+  Search,
+} from 'lucide-react';
+import { toast } from 'sonner';
 import { AsyncView } from '@/shared/components/AsyncView';
 import { EmptyState } from '@/shared/components/EmptyState';
 import { PageHeader } from '@/shared/components/PageHeader';
@@ -12,6 +20,7 @@ import { Select } from '@/shared/components/ui/Select';
 import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue';
 import { formatDate } from '@/shared/utils/date';
 import { initials } from '@/shared/utils/initials';
+import { useExportUserClasses } from '../hooks/useExportUserClasses';
 import { useUsers } from '../hooks/useUsers';
 import type {
   AccountFilter,
@@ -54,6 +63,7 @@ export const UserManagement = ({ role }: { role: ManagedRole }) => {
     user: null,
   });
   const [statusTarget, setStatusTarget] = useState<StatusTarget | null>(null);
+  const exportClasses = useExportUserClasses(role);
 
   const search = useDebouncedValue(searchInput, SEARCH_DEBOUNCE_MS);
   const users = useUsers({
@@ -71,6 +81,15 @@ export const UserManagement = ({ role }: { role: ManagedRole }) => {
   if (totalPages !== undefined && totalPages > 0 && page > totalPages) {
     setPage(totalPages);
   }
+
+  const exportUserClasses = (user: ManagedUser) =>
+    exportClasses.mutate(
+      { userId: user.id, code: user.code },
+      {
+        onError: () =>
+          toast.error('Could not export the class list. Please try again.'),
+      },
+    );
 
   const openCreate = () => setForm({ open: true, user: null });
   const openEdit = (user: ManagedUser) => setForm({ open: true, user });
@@ -148,6 +167,18 @@ export const UserManagement = ({ role }: { role: ManagedRole }) => {
       className: 'text-right',
       render: (item) => (
         <div className="flex justify-end gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label={`${config.exportClassesLabel}: ${item.fullName}`}
+            title={config.exportClassesLabel}
+            disabled={
+              exportClasses.isPending && exportClasses.variables?.userId === item.id
+            }
+            onClick={() => exportUserClasses(item)}
+          >
+            <FileSpreadsheet className="h-4 w-4" />
+          </Button>
           <Button
             variant="ghost"
             size="icon"
