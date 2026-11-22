@@ -40,6 +40,8 @@ jobs:
         env:
           VITE_API_URL: ${{ vars.VITE_API_URL }}
           VITE_GOOGLE_CLIENT_ID: ${{ vars.VITE_GOOGLE_CLIENT_ID }}
+          VITE_ZALO_BOT_NAME: ${{ vars.VITE_ZALO_BOT_NAME }}
+          VITE_ZALO_BOT_LINK: ${{ vars.VITE_ZALO_BOT_LINK }}
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4

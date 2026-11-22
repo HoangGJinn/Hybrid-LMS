@@ -22,3 +22,9 @@ export const coursesRoute: RouteObject = {
     },
   ],
 };
+
+export const importDataRoute: RouteObject = {
+  path: 'import',
+  ...crumb('Import data'),
+  ...lazyPage(() => import('./views/ImportDataPage')),
+};
