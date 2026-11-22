@@ -9,6 +9,9 @@ import {
   QueryMyClassesDto,
 } from '../dto/query-my-classes.dto.js';
 
+/** Rows per INSERT, to stay far below the database's limit on bind parameters. */
+const ENROLL_CHUNK = 1000;
+
 @Injectable()
 export class ClassRepository {
   constructor(
@@ -124,6 +127,36 @@ export class ClassRepository {
     return enrollments
       .map((e) => e.class)
       .filter((c): c is Class => Boolean(c?.isActive));
+  }
+
+  /**
+   * Creates the classes and enrols each one's students in a single transaction, so either every
+   * class with its students is created or nothing is.
+   */
+  async createWithStudents(
+    entries: ReadonlyArray<{
+      data: Partial<Class>;
+      studentIds: readonly string[];
+    }>,
+  ): Promise<void> {
+    if (entries.length === 0) return;
+    await this.classRepo.manager.transaction(async (manager) => {
+      const inserted = await manager.insert(
+        Class,
+        entries.map((entry) => entry.data),
+      );
+      const enrollments = entries.flatMap((entry, index) => {
+        const classId = String(inserted.identifiers[index]?.id ?? '');
+        if (!classId) throw new Error('A created class returned no id');
+        return entry.studentIds.map((studentId) => ({ classId, studentId }));
+      });
+      for (let start = 0; start < enrollments.length; start += ENROLL_CHUNK) {
+        await manager.insert(
+          ClassStudent,
+          enrollments.slice(start, start + ENROLL_CHUNK),
+        );
+      }
+    });
   }
 
   /** Every class the lecturer has, ended ones included, with the relations a class list needs. */

@@ -1,4 +1,4 @@
-import type { CellValue } from 'exceljs';
+import type { CellValue, Worksheet } from 'exceljs';
 import type { ClassImportRowPayload } from '../types/courses.types';
 
 /** Largest import file; the backend enforces the same limit. */
@@ -115,6 +115,19 @@ export const parseClassRecords = (records: string[][]): ParsedClassImportFile =>
   return { rows, error: null };
 };
 
+/** The cells of a sheet as text: `records[n]` is row n + 1, so indexes match the row numbers Excel shows. */
+export const sheetToRecords = (sheet: Worksheet): string[][] => {
+  const records: string[][] = [];
+  sheet.eachRow({ includeEmpty: true }, (row, rowNumber) => {
+    const cells: string[] = [];
+    row.eachCell({ includeEmpty: true }, (cell, columnNumber) => {
+      cells[columnNumber - 1] = cellToText(cell.value);
+    });
+    records[rowNumber - 1] = Array.from(cells, (cell) => cell ?? '');
+  });
+  return Array.from(records, (record) => record ?? []);
+};
+
 /** Reads an .xlsx file: the sheet named "Classes" if there is one, otherwise the first sheet. */
 export const parseClassWorkbook = async (
   content: ArrayBuffer,
@@ -130,15 +143,7 @@ export const parseClassWorkbook = async (
   const sheet = workbook.getWorksheet(CLASSES_SHEET) ?? workbook.worksheets[0];
   if (!sheet) return failure('The file has no sheet.');
 
-  const records: string[][] = [];
-  sheet.eachRow({ includeEmpty: true }, (row, rowNumber) => {
-    const cells: string[] = [];
-    row.eachCell({ includeEmpty: true }, (cell, columnNumber) => {
-      cells[columnNumber - 1] = cellToText(cell.value);
-    });
-    records[rowNumber - 1] = Array.from(cells, (cell) => cell ?? '');
-  });
-  return parseClassRecords(Array.from(records, (record) => record ?? []));
+  return parseClassRecords(sheetToRecords(sheet));
 };
 
 const GUIDE_ROWS: readonly (readonly string[])[] = [

@@ -1,6 +1,8 @@
 import { get, patch, post } from '@/core/api/http';
 import type {
   ClassFilters,
+  ClassDataImportResult,
+  ClassFilePayload,
   ClassImportResult,
   ClassImportRowPayload,
   ClassView,
@@ -57,4 +59,11 @@ export const classService = {
     dryRun: boolean,
   ): Promise<ClassImportResult> =>
     post<ClassImportResult>('/api/classes/import', { rows, dryRun }),
+
+  /** Creates the classes of several roster files and adds their students; `dryRun` only reports. */
+  importClassData: (
+    files: ClassFilePayload[],
+    dryRun: boolean,
+  ): Promise<ClassDataImportResult> =>
+    post<ClassDataImportResult>('/api/classes/import-data', { files, dryRun }),
 };

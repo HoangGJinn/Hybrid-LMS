@@ -32,7 +32,7 @@ interface NormalizedRow {
 }
 
 /** A row that passed validation, with the ids it points at. */
-interface ValidRow {
+export interface ValidClassRow {
   readonly row: NormalizedRow;
   readonly classCode: string;
   readonly name: string;
@@ -41,8 +41,14 @@ interface ValidRow {
   readonly lecturer: LecturerSummary;
 }
 
+/** What an import row turns into: its result, plus the class to create when the result is `created`. */
+export interface PlannedClassRow {
+  readonly result: ClassImportRowResult;
+  readonly valid: ValidClassRow | null;
+}
+
 type Validation =
-  | { readonly ok: true; readonly value: ValidRow }
+  | { readonly ok: true; readonly value: ValidClassRow }
   | { readonly ok: false; readonly message: string };
 
 const unique = <T>(values: T[]): T[] => [...new Set(values)];
@@ -76,9 +82,44 @@ export class ClassImportService {
 
   async importClasses(dto: ImportClassesDto): Promise<ClassImportResult> {
     const dryRun = dto.dryRun ?? false;
-    const rows = dto.rows.map(normalize);
+    const planned = await this.plan(
+      dto.rows,
+      (line) => `row ${line} in the file`,
+    );
+    const results = planned.map((item) => item.result);
+    const toCreate = planned.flatMap((item) =>
+      item.valid ? [item.valid] : [],
+    );
 
-    const lecturerValues = rows.map((row) => row.lecturer).filter(notNull);
+    if (!dryRun && toCreate.length > 0) await this.save(toCreate);
+
+    const count = (status: ClassImportRowStatus): number =>
+      results.filter((result) => result.status === status).length;
+    return {
+      dryRun,
+      total: results.length,
+      created: count('created'),
+      skipped: count('skipped'),
+      failed: count('error'),
+      rows: results,
+    };
+  }
+
+  /**
+   * Decides, for every row, whether its class would be created, skipped as a duplicate (code already
+   * used, or repeated by an earlier row) or rejected. Nothing is written. `line` must be unique per
+   * row, and `locate` turns the line of an earlier row into words for the "duplicate of" message.
+   * The result is in the order of `rows`.
+   */
+  async plan(
+    rows: readonly ImportClassRowDto[],
+    locate: (line: number) => string,
+  ): Promise<PlannedClassRow[]> {
+    const normalized = rows.map(normalize);
+
+    const lecturerValues = normalized
+      .map((row) => row.lecturer)
+      .filter(notNull);
     const lecturerCodes = unique(
       lecturerValues
         .filter((value) => !isEmail(value))
@@ -94,7 +135,7 @@ export class ClassImportService {
         this.userFacade.findLecturersByCodes(lecturerCodes),
         this.userFacade.findLecturersByEmails(lecturerEmails),
         this.classRepo.findExistingCodes(
-          unique(rows.map((row) => row.classCode).filter(notNull)),
+          unique(normalized.map((row) => row.classCode).filter(notNull)),
         ),
       ]);
 
@@ -112,8 +153,14 @@ export class ClassImportService {
     );
 
     const firstLineOfCode = new Map<string, number>();
-    const toCreate: ValidRow[] = [];
-    const results = rows.map((row): ClassImportRowResult => {
+    return normalized.map((row): PlannedClassRow => {
+      const reject = (
+        status: ClassImportRowStatus,
+        message: string,
+      ): PlannedClassRow => ({
+        result: this.result(row, status, message),
+        valid: null,
+      });
       const validation = this.validate(
         row,
         subjectIndex,
@@ -121,42 +168,23 @@ export class ClassImportService {
         lecturerCodeIndex,
         lecturerEmailIndex,
       );
-      if (!validation.ok) return this.result(row, 'error', validation.message);
+      if (!validation.ok) return reject('error', validation.message);
 
       const { value } = validation;
       const key = value.classCode.toLowerCase();
       if (existingCodes.has(key)) {
-        return this.result(
-          row,
+        return reject(
           'skipped',
           `Class code ${value.classCode} already exists`,
         );
       }
       const earlierLine = firstLineOfCode.get(key);
       if (earlierLine !== undefined) {
-        return this.result(
-          row,
-          'skipped',
-          `Duplicate of row ${earlierLine} in the file`,
-        );
+        return reject('skipped', `Duplicate of ${locate(earlierLine)}`);
       }
       firstLineOfCode.set(key, row.line);
-      toCreate.push(value);
-      return this.result(row, 'created', null);
+      return { result: this.result(row, 'created', null), valid: value };
     });
-
-    if (!dryRun && toCreate.length > 0) await this.save(toCreate);
-
-    const count = (status: ClassImportRowStatus): number =>
-      results.filter((result) => result.status === status).length;
-    return {
-      dryRun,
-      total: results.length,
-      created: count('created'),
-      skipped: count('skipped'),
-      failed: count('error'),
-      rows: results,
-    };
   }
 
   /** Required cells, length limits and the subject, semester and lecturer the row points at. */
@@ -216,7 +244,7 @@ export class ClassImportService {
     };
   }
 
-  private async save(valid: ValidRow[]): Promise<void> {
+  private async save(valid: ValidClassRow[]): Promise<void> {
     try {
       await this.classRepo.createMany(
         valid.map((item) => ({

@@ -15,6 +15,9 @@ import { ClassService } from '../services/class.service.js';
 import { CreateClassDto } from '../dto/create-class.dto.js';
 import { UpdateClassDto } from '../dto/update-class.dto.js';
 import { ImportClassesDto } from '../dto/import-classes.dto.js';
+import { ImportClassDataDto } from '../dto/import-class-data.dto.js';
+import { ClassDataImportService } from '../services/class-data-import.service.js';
+import { ClassDataImportResult } from '../types/class-data-import.type.js';
 import { ClassExportService } from '../services/class-export.service.js';
 import { ClassImportService } from '../services/class-import.service.js';
 import { sendXlsx } from '../../../shared/excel/workbook.util.js';
@@ -36,6 +39,7 @@ export class ClassController {
   constructor(
     private readonly classService: ClassService,
     private readonly importService: ClassImportService,
+    private readonly dataImportService: ClassDataImportService,
     private readonly exportService: ClassExportService,
     private readonly academicFacade: AcademicFacade,
   ) {}
@@ -85,6 +89,18 @@ export class ClassController {
     @Body() dto: ImportClassesDto,
   ): Promise<ClassImportResult> {
     return this.importService.importClasses(dto);
+  }
+
+  /**
+   * Creates the classes of several roster files and adds their students. With `dryRun` it only
+   * reports, per file and row, what would happen; without it everything valid is created in one
+   * transaction.
+   */
+  @Post('import-data')
+  async importClassData(
+    @Body() dto: ImportClassDataDto,
+  ): Promise<ClassDataImportResult> {
+    return this.dataImportService.importData(dto);
   }
 
   /**
