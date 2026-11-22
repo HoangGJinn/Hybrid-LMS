@@ -29,7 +29,7 @@ const DocumentViewerPage = () => {
         <EmptyState
           title="Document not found"
           action={
-            <Link to={`/student/courses/${courseId}`}>Back to course</Link>
+            <Link to={courseBase}>Back to course</Link>
           }
         />
       }
@@ -63,7 +63,7 @@ const DocumentViewerPage = () => {
                   {quizzes.data.map((q) => (
                     <li key={q.id}>
                       <Link
-                        to={`/student/courses/${courseId}/quizzes/${q.id}`}
+                        to={`${courseBase}/quizzes/${q.id}`}
                         className="flex items-center justify-between rounded-md border p-2 text-sm text-foreground no-underline hover:border-primary"
                       >
                         <span>{q.title}</span>
