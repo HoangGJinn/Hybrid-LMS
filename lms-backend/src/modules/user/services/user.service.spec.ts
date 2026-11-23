@@ -181,7 +181,10 @@ describe('UserService', () => {
 
       const result = await service.getProfileCode('user-uuid-1');
 
-      expect(mockUserRepo.findProfileCode).toHaveBeenCalledWith('user-uuid-1');
+      expect(mockUserRepo.findProfileCode).toHaveBeenCalledWith(
+        'user-uuid-1',
+        undefined,
+      );
       expect(result).toBe('SV2005001');
     });
   });

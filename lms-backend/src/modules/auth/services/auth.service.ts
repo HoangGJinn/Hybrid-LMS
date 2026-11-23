@@ -323,6 +323,9 @@ export class AuthService {
   }
 
   private async toSessionUser(user: UserView): Promise<SessionUser> {
-    return { ...user, code: await this.userFacade.getProfileCode(user.id) };
+    return {
+      ...user,
+      code: await this.userFacade.getProfileCode(user.id, user.role),
+    };
   }
 }

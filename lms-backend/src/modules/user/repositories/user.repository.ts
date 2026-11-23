@@ -156,7 +156,16 @@ export class UserRepository {
   }
 
   /** Student code or lecturer code of the user; null for users without such a profile (e.g. admins). */
-  async findProfileCode(userId: string): Promise<string | null> {
+  async findProfileCode(userId: string, role?: Role): Promise<string | null> {
+    if (role === Role.ADMIN) return null;
+    if (role === Role.STUDENT) {
+      const student = await this.studentRepo.findOneBy({ userId });
+      return student?.studentCode ?? null;
+    }
+    if (role === Role.LECTURER) {
+      const lecturer = await this.lecturerRepo.findOneBy({ userId });
+      return lecturer?.lecturerCode ?? null;
+    }
     const student = await this.studentRepo.findOneBy({ userId });
     if (student) return student.studentCode;
     const lecturer = await this.lecturerRepo.findOneBy({ userId });
@@ -176,54 +185,29 @@ export class UserRepository {
   }
 
   /**
-   * Finds a user by email, student code, lecturer code, or email prefix,
+   * Finds a user by email, student code, lecturer code, or email prefix in a single query,
    * explicitly selecting the password_hash column (which is excluded by default).
    */
   async findForPasswordAuth(identifier: string): Promise<User | null> {
     const trimmed = identifier.trim();
     if (!trimmed) return null;
+    const code = trimmed.toUpperCase();
+    const prefix = `${escapeLike(trimmed)}@%`;
 
-    // 1. Direct email lookup
-    const userByEmail = await this.userRepo
+    return this.userRepo
       .createQueryBuilder('u')
       .addSelect('u.passwordHash')
-      .where('LOWER(u.email) = LOWER(:email)', { email: trimmed })
+      .leftJoin(Student, 's', 's.userId = u.id')
+      .leftJoin(Lecturer, 'l', 'l.userId = u.id')
+      .where(
+        '(LOWER(u.email) = LOWER(:email) OR s.studentCode = :code OR l.lecturerCode = :code OR LOWER(u.email) LIKE LOWER(:prefix))',
+        { email: trimmed, code, prefix },
+      )
+      .orderBy(
+        'CASE WHEN LOWER(u.email) = LOWER(:email) THEN 1 WHEN s.studentCode = :code THEN 2 WHEN l.lecturerCode = :code THEN 3 ELSE 4 END',
+        'ASC',
+      )
       .getOne();
-    if (userByEmail) return userByEmail;
-
-    // 2. Student code lookup (e.g. SV26000001)
-    const student = await this.studentRepo.findOne({
-      where: { studentCode: trimmed.toUpperCase() },
-    });
-    if (student) {
-      return this.userRepo
-        .createQueryBuilder('u')
-        .addSelect('u.passwordHash')
-        .where('u.id = :id', { id: student.userId })
-        .getOne();
-    }
-
-    // 3. Lecturer code lookup (e.g. GV26000001)
-    const lecturer = await this.lecturerRepo.findOne({
-      where: { lecturerCode: trimmed.toUpperCase() },
-    });
-    if (lecturer) {
-      return this.userRepo
-        .createQueryBuilder('u')
-        .addSelect('u.passwordHash')
-        .where('u.id = :id', { id: lecturer.userId })
-        .getOne();
-    }
-
-    // 4. Quick username prefix lookup (e.g. 'student1' matches 'student1@%')
-    const userByPrefix = await this.userRepo
-      .createQueryBuilder('u')
-      .addSelect('u.passwordHash')
-      .where('LOWER(u.email) LIKE LOWER(:prefix)', { prefix: `${trimmed}@%` })
-      .getOne();
-    if (userByPrefix) return userByPrefix;
-
-    return null;
   }
 
   /**

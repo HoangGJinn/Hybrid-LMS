@@ -187,6 +187,29 @@ describe('UserRepository', () => {
 
       expect(code).toBeNull();
     });
+
+    it('skips both profile tables when role is ADMIN', async () => {
+      const code = await repository.findProfileCode('adm-1', Role.ADMIN);
+
+      expect(code).toBeNull();
+      expect(mockStudentRepo.findOneBy).not.toHaveBeenCalled();
+      expect(mockLecturerRepo.findOneBy).not.toHaveBeenCalled();
+    });
+
+    it('skips students table when role is LECTURER', async () => {
+      mockLecturerRepo.findOneBy!.mockResolvedValue({
+        userId: 'lec-1',
+        lecturerCode: 'GV26000001',
+      } as any);
+
+      const code = await repository.findProfileCode('lec-1', Role.LECTURER);
+
+      expect(code).toBe('GV26000001');
+      expect(mockStudentRepo.findOneBy).not.toHaveBeenCalled();
+      expect(mockLecturerRepo.findOneBy).toHaveBeenCalledWith({
+        userId: 'lec-1',
+      });
+    });
   });
 
   describe('queries: findByEmail, findBySsoId, findById, findByRole', () => {
@@ -654,6 +677,40 @@ describe('UserRepository', () => {
       });
       expect(res.isActive).toBe(false);
       expect(res.deletedAt).toEqual(deletedAt);
+    });
+  });
+
+  describe('findForPasswordAuth', () => {
+    it('returns null without querying when identifier is blank', async () => {
+      expect(await repository.findForPasswordAuth('   ')).toBeNull();
+      expect(mockUserRepo.createQueryBuilder).not.toHaveBeenCalled();
+    });
+
+    it('looks up email, student code, lecturer code, and email prefix in a single query', async () => {
+      const qb = {
+        addSelect: vi.fn().mockReturnThis(),
+        leftJoin: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        orderBy: vi.fn().mockReturnThis(),
+        getOne: vi.fn().mockResolvedValue(sampleUser),
+      };
+      mockUserRepo.createQueryBuilder!.mockReturnValue(qb);
+
+      const res = await repository.findForPasswordAuth('student_1');
+
+      expect(mockUserRepo.createQueryBuilder).toHaveBeenCalledTimes(1);
+      expect(qb.addSelect).toHaveBeenCalledWith('u.passwordHash');
+      expect(qb.leftJoin).toHaveBeenCalledWith(Student, 's', 's.userId = u.id');
+      expect(qb.leftJoin).toHaveBeenCalledWith(Lecturer, 'l', 'l.userId = u.id');
+      expect(qb.where).toHaveBeenCalledWith(
+        expect.stringContaining('s.studentCode = :code'),
+        {
+          email: 'student_1',
+          code: 'STUDENT_1',
+          prefix: 'student\\_1@%',
+        },
+      );
+      expect(res).toEqual(sampleUser);
     });
   });
 

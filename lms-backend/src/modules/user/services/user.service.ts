@@ -79,8 +79,8 @@ export class UserService {
     return this.userRepository.findByRole(role);
   }
 
-  async getProfileCode(userId: string): Promise<string | null> {
-    return this.userRepository.findProfileCode(userId);
+  async getProfileCode(userId: string, role?: Role): Promise<string | null> {
+    return this.userRepository.findProfileCode(userId, role);
   }
 
   async findByEmail(email: string): Promise<User | null> {

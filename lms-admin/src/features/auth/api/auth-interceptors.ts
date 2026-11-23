@@ -11,6 +11,7 @@ import { authKeys } from './queryKeys';
 const UNAUTHORIZED = 401;
 // A 401 from these routes is a real answer (bad login, dead refresh token), not an expired access token.
 const AUTH_URLS_WITHOUT_REFRESH = [
+  '/api/auth/login',
   '/api/auth/google',
   '/api/auth/refresh',
   '/api/auth/logout',
