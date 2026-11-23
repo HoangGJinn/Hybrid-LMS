@@ -63,3 +63,19 @@ export type AccountFilter = 'all' | 'active' | 'pending' | 'inactive';
 
 /** What a row's badge says: Pending (never signed in) → Active, or Inactive (deactivated). */
 export type AccountState = 'pending' | 'active' | 'inactive';
+
+/** One class taught by a lecturer or enrolled in by a student (mirrors backend `ClassListExportRow`). */
+export interface UserClassItem {
+  id: string;
+  classCode: string;
+  name: string;
+  subjectCode: string;
+  subjectName: string;
+  semesterCode: string;
+  semesterName: string;
+  lecturerName: string;
+  studentCount: number;
+  isActive: boolean;
+  endedAt: string | null;
+  joinedAt: string | null;
+}

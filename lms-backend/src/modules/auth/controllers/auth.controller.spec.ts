@@ -4,7 +4,10 @@ import type { Request, Response } from 'express';
 import { AuthController } from './auth.controller.js';
 import { AuthService } from '../services/auth.service.js';
 import { Role } from '../../../common/enums/role.enum.js';
-import { REFRESH_COOKIE_NAME } from '../constants/refresh-cookie-name.constant.js';
+import {
+  ADMIN_REFRESH_COOKIE_NAME,
+  REFRESH_COOKIE_NAME,
+} from '../constants/refresh-cookie-name.constant.js';
 import { SessionUser } from '../types/session-user.type.js';
 
 describe('AuthController', () => {
@@ -57,6 +60,7 @@ describe('AuthController', () => {
 
       expect(mockAuthService.loginWithGoogle).toHaveBeenCalledWith(
         'google.id.token',
+        [Role.STUDENT, Role.LECTURER],
       );
       expect(mockResponse.cookie).toHaveBeenCalledWith(
         REFRESH_COOKIE_NAME,
@@ -83,10 +87,13 @@ describe('AuthController', () => {
         mockResponse as unknown as Response,
       );
 
-      expect(mockAuthService.loginWithCredentials).toHaveBeenCalledWith({
-        username: 'student1',
-        password: 'admine123456',
-      });
+      expect(mockAuthService.loginWithCredentials).toHaveBeenCalledWith(
+        {
+          username: 'student1',
+          password: 'admine123456',
+        },
+        [Role.STUDENT, Role.LECTURER],
+      );
       expect(mockResponse.cookie).toHaveBeenCalledWith(
         REFRESH_COOKIE_NAME,
         'refresh.uuid',
@@ -240,6 +247,155 @@ describe('AuthController', () => {
       } finally {
         process.env.REFRESH_COOKIE_SAME_SITE = originalEnv;
         process.env.FRONTEND_URL = originalFrontendUrl;
+      }
+    });
+  });
+
+  describe('admin origin cookie isolation', () => {
+    it('sets admin_refresh_token when loginWithGoogle originates from ADMIN_URL', async () => {
+      const originalAdminUrl = process.env.ADMIN_URL;
+      process.env.ADMIN_URL = 'https://admin.adalms.tech';
+      try {
+        mockAuthService.loginWithGoogle!.mockResolvedValue({
+          accessToken: 'admin.jwt',
+          refreshToken: 'admin.refresh.uuid',
+          user: { ...sampleSessionUser, role: Role.ADMIN },
+        });
+        const mockReq = {
+          headers: { origin: 'https://admin.adalms.tech' },
+        } as unknown as Request;
+
+        await controller.loginWithGoogle(
+          { idToken: 'google.id.token' },
+          mockResponse as unknown as Response,
+          mockReq,
+        );
+
+        expect(mockResponse.cookie).toHaveBeenCalledWith(
+          ADMIN_REFRESH_COOKIE_NAME,
+          'admin.refresh.uuid',
+          expect.objectContaining({ httpOnly: true }),
+        );
+      } finally {
+        if (originalAdminUrl === undefined) delete process.env.ADMIN_URL;
+        else process.env.ADMIN_URL = originalAdminUrl;
+      }
+    });
+
+    it('sets admin_refresh_token when login originates from localhost:3001', async () => {
+      mockAuthService.loginWithCredentials!.mockResolvedValue({
+        accessToken: 'admin.jwt',
+        refreshToken: 'admin.refresh.uuid',
+        user: { ...sampleSessionUser, role: Role.ADMIN },
+      });
+      const mockReq = {
+        headers: { origin: 'http://localhost:3001' },
+      } as unknown as Request;
+
+      await controller.login(
+        { username: 'admin1', password: 'password123' },
+        mockResponse as unknown as Response,
+        mockReq,
+      );
+
+      expect(mockResponse.cookie).toHaveBeenCalledWith(
+        ADMIN_REFRESH_COOKIE_NAME,
+        'admin.refresh.uuid',
+        expect.objectContaining({ httpOnly: true }),
+      );
+    });
+
+    it('reads and rotates only admin_refresh_token on refresh from ADMIN_URL', async () => {
+      const originalAdminUrl = process.env.ADMIN_URL;
+      process.env.ADMIN_URL = 'https://admin.adalms.tech';
+      try {
+        const mockReq = {
+          cookies: {
+            [REFRESH_COOKIE_NAME]: 'lecturer.refresh.token',
+            [ADMIN_REFRESH_COOKIE_NAME]: 'admin.refresh.token',
+          },
+          headers: { origin: 'https://admin.adalms.tech' },
+        } as unknown as Request;
+        mockAuthService.refresh!.mockResolvedValue({
+          accessToken: 'new.admin.jwt',
+          refreshToken: 'new.admin.refresh',
+          user: { ...sampleSessionUser, role: Role.ADMIN },
+        });
+
+        const result = await controller.refresh(
+          mockReq,
+          mockResponse as unknown as Response,
+        );
+
+        expect(mockAuthService.refresh).toHaveBeenCalledWith(
+          'admin.refresh.token',
+        );
+        expect(mockResponse.cookie).toHaveBeenCalledWith(
+          ADMIN_REFRESH_COOKIE_NAME,
+          'new.admin.refresh',
+          expect.objectContaining({ httpOnly: true }),
+        );
+        expect(result).toEqual({ accessToken: 'new.admin.jwt' });
+      } finally {
+        if (originalAdminUrl === undefined) delete process.env.ADMIN_URL;
+        else process.env.ADMIN_URL = originalAdminUrl;
+      }
+    });
+
+    it('revokes and clears only admin_refresh_token on logout from ADMIN_URL', async () => {
+      const originalAdminUrl = process.env.ADMIN_URL;
+      process.env.ADMIN_URL = 'https://admin.adalms.tech';
+      try {
+        const mockReq = {
+          cookies: {
+            [REFRESH_COOKIE_NAME]: 'lecturer.refresh.token',
+            [ADMIN_REFRESH_COOKIE_NAME]: 'admin.refresh.token',
+          },
+          headers: { origin: 'https://admin.adalms.tech' },
+        } as unknown as Request;
+        mockAuthService.logout!.mockResolvedValue(undefined);
+
+        await controller.logout(mockReq, mockResponse as unknown as Response);
+
+        expect(mockAuthService.logout).toHaveBeenCalledWith(
+          'admin.refresh.token',
+        );
+        expect(mockResponse.clearCookie).toHaveBeenCalledWith(
+          ADMIN_REFRESH_COOKIE_NAME,
+          expect.anything(),
+        );
+      } finally {
+        if (originalAdminUrl === undefined) delete process.env.ADMIN_URL;
+        else process.env.ADMIN_URL = originalAdminUrl;
+      }
+    });
+
+    it('passes ADMIN-only role restriction to AuthService when logging in from ADMIN_URL', async () => {
+      const originalAdminUrl = process.env.ADMIN_URL;
+      process.env.ADMIN_URL = 'https://admin.adalms.tech';
+      try {
+        mockAuthService.loginWithGoogle!.mockResolvedValue({
+          accessToken: 'admin.jwt',
+          refreshToken: 'admin.refresh.uuid',
+          user: { ...sampleSessionUser, role: Role.ADMIN },
+        });
+        const mockReq = {
+          headers: { origin: 'https://admin.adalms.tech' },
+        } as unknown as Request;
+
+        await controller.loginWithGoogle(
+          { idToken: 'google.id.token' },
+          mockResponse as unknown as Response,
+          mockReq,
+        );
+
+        expect(mockAuthService.loginWithGoogle).toHaveBeenCalledWith(
+          'google.id.token',
+          [Role.ADMIN],
+        );
+      } finally {
+        if (originalAdminUrl === undefined) delete process.env.ADMIN_URL;
+        else process.env.ADMIN_URL = originalAdminUrl;
       }
     });
   });
