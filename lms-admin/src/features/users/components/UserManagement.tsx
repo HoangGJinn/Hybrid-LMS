@@ -36,6 +36,7 @@ import {
   toHasLoggedIn,
   toIsActive,
 } from '../utils/user-display';
+import { UserClassesModal } from './UserClassesModal';
 import { UserFormModal } from './UserFormModal';
 import { UserStatusConfirm, type StatusTarget } from './UserStatusConfirm';
 
@@ -63,6 +64,8 @@ export const UserManagement = ({ role }: { role: ManagedRole }) => {
     user: null,
   });
   const [statusTarget, setStatusTarget] = useState<StatusTarget | null>(null);
+  const [viewingClassesUser, setViewingClassesUser] =
+    useState<ManagedUser | null>(null);
   const exportClasses = useExportUserClasses(role);
 
   const search = useDebouncedValue(searchInput, SEARCH_DEBOUNCE_MS);
@@ -102,7 +105,12 @@ export const UserManagement = ({ role }: { role: ManagedRole }) => {
       header: 'Name',
       className: 'min-w-56',
       render: (item) => (
-        <div className="flex items-center gap-3">
+        <button
+          type="button"
+          title={`${config.viewClassesLabel}: ${item.fullName}`}
+          onClick={() => setViewingClassesUser(item)}
+          className="group flex w-full min-w-0 items-center gap-3 border-0 bg-transparent p-0 text-left"
+        >
           {item.avatarUrl ? (
             <img
               src={item.avatarUrl}
@@ -119,12 +127,14 @@ export const UserManagement = ({ role }: { role: ManagedRole }) => {
             </div>
           )}
           <div className="min-w-0">
-            <p className="m-0 truncate font-medium">{item.fullName}</p>
+            <p className="m-0 truncate font-medium text-foreground group-hover:text-brand group-hover:underline">
+              {item.fullName}
+            </p>
             <p className="m-0 truncate text-xs text-muted-foreground">
               {item.email}
             </p>
           </div>
-        </div>
+        </button>
       ),
     },
     {
@@ -314,6 +324,16 @@ export const UserManagement = ({ role }: { role: ManagedRole }) => {
         target={statusTarget}
         role={role}
         onClose={() => setStatusTarget(null)}
+      />
+      <UserClassesModal
+        user={viewingClassesUser}
+        role={role}
+        isExporting={
+          exportClasses.isPending &&
+          exportClasses.variables?.userId === viewingClassesUser?.id
+        }
+        onExport={exportUserClasses}
+        onClose={() => setViewingClassesUser(null)}
       />
     </>
   );

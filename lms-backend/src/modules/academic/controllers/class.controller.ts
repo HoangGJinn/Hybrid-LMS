@@ -19,6 +19,7 @@ import { ImportClassDataDto } from '../dto/import-class-data.dto.js';
 import { ClassDataImportService } from '../services/class-data-import.service.js';
 import { ClassDataImportResult } from '../types/class-data-import.type.js';
 import { ClassExportService } from '../services/class-export.service.js';
+import type { ClassListExportRow } from '../utils/class-list-export.builder.js';
 import { ClassImportService } from '../services/class-import.service.js';
 import { sendXlsx } from '../../../shared/excel/workbook.util.js';
 import { ClassImportResult } from '../types/class-import.type.js';
@@ -101,6 +102,22 @@ export class ClassController {
     @Body() dto: ImportClassDataDto,
   ): Promise<ClassDataImportResult> {
     return this.dataImportService.importData(dto);
+  }
+
+  /** JSON list of every class the lecturer teaches (ended ones included), for admin user details. */
+  @Get('lecturers/:lecturerId')
+  async getLecturerClasses(
+    @Param('lecturerId', ParseUUIDPipe) lecturerId: string,
+  ): Promise<ClassListExportRow[]> {
+    return this.exportService.getLecturerClasses(lecturerId);
+  }
+
+  /** JSON list of every class the student is enrolled in (ended ones included), for admin user details. */
+  @Get('students/:studentId')
+  async getStudentClasses(
+    @Param('studentId', ParseUUIDPipe) studentId: string,
+  ): Promise<ClassListExportRow[]> {
+    return this.exportService.getStudentClasses(studentId);
   }
 
   /**
