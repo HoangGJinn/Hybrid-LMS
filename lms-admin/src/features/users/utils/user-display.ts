@@ -102,3 +102,16 @@ export const toIsDeleted = (filter: AccountFilter): boolean | undefined =>
 /** A student code starts with SV and a lecturer code with GV; the same rule as the backend. */
 export const isCodeForRole = (code: string, role: ManagedRole): boolean =>
   code.startsWith(ROLE_CONFIG[role].codePrefix);
+
+export const ONLINE_WINDOW_MS = 5 * 60 * 1000;
+
+export const isUserOnline = (
+  lastSeenAt: string | null | undefined,
+  now: Date = new Date(),
+): boolean => {
+  if (!lastSeenAt) return false;
+  const seenMs = new Date(lastSeenAt).getTime();
+  if (Number.isNaN(seenMs)) return false;
+  const diff = now.getTime() - seenMs;
+  return diff >= 0 && diff <= ONLINE_WINDOW_MS;
+};

@@ -51,6 +51,9 @@ export class User {
   @Column({ name: 'deleted_by', type: 'uuid', nullable: true })
   deletedBy?: string | null;
 
+  @Column({ name: 'last_seen_at', type: 'timestamptz', nullable: true })
+  lastSeenAt?: Date | null;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   readonly createdAt: Date;
 

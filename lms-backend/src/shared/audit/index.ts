@@ -1,5 +1,6 @@
 export { AuditModule } from './audit.module.js';
 export { AuditFacade } from './facades/audit.facade.js';
+export { PresenceService } from './services/presence.service.js';
 export { AuditContextInterceptor } from './interceptors/audit-context.interceptor.js';
 export { AuditAction } from './enums/audit-action.enum.js';
 export { AuditCategory } from './enums/audit-category.enum.js';

@@ -24,6 +24,7 @@ export interface ManagedUser {
   /** false = pre-provisioned account nobody has signed in to yet ("Pending"). */
   hasLoggedIn: boolean;
   deletedAt?: string | null;
+  lastSeenAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }

@@ -3,6 +3,7 @@ import type { ManagedUser } from '../types/users.types';
 import {
   getAccountState,
   isCodeForRole,
+  isUserOnline,
   getStatusLabel,
   getStatusVariant,
   toHasLoggedIn,
@@ -108,5 +109,14 @@ describe('account filters', () => {
     expect(toIsActive('removed')).toBeUndefined();
     expect(toHasLoggedIn('removed')).toBeUndefined();
     expect(toIsDeleted('removed')).toBe(true);
+  });
+});
+
+describe('isUserOnline', () => {
+  it('returns true when lastSeenAt is within 5 minutes and false otherwise', () => {
+    const now = new Date('2026-11-23T12:00:00Z');
+    expect(isUserOnline('2026-11-23T11:57:00Z', now)).toBe(true);
+    expect(isUserOnline('2026-11-23T11:50:00Z', now)).toBe(false);
+    expect(isUserOnline(null, now)).toBe(false);
   });
 });

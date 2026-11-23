@@ -28,6 +28,7 @@ export class ManagedUserView {
   /** false = pre-provisioned account that nobody has signed in to yet ("pending"). */
   hasLoggedIn: boolean;
   deletedAt?: Date | null;
+  lastSeenAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
 
@@ -43,6 +44,7 @@ export class ManagedUserView {
     view.profileStatus = profile?.status ?? null;
     view.hasLoggedIn = user.ssoId !== null;
     view.deletedAt = user.deletedAt ?? null;
+    view.lastSeenAt = user.lastSeenAt ?? null;
     view.createdAt = user.createdAt;
     view.updatedAt = user.updatedAt;
     return view;

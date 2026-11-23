@@ -4,6 +4,7 @@ import {
   ExecutionContext,
   Injectable,
   NestInterceptor,
+  Optional,
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { Observable } from 'rxjs';
@@ -12,6 +13,7 @@ import {
   auditContextStorage,
   type AuditRequestContext,
 } from '../context/audit-context.js';
+import { PresenceService } from '../services/presence.service.js';
 
 const MAX_IP_LENGTH = 45;
 
@@ -42,6 +44,10 @@ const extractHeader = (
  */
 @Injectable()
 export class AuditContextInterceptor implements NestInterceptor {
+  constructor(
+    @Optional() private readonly presenceService?: PresenceService,
+  ) {}
+
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     if (context.getType() !== 'http') {
       return next.handle();
@@ -49,6 +55,9 @@ export class AuditContextInterceptor implements NestInterceptor {
     const req = context
       .switchToHttp()
       .getRequest<Request & { user?: AuthenticatedUser }>();
+    if (req.user?.id) {
+      void this.presenceService?.touch(req.user.id);
+    }
     const ctx: AuditRequestContext = {
       actor: req.user
         ? {
