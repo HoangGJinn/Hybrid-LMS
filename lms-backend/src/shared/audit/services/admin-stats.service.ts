@@ -1,12 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import {
   AdminStatsRepository,
+  type DailyLoginRow,
   type SemesterRow,
 } from '../repositories/admin-stats.repository.js';
 import type {
   ActiveSemesterOverview,
   AdminDashboardOverview,
   AdminDashboardTrends,
+  HourlyActivityPoint,
 } from '../types/admin-dashboard-overview.type.js';
 
 export const ONLINE_WINDOW_MS = 5 * 60 * 1000;
@@ -55,6 +57,35 @@ const normalizeTrendDays = (days: number | undefined): number =>
     ? (days as number)
     : DEFAULT_TREND_DAYS;
 
+const buildTrends = (
+  dailyRows: DailyLoginRow[],
+  hourlyRows: HourlyActivityPoint[],
+  dailyFrom: Date,
+  days: number,
+): AdminDashboardTrends => {
+  const byDate = new Map(dailyRows.map((row) => [row.date, row]));
+  const loginsByDay = Array.from({ length: days }, (_, index) => {
+    const date = toVietnamDateKey(
+      new Date(dailyFrom.getTime() + index * DAY_MS),
+    );
+    const row = byDate.get(date);
+    return {
+      date,
+      succeeded: row?.succeeded ?? 0,
+      failed: row?.failed ?? 0,
+      activeUsers: row?.activeUsers ?? 0,
+    };
+  });
+
+  const byHour = new Map(hourlyRows.map((row) => [row.hour, row.count]));
+  const activityByHour = Array.from({ length: 24 }, (_, hour) => ({
+    hour,
+    count: byHour.get(hour) ?? 0,
+  }));
+
+  return { days, loginsByDay, activityByHour };
+};
+
 @Injectable()
 export class AdminStatsService {
   constructor(private readonly statsRepo: AdminStatsRepository) {}
@@ -67,86 +98,51 @@ export class AdminStatsService {
     const onlineCutoff = new Date(now.getTime() - ONLINE_WINDOW_MS);
     const last24hCutoff = new Date(now.getTime() - DAY_MS);
     const startOfToday = getStartOfVietnamDay(now);
-
-    const semester = await this.statsRepo.findCurrentOrLatestSemester(now);
-
-    const [
-      classes,
-      students,
-      lecturers,
-      trafficCounts,
-      onlineUsers,
-      emptyActiveClasses,
-      classesWithInactiveLecturer,
-      subjectDistribution,
-      trends,
-    ] = await Promise.all([
-      this.statsRepo.getClassStats(semester?.id ?? null),
-      this.statsRepo.getStudentStats(),
-      this.statsRepo.getLecturerStats(),
-      this.statsRepo.getTrafficStats(onlineCutoff, startOfToday, last24hCutoff),
-      this.statsRepo.findOnlineUsers(onlineCutoff),
-      this.statsRepo.findEmptyActiveClasses(),
-      this.statsRepo.findClassesWithInactiveLecturer(),
-      this.statsRepo.findSubjectDistribution(),
-      this.buildTrends(startOfToday, trendDays),
-    ]);
-
-    return {
-      classes,
-      students,
-      lecturers,
-      activeSemester: buildSemesterOverview(semester, now),
-      traffic: {
-        ...trafficCounts,
-        onlineUsers,
-      },
-      attention: {
-        emptyActiveClasses: emptyActiveClasses.items,
-        emptyActiveClassesCount: emptyActiveClasses.totalCount,
-        classesWithInactiveLecturer: classesWithInactiveLecturer.items,
-        classesWithInactiveLecturerCount:
-          classesWithInactiveLecturer.totalCount,
-      },
-      subjectDistribution,
-      trends,
-    };
-  }
-
-  /** Builds zero-filled daily and hourly series so charts never have gaps. */
-  private async buildTrends(
-    startOfToday: Date,
-    days: number,
-  ): Promise<AdminDashboardTrends> {
-    const dailyFrom = new Date(startOfToday.getTime() - (days - 1) * DAY_MS);
+    const dailyFrom = new Date(
+      startOfToday.getTime() - (trendDays - 1) * DAY_MS,
+    );
     const hourlyFrom = new Date(
       startOfToday.getTime() - (HOURLY_WINDOW_DAYS - 1) * DAY_MS,
     );
-    const [dailyRows, hourlyRows] = await Promise.all([
-      this.statsRepo.findDailyLoginTrend(dailyFrom),
-      this.statsRepo.findHourlyActivity(hourlyFrom),
+
+    const [usersOverview, academicOverview, auditOverview] = await Promise.all([
+      this.statsRepo.getUsersAndPresenceOverview(onlineCutoff, startOfToday),
+      this.statsRepo.getAcademicOverview(now),
+      this.statsRepo.getAuditOverview(
+        startOfToday,
+        last24hCutoff,
+        dailyFrom,
+        hourlyFrom,
+      ),
     ]);
 
-    const byDate = new Map(dailyRows.map((row) => [row.date, row]));
-    const loginsByDay = Array.from({ length: days }, (_, index) => {
-      const date = toVietnamDateKey(
-        new Date(dailyFrom.getTime() + index * DAY_MS),
-      );
-      const row = byDate.get(date);
-      return {
-        date,
-        succeeded: row?.succeeded ?? 0,
-        failed: row?.failed ?? 0,
-        activeUsers: row?.activeUsers ?? 0,
-      };
-    });
-
-    const byHour = new Map(hourlyRows.map((row) => [row.hour, row.count]));
-    const activityByHour = Array.from({ length: 24 }, (_, hour) => ({
-      hour,
-      count: byHour.get(hour) ?? 0,
-    }));
-
-    return { days, loginsByDay, activityByHour };
+    return {
+      classes: academicOverview.classes,
+      students: usersOverview.students,
+      lecturers: usersOverview.lecturers,
+      activeSemester: buildSemesterOverview(academicOverview.semester, now),
+      traffic: {
+        onlineNowCount: usersOverview.onlineNowCount,
+        activeUsersTodayCount: usersOverview.activeUsersTodayCount,
+        loginsTodayCount: auditOverview.loginsTodayCount,
+        failedLogins24hCount: auditOverview.failedLogins24hCount,
+        onlineUsers: usersOverview.onlineUsers,
+      },
+      attention: {
+        emptyActiveClasses: academicOverview.emptyActiveClasses.items,
+        emptyActiveClassesCount: academicOverview.emptyActiveClasses.totalCount,
+        classesWithInactiveLecturer:
+          academicOverview.classesWithInactiveLecturer.items,
+        classesWithInactiveLecturerCount:
+          academicOverview.classesWithInactiveLecturer.totalCount,
+      },
+      subjectDistribution: academicOverview.subjectDistribution,
+      trends: buildTrends(
+        auditOverview.dailyLoginTrend,
+        auditOverview.hourlyActivity,
+        dailyFrom,
+        trendDays,
+      ),
+    };
   }
 }

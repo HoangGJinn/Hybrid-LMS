@@ -10,70 +10,70 @@ describe('AdminStatsService', () => {
 
   beforeEach(() => {
     mockRepo = {
-      findCurrentOrLatestSemester: vi.fn().mockResolvedValue({
-        id: 'sem-1',
-        semesterCode: 'HK1-2026',
-        name: 'Học kỳ 1 - 2026',
-        startDate: new Date('2026-11-01T00:00:00Z'),
-        endDate: new Date('2026-12-01T00:00:00Z'),
-      }),
-      getClassStats: vi.fn().mockResolvedValue({
-        activeCount: 12,
-        endedCount: 4,
-        currentSemesterCount: 10,
-      }),
-      getStudentStats: vi.fn().mockResolvedValue({
-        totalCount: 200,
-        studyingCount: 185,
-        pendingCount: 10,
-        inactiveCount: 5,
-      }),
-      getLecturerStats: vi.fn().mockResolvedValue({
-        totalCount: 20,
-        workingCount: 18,
-        pendingCount: 2,
-        inactiveCount: 0,
-      }),
-      getTrafficStats: vi.fn().mockResolvedValue({
+      getUsersAndPresenceOverview: vi.fn().mockResolvedValue({
+        students: {
+          totalCount: 200,
+          studyingCount: 185,
+          pendingCount: 10,
+          inactiveCount: 5,
+        },
+        lecturers: {
+          totalCount: 20,
+          workingCount: 18,
+          pendingCount: 2,
+          inactiveCount: 0,
+        },
         onlineNowCount: 7,
         activeUsersTodayCount: 45,
+        onlineUsers: [
+          {
+            id: 'u1',
+            fullName: 'Nguyen Van A',
+            email: 'a@school.edu.vn',
+            avatarUrl: null,
+            role: 'STUDENT',
+            code: 'SV26000001',
+            lastSeenAt: new Date('2026-11-23T11:59:00Z'),
+          },
+        ],
+      }),
+      getAcademicOverview: vi.fn().mockResolvedValue({
+        semester: {
+          id: 'sem-1',
+          semesterCode: 'HK1-2026',
+          name: 'Học kỳ 1 - 2026',
+          startDate: new Date('2026-11-01T00:00:00Z'),
+          endDate: new Date('2026-12-01T00:00:00Z'),
+        },
+        classes: {
+          activeCount: 12,
+          endedCount: 4,
+          currentSemesterCount: 10,
+        },
+        emptyActiveClasses: { items: [], totalCount: 0 },
+        classesWithInactiveLecturer: { items: [], totalCount: 0 },
+        subjectDistribution: [
+          {
+            subjectId: 'sub-1',
+            subjectCode: 'CS101',
+            subjectName: 'Intro to CS',
+            activeClassCount: 4,
+            enrolledStudentCount: 120,
+          },
+        ],
+      }),
+      getAuditOverview: vi.fn().mockResolvedValue({
         loginsTodayCount: 52,
         failedLogins24hCount: 3,
+        dailyLoginTrend: [
+          { date: '2026-11-16', succeeded: 5, failed: 1, activeUsers: 4 },
+        ],
+        hourlyActivity: [{ hour: 9, count: 12 }],
       }),
-      findOnlineUsers: vi.fn().mockResolvedValue([
-        {
-          id: 'u1',
-          fullName: 'Nguyen Van A',
-          email: 'a@school.edu.vn',
-          avatarUrl: null,
-          role: 'STUDENT',
-          code: 'SV26000001',
-          lastSeenAt: new Date('2026-11-23T11:59:00Z'),
-        },
-      ]),
-      findEmptyActiveClasses: vi.fn().mockResolvedValue({
-        items: [],
-        totalCount: 0,
-      }),
-      findClassesWithInactiveLecturer: vi.fn().mockResolvedValue({
-        items: [],
-        totalCount: 0,
-      }),
-      findSubjectDistribution: vi.fn().mockResolvedValue([
-        {
-          subjectId: 'sub-1',
-          subjectCode: 'CS101',
-          subjectName: 'Intro to CS',
-          activeClassCount: 4,
-          enrolledStudentCount: 120,
-        },
-      ]),
-      findDailyLoginTrend: vi.fn().mockResolvedValue([
-        { date: '2026-11-16', succeeded: 5, failed: 1, activeUsers: 4 },
-      ]),
-      findHourlyActivity: vi.fn().mockResolvedValue([{ hour: 9, count: 12 }]),
     };
-    service = new AdminStatsService(mockRepo as unknown as AdminStatsRepository);
+    service = new AdminStatsService(
+      mockRepo as unknown as AdminStatsRepository,
+    );
   });
 
   it('aggregates overview stats and calculates semester progress and days remaining', async () => {
@@ -83,6 +83,7 @@ describe('AdminStatsService', () => {
     expect(overview.classes.activeCount).toBe(12);
     expect(overview.students.totalCount).toBe(200);
     expect(overview.traffic.onlineNowCount).toBe(7);
+    expect(overview.traffic.loginsTodayCount).toBe(52);
     expect(overview.traffic.onlineUsers).toHaveLength(1);
     expect(overview.activeSemester).toMatchObject({
       id: 'sem-1',
@@ -94,12 +95,18 @@ describe('AdminStatsService', () => {
   });
 
   it('returns activeSemester as null when no semesters exist', async () => {
-    mockRepo.findCurrentOrLatestSemester!.mockResolvedValue(null);
+    mockRepo.getAcademicOverview!.mockResolvedValue({
+      semester: null,
+      classes: { activeCount: 0, endedCount: 0, currentSemesterCount: 0 },
+      emptyActiveClasses: { items: [], totalCount: 0 },
+      classesWithInactiveLecturer: { items: [], totalCount: 0 },
+      subjectDistribution: [],
+    });
 
     const overview = await service.getOverview(new Date('2026-11-16T00:00:00Z'));
 
     expect(overview.activeSemester).toBeNull();
-    expect(mockRepo.getClassStats).toHaveBeenCalledWith(null);
+    expect(overview.classes.currentSemesterCount).toBe(0);
   });
 
   it('zero-fills daily and hourly trends', async () => {
@@ -126,7 +133,10 @@ describe('AdminStatsService', () => {
   });
 
   it('falls back to 14 days for unsupported windows', async () => {
-    const overview = await service.getOverview(new Date('2026-11-16T05:00:00Z'), 99);
+    const overview = await service.getOverview(
+      new Date('2026-11-16T05:00:00Z'),
+      99,
+    );
     expect(overview.trends.days).toBe(14);
     expect(overview.trends.loginsByDay).toHaveLength(14);
   });
