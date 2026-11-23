@@ -2,6 +2,7 @@ import {
   BookOpen,
   GraduationCap,
   LayoutDashboard,
+  ScrollText,
   Upload,
   Users,
 } from 'lucide-react';
@@ -19,4 +20,5 @@ export const adminNav: NavItem[] = [
   { label: 'Lecturers', to: '/lecturers', icon: Users },
   { label: 'Students', to: '/students', icon: GraduationCap },
   { label: 'Import data', to: '/import', icon: Upload },
+  { label: 'Audit Log', to: '/audit-logs', icon: ScrollText },
 ];

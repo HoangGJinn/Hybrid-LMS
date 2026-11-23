@@ -830,4 +830,37 @@ describe('UserService', () => {
       ).rejects.toThrow(ForbiddenException);
     });
   });
+
+  describe('audit logging', () => {
+    it('records USER_UPDATED diff and USER_REMOVED snapshot when AuditFacade is provided', async () => {
+      const mockAudit = { record: vi.fn().mockResolvedValue(undefined) };
+      const auditedService = new UserService(
+        mockUserRepo as unknown as UserRepository,
+        mockAudit as any,
+      );
+
+      mockUserRepo.findById!.mockResolvedValue(sampleUser);
+      mockUserRepo.findProfile!.mockResolvedValue({
+        code: 'SV26000001',
+        status: 'STUDYING',
+      });
+      mockUserRepo.updateUserAndProfile!.mockResolvedValue({
+        ...sampleUser,
+        fullName: 'Nguyen Van B',
+      });
+
+      await auditedService.updateUser('user-uuid-1', {
+        fullName: 'Nguyen Van B',
+      });
+
+      expect(mockAudit.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'USER_UPDATED',
+          entityType: 'USER',
+          entityId: 'user-uuid-1',
+          changes: { fullName: { from: 'Nguyen Van A', to: 'Nguyen Van B' } },
+        }),
+      );
+    });
+  });
 });

@@ -603,4 +603,41 @@ describe('ClassService', () => {
       expect(batchRes.get('cls-1')).toBe(10);
     });
   });
+
+  describe('audit logging', () => {
+    it('records CLASS_REMOVED when AuditFacade is provided', async () => {
+      const mockAudit = { record: vi.fn().mockResolvedValue(undefined) };
+      const auditedService = new ClassService(
+        mockClassRepo as unknown as ClassRepository,
+        mockSubjectService as unknown as SubjectService,
+        mockSemesterService as unknown as SemesterService,
+        mockUserFacade as unknown as UserFacade,
+        mockClassStudentRepo as unknown as ClassStudentRepository,
+        mockAccessPolicy as unknown as ClassAccessPolicy,
+        mockAudit as any,
+      );
+      const deletedAt = new Date();
+      mockClassRepo
+        .findById!.mockResolvedValueOnce(sampleClass)
+        .mockResolvedValueOnce({
+          ...sampleClass,
+          isActive: false,
+          endedAt: deletedAt,
+          deletedAt,
+        });
+      mockClassRepo.update!.mockResolvedValue(undefined);
+      mockClassRepo.countStudents!.mockResolvedValue(12);
+
+      await auditedService.remove('cls-uuid-1', 'admin-1');
+
+      expect(mockAudit.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'CLASS_REMOVED',
+          entityType: 'CLASS',
+          entityId: 'cls-uuid-1',
+          metadata: expect.objectContaining({ studentCount: 12 }),
+        }),
+      );
+    });
+  });
 });

@@ -1,0 +1,11 @@
+export { AuditModule } from './audit.module.js';
+export { AuditFacade } from './facades/audit.facade.js';
+export { AuditContextInterceptor } from './interceptors/audit-context.interceptor.js';
+export { AuditAction } from './enums/audit-action.enum.js';
+export { AuditCategory } from './enums/audit-category.enum.js';
+export { AuditEntityType } from './enums/audit-entity-type.enum.js';
+export { AuditResult } from './enums/audit-result.enum.js';
+export { diffFields, type FieldChange, type FieldChanges } from './utils/diff.util.js';
+export type { AuditActor, AuditRequestContext } from './context/audit-context.js';
+export type { RecordAuditInput } from './types/record-audit-input.type.js';
+export type { AuditLogView } from './types/audit-log-view.type.js';

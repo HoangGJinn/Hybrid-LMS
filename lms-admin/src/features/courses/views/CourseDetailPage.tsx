@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
-import { Trash2, Users } from 'lucide-react';
+import { History, Trash2, Users } from 'lucide-react';
 import { AsyncView } from '@/shared/components/AsyncView';
 import { PageHeader } from '@/shared/components/PageHeader';
 import { Badge } from '@/shared/components/ui/Badge';
@@ -31,6 +31,13 @@ const CourseDetail = ({ course }: { course: ClassView }) => {
         subtitle="Course details"
         actions={
           <div className="flex flex-wrap gap-2">
+            <Link
+              to={`/audit-logs?relatedId=${course.id}`}
+              className={buttonClasses('outline', 'md')}
+            >
+              <History className="h-4 w-4" />
+              History
+            </Link>
             {!course.deletedAt && (
               <Button variant="danger" onClick={() => setRemoving(true)}>
                 <Trash2 className="h-4 w-4" />

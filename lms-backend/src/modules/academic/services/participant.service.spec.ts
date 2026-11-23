@@ -647,4 +647,33 @@ describe('ParticipantService', () => {
       ).rejects.toThrow(ForbiddenException);
     });
   });
+
+  describe('audit logging', () => {
+    it('records PARTICIPANT_REMOVED with snapshot before deletion', async () => {
+      const mockAudit = { record: vi.fn().mockResolvedValue(undefined) };
+      const auditedService = new ParticipantService(
+        mockClassService as unknown as ClassService,
+        mockParticipantRepo as unknown as ClassStudentRepository,
+        mockUserFacade as unknown as UserFacade,
+        new ClassAccessPolicy({} as unknown as ClassStudentRepository),
+        mockAudit as any,
+      );
+      mockParticipantRepo.findOne!.mockResolvedValue(makeEnrolment(makeStudent()));
+      mockParticipantRepo.remove!.mockResolvedValue(true);
+
+      await auditedService.remove('cls-1', owner, 'stu-1');
+
+      expect(mockAudit.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'PARTICIPANT_REMOVED',
+          entityType: 'PARTICIPANT',
+          entityId: 'stu-1',
+          parentType: 'CLASS',
+          parentId: 'cls-1',
+          actor: expect.objectContaining({ id: 'lec-1' }),
+          metadata: expect.objectContaining({ studentCode: 'SV26000001' }),
+        }),
+      );
+    });
+  });
 });

@@ -4,7 +4,15 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
+import {
+  AuditAction,
+  AuditCategory,
+  AuditEntityType,
+  AuditFacade,
+  diffFields,
+} from '../../../shared/audit/index.js';
 import { User } from '../entities/user.entity.js';
 import {
   UserRepository,
@@ -43,7 +51,10 @@ const isLecturerStatus = (value: string): value is LecturerStatus =>
 /** Handles business logic for the User module. */
 @Injectable()
 export class UserService {
-  constructor(private readonly userRepository: UserRepository) {}
+  constructor(
+    private readonly userRepository: UserRepository,
+    @Optional() private readonly auditFacade?: AuditFacade,
+  ) {}
 
   /**
    * Creates the account of someone signing in for the first time. Two parallel first logins of the
@@ -140,7 +151,17 @@ export class UserService {
         role,
         code: dto.code,
       });
-      return await this.toManagedView(user);
+      const view = await this.toManagedView(user);
+      await this.auditFacade?.record({
+        category: AuditCategory.ADMIN,
+        action: AuditAction.USER_CREATED,
+        entityType: AuditEntityType.USER,
+        entityId: view.id,
+        entityLabel: this.userLabel(view),
+        summary: `Created ${view.role.toLowerCase()} account ${this.userLabel(view)}`,
+        metadata: { email: view.email, role: view.role, code: view.code },
+      });
+      return view;
     } catch (error) {
       // Lost a race with another request, or the code is taken.
       if (isUniqueViolation(error)) {
@@ -232,6 +253,9 @@ export class UserService {
     this.assertNotRemoved(user);
     await this.assertEmailChangeAllowed(user, dto.email);
 
+    const beforeProfile = this.auditFacade
+      ? await this.userRepository.findProfile(user.id)
+      : null;
     const data: UserUpdateData = {
       fullName:
         dto.fullName ?? this.placeholderNameAfterEmailChange(user, dto.email),
@@ -239,9 +263,37 @@ export class UserService {
       ...this.resolveStatus(user.role, dto.status),
     };
     try {
-      return await this.toManagedView(
+      const updated = await this.toManagedView(
         await this.userRepository.updateUserAndProfile(user, data),
       );
+      if (this.auditFacade) {
+        const changes = diffFields(
+          {
+            fullName: user.fullName,
+            email: user.email,
+            profileStatus: beforeProfile?.status ?? null,
+          },
+          {
+            fullName: updated.fullName,
+            email: updated.email,
+            profileStatus: updated.profileStatus,
+          },
+          ['fullName', 'email', 'profileStatus'],
+        );
+        if (changes) {
+          await this.auditFacade.record({
+            category: AuditCategory.ADMIN,
+            action: AuditAction.USER_UPDATED,
+            entityType: AuditEntityType.USER,
+            entityId: updated.id,
+            entityLabel: this.userLabel(updated),
+            summary: `Updated ${updated.role.toLowerCase()} ${this.userLabel(updated)}`,
+            changes,
+            metadata: { role: updated.role, code: updated.code },
+          });
+        }
+      }
+      return updated;
     } catch (error) {
       if (isUniqueViolation(error)) {
         throw new ConflictException({
@@ -259,7 +311,20 @@ export class UserService {
     this.assertManageable(user);
     this.assertNotRemoved(user);
     if (!user.isActive) throw new ConflictException('User already deactivated');
-    return this.toManagedView(await this.userRepository.setActive(id, false));
+    const view = await this.toManagedView(
+      await this.userRepository.setActive(id, false),
+    );
+    await this.auditFacade?.record({
+      category: AuditCategory.ADMIN,
+      action: AuditAction.USER_DEACTIVATED,
+      entityType: AuditEntityType.USER,
+      entityId: view.id,
+      entityLabel: this.userLabel(view),
+      summary: `Deactivated ${view.role.toLowerCase()} ${this.userLabel(view)}`,
+      changes: { isActive: { from: true, to: false } },
+      metadata: { email: view.email, role: view.role, code: view.code },
+    });
+    return view;
   }
 
   /** Admin: undoes a deactivation. */
@@ -268,7 +333,20 @@ export class UserService {
     this.assertManageable(user);
     this.assertNotRemoved(user);
     if (user.isActive) throw new ConflictException('User is already active');
-    return this.toManagedView(await this.userRepository.setActive(id, true));
+    const view = await this.toManagedView(
+      await this.userRepository.setActive(id, true),
+    );
+    await this.auditFacade?.record({
+      category: AuditCategory.ADMIN,
+      action: AuditAction.USER_ACTIVATED,
+      entityType: AuditEntityType.USER,
+      entityId: view.id,
+      entityLabel: this.userLabel(view),
+      summary: `Activated ${view.role.toLowerCase()} ${this.userLabel(view)}`,
+      changes: { isActive: { from: false, to: true } },
+      metadata: { email: view.email, role: view.role, code: view.code },
+    });
+    return view;
   }
 
   /** Admin: permanently soft-deletes an account. The row and history stay, but it can never be restored. */
@@ -281,9 +359,32 @@ export class UserService {
     if (user.deletedAt) {
       throw new ConflictException('User has already been permanently removed');
     }
-    return this.toManagedView(
+    const view = await this.toManagedView(
       await this.userRepository.softDelete(id, actorId),
     );
+    await this.auditFacade?.record({
+      category: AuditCategory.ADMIN,
+      action: AuditAction.USER_REMOVED,
+      entityType: AuditEntityType.USER,
+      entityId: view.id,
+      entityLabel: this.userLabel(view),
+      summary: `Permanently removed ${view.role.toLowerCase()} ${this.userLabel(view)}`,
+      changes: {
+        isActive: { from: user.isActive, to: false },
+        deletedAt: { from: null, to: view.deletedAt ?? null },
+      },
+      metadata: {
+        email: view.email,
+        fullName: view.fullName,
+        role: view.role,
+        code: view.code,
+      },
+    });
+    return view;
+  }
+
+  private userLabel(user: Pick<ManagedUserView, 'code' | 'fullName' | 'email'>): string {
+    return user.code ? `${user.code} — ${user.fullName}` : `${user.fullName} (${user.email})`;
   }
 
   private async toManagedView(user: User): Promise<ManagedUserView> {

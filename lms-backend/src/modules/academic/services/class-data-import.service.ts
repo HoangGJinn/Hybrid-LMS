@@ -2,7 +2,14 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Optional,
 } from '@nestjs/common';
+import {
+  AuditAction,
+  AuditCategory,
+  AuditEntityType,
+  AuditFacade,
+} from '../../../shared/audit/index.js';
 import { isUniqueViolation } from '../../../common/utils/pg-error.util.js';
 import { emptyToNull } from '../../../common/utils/string.util.js';
 import { UserFacade } from '../../user/facades/user.facade.js';
@@ -50,6 +57,7 @@ export class ClassDataImportService {
     private readonly classImport: ClassImportService,
     private readonly classRepo: ClassRepository,
     private readonly userFacade: UserFacade,
+    @Optional() private readonly auditFacade?: AuditFacade,
   ) {}
 
   async importData(dto: ImportClassDataDto): Promise<ClassDataImportResult> {
@@ -89,7 +97,26 @@ export class ClassDataImportService {
     );
 
     if (!dryRun) await this.save(rowTargets);
-    return this.summarize(dryRun, fileResults);
+    const result = this.summarize(dryRun, fileResults);
+    if (!dryRun && (result.createdClasses > 0 || result.addedStudents > 0)) {
+      await this.auditFacade?.record({
+        category: AuditCategory.ADMIN,
+        action: AuditAction.CLASS_IMPORTED,
+        entityType: AuditEntityType.CLASS,
+        entityLabel: `${result.createdClasses} courses, ${result.addedStudents} students`,
+        summary: `Imported ${result.createdClasses} course(s) and ${result.addedStudents} student(s) from ${dto.files.length} file(s)`,
+        metadata: {
+          files: dto.files.map((f) => f.name),
+          createdClasses: result.createdClasses,
+          addedStudents: result.addedStudents,
+          skippedClasses: result.skippedClasses,
+          failedClasses: result.failedClasses,
+          skippedStudents: result.skippedStudents,
+          failedStudents: result.failedStudents,
+        },
+      });
+    }
+    return result;
   }
 
   /**

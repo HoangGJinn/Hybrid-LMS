@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { useParams } from 'react-router';
+import { Link, useParams } from 'react-router';
 import { toast } from 'sonner';
-import { Download, Search, Upload, UserMinus, UserPlus } from 'lucide-react';
+import { Download, History, Search, Upload, UserMinus, UserPlus } from 'lucide-react';
 import { getErrorMessage } from '@/core/api/errors';
 import { AsyncView } from '@/shared/components/AsyncView';
 import { EmptyState } from '@/shared/components/EmptyState';
@@ -10,6 +10,7 @@ import { Pagination } from '@/shared/components/Pagination';
 import { Table, type Column } from '@/shared/components/Table';
 import { Badge } from '@/shared/components/ui/Badge';
 import { Button } from '@/shared/components/ui/Button';
+import { buttonClasses } from '@/shared/components/ui/button-classes';
 import { Input } from '@/shared/components/ui/Input';
 import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue';
 import { formatDate } from '@/shared/utils/date';
@@ -190,6 +191,13 @@ const ParticipantsContent = ({ course }: { course: ClassView }) => {
         subtitle={`${course.classCode} — ${course.name}`}
         actions={
           <div className="flex flex-wrap gap-2">
+            <Link
+              to={`/audit-logs?entityType=PARTICIPANT&parentId=${course.id}`}
+              className={buttonClasses('outline', 'md')}
+            >
+              <History className="h-4 w-4" />
+              History
+            </Link>
             <Button variant="outline" onClick={() => void handleExport()} isLoading={exporting}>
               {!exporting && <Download className="h-4 w-4" />}
               Export

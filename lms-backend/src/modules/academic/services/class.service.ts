@@ -4,7 +4,15 @@ import {
   Injectable,
   NotFoundException,
   ForbiddenException,
+  Optional,
 } from '@nestjs/common';
+import {
+  AuditAction,
+  AuditCategory,
+  AuditEntityType,
+  AuditFacade,
+  diffFields,
+} from '../../../shared/audit/index.js';
 import { ClassRepository } from '../repositories/class.repository.js';
 import { ClassStudentRepository } from '../repositories/class-student.repository.js';
 import { ClassAccessPolicy } from '../policies/class-access.policy.js';
@@ -33,6 +41,7 @@ export class ClassService {
     private readonly userFacade: UserFacade,
     private readonly classStudentRepo: ClassStudentRepository,
     private readonly accessPolicy: ClassAccessPolicy,
+    @Optional() private readonly auditFacade?: AuditFacade,
   ) {}
 
   private async validateSubject(subjectId: string): Promise<void> {
@@ -81,7 +90,22 @@ export class ClassService {
     await this.validateLecturer(dto.lecturerId);
     const saved = await this.classRepo.create(dto);
     const reloaded = await this.findById(saved.id);
-    return ClassView.fromEntity(reloaded, 0);
+    const view = ClassView.fromEntity(reloaded, 0);
+    await this.auditFacade?.record({
+      category: AuditCategory.ADMIN,
+      action: AuditAction.CLASS_CREATED,
+      entityType: AuditEntityType.CLASS,
+      entityId: view.id,
+      entityLabel: `${view.classCode} — ${view.name}`,
+      summary: `Created course ${view.classCode} — ${view.name}`,
+      metadata: {
+        subjectCode: view.subjectCode,
+        semesterCode: view.semesterCode,
+        lecturerId: view.lecturerId,
+        lecturerName: view.lecturerName,
+      },
+    });
+    return view;
   }
 
   async createClass(dto: CreateClassDto): Promise<ClassView> {
@@ -173,7 +197,48 @@ export class ClassService {
     await this.classRepo.update(id, dto);
     const updated = await this.findById(id);
     const count = await this.countStudents(id);
-    return ClassView.fromEntity(updated, count);
+    const view = ClassView.fromEntity(updated, count);
+    if (this.auditFacade) {
+      const beforeView = ClassView.fromEntity(cls, count);
+      const changes = diffFields(
+        {
+          classCode: beforeView.classCode,
+          name: beforeView.name,
+          subjectCode: beforeView.subjectCode,
+          semesterCode: beforeView.semesterCode,
+          lecturerId: beforeView.lecturerId,
+          lecturerName: beforeView.lecturerName,
+        },
+        {
+          classCode: view.classCode,
+          name: view.name,
+          subjectCode: view.subjectCode,
+          semesterCode: view.semesterCode,
+          lecturerId: view.lecturerId,
+          lecturerName: view.lecturerName,
+        },
+        [
+          'classCode',
+          'name',
+          'subjectCode',
+          'semesterCode',
+          'lecturerId',
+          'lecturerName',
+        ],
+      );
+      if (changes) {
+        await this.auditFacade.record({
+          category: AuditCategory.ADMIN,
+          action: AuditAction.CLASS_UPDATED,
+          entityType: AuditEntityType.CLASS,
+          entityId: view.id,
+          entityLabel: `${view.classCode} — ${view.name}`,
+          summary: `Updated course ${view.classCode} — ${view.name}`,
+          changes,
+        });
+      }
+    }
+    return view;
   }
 
   async updateClass(id: string, dto: UpdateClassDto): Promise<ClassView> {
@@ -196,7 +261,18 @@ export class ClassService {
     await this.classRepo.update(id, { isActive: false, endedAt: new Date() });
     const updated = await this.findById(id);
     const count = await this.countStudents(id);
-    return ClassView.fromEntity(updated, count);
+    const view = ClassView.fromEntity(updated, count);
+    await this.auditFacade?.record({
+      category: AuditCategory.ADMIN,
+      action: AuditAction.CLASS_DEACTIVATED,
+      entityType: AuditEntityType.CLASS,
+      entityId: view.id,
+      entityLabel: `${view.classCode} — ${view.name}`,
+      summary: `Deactivated course ${view.classCode} — ${view.name}`,
+      changes: { isActive: { from: true, to: false } },
+      metadata: { endedAt: view.endedAt },
+    });
+    return view;
   }
 
   async deactivateClass(id: string): Promise<ClassView> {
@@ -217,7 +293,26 @@ export class ClassService {
     });
     const updated = await this.findById(id);
     const count = await this.countStudents(id);
-    return ClassView.fromEntity(updated, count);
+    const view = ClassView.fromEntity(updated, count);
+    await this.auditFacade?.record({
+      category: AuditCategory.ADMIN,
+      action: AuditAction.CLASS_REMOVED,
+      entityType: AuditEntityType.CLASS,
+      entityId: view.id,
+      entityLabel: `${view.classCode} — ${view.name}`,
+      summary: `Permanently removed course ${view.classCode} — ${view.name}`,
+      changes: {
+        isActive: { from: cls.isActive, to: false },
+        deletedAt: { from: null, to: view.deletedAt ?? null },
+      },
+      metadata: {
+        classCode: view.classCode,
+        name: view.name,
+        lecturerName: view.lecturerName,
+        studentCount: count,
+      },
+    });
+    return view;
   }
 
   async getClassmates(
