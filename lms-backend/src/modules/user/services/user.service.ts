@@ -43,7 +43,7 @@ const isLecturerStatus = (value: string): value is LecturerStatus =>
 /** Handles business logic for the User module. */
 @Injectable()
 export class UserService {
-  constructor(private readonly userRepository: UserRepository) { }
+  constructor(private readonly userRepository: UserRepository) {}
 
   /**
    * Creates the account of someone signing in for the first time. Two parallel first logins of the
@@ -158,6 +158,7 @@ export class UserService {
     const [users, total] = await this.userRepository.findPage({
       role: query.role,
       isActive: query.isActive,
+      isDeleted: query.isDeleted ?? false,
       hasLoggedIn: query.hasLoggedIn,
       status: query.status,
       search,
@@ -228,6 +229,7 @@ export class UserService {
   async updateUser(id: string, dto: UpdateUserDto): Promise<ManagedUserView> {
     const user = await this.getUserById(id);
     this.assertManageable(user);
+    this.assertNotRemoved(user);
     await this.assertEmailChangeAllowed(user, dto.email);
 
     const data: UserUpdateData = {
@@ -255,6 +257,7 @@ export class UserService {
   async deactivateUser(id: string): Promise<ManagedUserView> {
     const user = await this.getUserById(id);
     this.assertManageable(user);
+    this.assertNotRemoved(user);
     if (!user.isActive) throw new ConflictException('User already deactivated');
     return this.toManagedView(await this.userRepository.setActive(id, false));
   }
@@ -263,8 +266,24 @@ export class UserService {
   async activateUser(id: string): Promise<ManagedUserView> {
     const user = await this.getUserById(id);
     this.assertManageable(user);
+    this.assertNotRemoved(user);
     if (user.isActive) throw new ConflictException('User is already active');
     return this.toManagedView(await this.userRepository.setActive(id, true));
+  }
+
+  /** Admin: permanently soft-deletes an account. The row and history stay, but it can never be restored. */
+  async removeUser(
+    id: string,
+    actorId: string | null = null,
+  ): Promise<ManagedUserView> {
+    const user = await this.getUserById(id);
+    this.assertManageable(user);
+    if (user.deletedAt) {
+      throw new ConflictException('User has already been permanently removed');
+    }
+    return this.toManagedView(
+      await this.userRepository.softDelete(id, actorId),
+    );
   }
 
   private async toManagedView(user: User): Promise<ManagedUserView> {
@@ -276,6 +295,14 @@ export class UserService {
   private assertManageable(user: User): void {
     if (user.role === Role.ADMIN) {
       throw new ForbiddenException('Admin accounts cannot be modified here');
+    }
+  }
+
+  private assertNotRemoved(user: User): void {
+    if (user.deletedAt) {
+      throw new ConflictException(
+        'Removed accounts cannot be modified or restored',
+      );
     }
   }
 

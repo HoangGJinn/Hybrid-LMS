@@ -40,6 +40,7 @@ const STATUS_VARIANTS: Record<string, BadgeVariant> = {
 };
 
 export const getAccountState = (user: ManagedUser): AccountState => {
+  if (user.deletedAt) return 'removed';
   if (!user.isActive) return 'inactive';
   return user.hasLoggedIn ? 'active' : 'pending';
 };
@@ -58,6 +59,11 @@ export const ACCOUNT_STATE_BADGES: Record<
     label: 'Inactive',
     variant: 'default',
     hint: 'Deactivated: cannot sign in or use the API.',
+  },
+  removed: {
+    label: 'Removed',
+    variant: 'destructive',
+    hint: 'Permanently removed: cannot sign in or be restored.',
   },
 };
 
@@ -89,6 +95,9 @@ export const toHasLoggedIn = (filter: AccountFilter): boolean | undefined => {
   if (filter === 'pending') return false;
   return undefined;
 };
+
+export const toIsDeleted = (filter: AccountFilter): boolean | undefined =>
+  filter === 'removed' ? true : undefined;
 
 /** A student code starts with SV and a lecturer code with GV; the same rule as the backend. */
 export const isCodeForRole = (code: string, role: ManagedRole): boolean =>

@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseBoolPipe,
@@ -147,11 +148,14 @@ export class ClassController {
     isActive?: boolean,
     @Query('semesterId') semesterId?: string,
     @Query('search') search?: string,
+    @Query('isDeleted', new ParseBoolPipe({ optional: true }))
+    isDeleted?: boolean,
   ): Promise<ClassView[]> {
     return this.classService.findAll({
       isActive,
       semesterId,
       search,
+      ...(isDeleted !== undefined ? { isDeleted } : {}),
     });
   }
 
@@ -192,5 +196,13 @@ export class ClassController {
   @Patch(':id/deactivate')
   async deactivate(@Param('id') id: string): Promise<ClassView> {
     return this.classService.deactivate(id);
+  }
+
+  @Delete(':id')
+  async remove(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() actor?: AuthenticatedUser,
+  ): Promise<ClassView> {
+    return this.classService.remove(id, actor?.id ?? null);
   }
 }

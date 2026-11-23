@@ -23,6 +23,7 @@ export interface ManagedUser {
   profileStatus: string | null;
   /** false = pre-provisioned account nobody has signed in to yet ("Pending"). */
   hasLoggedIn: boolean;
+  deletedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -31,6 +32,7 @@ export interface ManagedUser {
 export interface UserListParams {
   role?: UserRole;
   isActive?: boolean;
+  isDeleted?: boolean;
   /** false = pending accounts (never signed in); true = accounts linked to a Google login. */
   hasLoggedIn?: boolean;
   /** Profile status (STUDYING, WORKING, ...). Meant to be combined with `role`. */
@@ -58,11 +60,11 @@ export interface UpdateUserPayload {
   status?: string;
 }
 
-/** Account filter of the list pages, one option per badge. `isActive` / `hasLoggedIn` are derived from it. */
-export type AccountFilter = 'all' | 'active' | 'pending' | 'inactive';
+/** Account filter of the list pages, one option per badge. `isActive` / `hasLoggedIn` / `isDeleted` are derived from it. */
+export type AccountFilter = 'all' | 'active' | 'pending' | 'inactive' | 'removed';
 
-/** What a row's badge says: Pending (never signed in) → Active, or Inactive (deactivated). */
-export type AccountState = 'pending' | 'active' | 'inactive';
+/** What a row's badge says: Pending (never signed in) → Active, Inactive (deactivated), or Removed (permanently deleted). */
+export type AccountState = 'pending' | 'active' | 'inactive' | 'removed';
 
 /** One class taught by a lecturer or enrolled in by a student (mirrors backend `ClassListExportRow`). */
 export interface UserClassItem {

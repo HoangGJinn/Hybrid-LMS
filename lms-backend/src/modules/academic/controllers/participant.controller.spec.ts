@@ -23,6 +23,7 @@ describe('ParticipantController', () => {
       add: vi.fn(),
       importParticipants: vi.fn(),
       remove: vi.fn().mockResolvedValue(undefined),
+      removeMany: vi.fn().mockResolvedValue({ removed: 2 }),
     };
     controller = new ParticipantController(
       mockService as unknown as ParticipantService,
@@ -72,5 +73,14 @@ describe('ParticipantController', () => {
     ).resolves.toBeUndefined();
 
     expect(mockService.remove).toHaveBeenCalledWith('cls-1', user, 'stu-1');
+  });
+
+  it('removes multiple participants at once', async () => {
+    const dto = { studentIds: ['stu-1', 'stu-2'] };
+
+    await expect(controller.removeMany('cls-1', user, dto)).resolves.toEqual({
+      removed: 2,
+    });
+    expect(mockService.removeMany).toHaveBeenCalledWith('cls-1', user, dto);
   });
 });

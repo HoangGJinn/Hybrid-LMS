@@ -6,6 +6,7 @@ import {
   Plus,
   RotateCcw,
   Search,
+  Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { AsyncView } from '@/shared/components/AsyncView';
@@ -35,6 +36,7 @@ import {
   getStatusVariant,
   toHasLoggedIn,
   toIsActive,
+  toIsDeleted,
 } from '../utils/user-display';
 import { UserClassesModal } from './UserClassesModal';
 import { UserFormModal } from './UserFormModal';
@@ -48,6 +50,7 @@ const ACCOUNT_OPTIONS: { value: AccountFilter; label: string }[] = [
   { value: 'active', label: 'Active' },
   { value: 'pending', label: 'Pending' },
   { value: 'inactive', label: 'Inactive' },
+  { value: 'removed', label: 'Removed' },
 ];
 
 const isAccountFilter = (value: string): value is AccountFilter =>
@@ -72,6 +75,7 @@ export const UserManagement = ({ role }: { role: ManagedRole }) => {
   const users = useUsers({
     role,
     isActive: toIsActive(accountFilter),
+    isDeleted: toIsDeleted(accountFilter),
     hasLoggedIn: toHasLoggedIn(accountFilter),
     search: search || undefined,
     page,
@@ -189,35 +193,49 @@ export const UserManagement = ({ role }: { role: ManagedRole }) => {
           >
             <FileSpreadsheet className="h-4 w-4" />
           </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label={`Edit ${item.fullName}`}
-            title="Edit"
-            onClick={() => openEdit(item)}
-          >
-            <Pencil className="h-4 w-4" />
-          </Button>
-          {item.isActive ? (
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label={`Deactivate ${item.fullName}`}
-              title="Deactivate"
-              onClick={() => setStatusTarget({ user: item, action: 'deactivate' })}
-            >
-              <Archive className="h-4 w-4" />
-            </Button>
-          ) : (
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label={`Activate ${item.fullName}`}
-              title="Activate"
-              onClick={() => setStatusTarget({ user: item, action: 'activate' })}
-            >
-              <RotateCcw className="h-4 w-4" />
-            </Button>
+          {!item.deletedAt && (
+            <>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label={`Edit ${item.fullName}`}
+                title="Edit"
+                onClick={() => openEdit(item)}
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
+              {item.isActive ? (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={`Deactivate ${item.fullName}`}
+                  title="Deactivate"
+                  onClick={() => setStatusTarget({ user: item, action: 'deactivate' })}
+                >
+                  <Archive className="h-4 w-4" />
+                </Button>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={`Activate ${item.fullName}`}
+                  title="Activate"
+                  onClick={() => setStatusTarget({ user: item, action: 'activate' })}
+                >
+                  <RotateCcw className="h-4 w-4" />
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label={`Remove ${item.fullName}`}
+                title="Remove permanently"
+                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                onClick={() => setStatusTarget({ user: item, action: 'remove' })}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </>
           )}
         </div>
       ),

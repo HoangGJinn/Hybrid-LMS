@@ -396,6 +396,22 @@ describe('UserRepository', () => {
       );
     });
 
+    it('filters permanently removed accounts when isDeleted is true', async () => {
+      const qb = createQueryBuilderMock();
+
+      await repository.findPage({ isDeleted: true, page: 1, limit: 10 });
+
+      expect(qb.andWhere).toHaveBeenCalledWith('u.deletedAt IS NOT NULL');
+    });
+
+    it('filters non-removed accounts when isDeleted is false', async () => {
+      const qb = createQueryBuilderMock();
+
+      await repository.findPage({ isDeleted: false, page: 1, limit: 10 });
+
+      expect(qb.andWhere).toHaveBeenCalledWith('u.deletedAt IS NULL');
+    });
+
     it('adds no filter when none is given and lists the newest accounts first', async () => {
       const qb = createQueryBuilderMock();
 
@@ -615,6 +631,29 @@ describe('UserRepository', () => {
         isActive: false,
       });
       expect(res.isActive).toBe(false);
+    });
+  });
+
+  describe('softDelete', () => {
+    it('sets isActive=false, deletedAt, and deletedBy without removing the row', async () => {
+      const deletedAt = new Date();
+      mockUserRepo.update!.mockResolvedValue({ affected: 1 });
+      mockUserRepo.findOneOrFail!.mockResolvedValue({
+        ...sampleUser,
+        isActive: false,
+        deletedAt,
+        deletedBy: 'admin-1',
+      });
+
+      const res = await repository.softDelete('usr-1', 'admin-1');
+
+      expect(mockUserRepo.update).toHaveBeenCalledWith('usr-1', {
+        isActive: false,
+        deletedAt: expect.any(Date),
+        deletedBy: 'admin-1',
+      });
+      expect(res.isActive).toBe(false);
+      expect(res.deletedAt).toEqual(deletedAt);
     });
   });
 

@@ -9,6 +9,7 @@ import { ClassService } from './class.service.js';
 import { AddParticipantDto } from '../dto/add-participant.dto.js';
 import { AddParticipantsDto } from '../dto/add-participants.dto.js';
 import { ImportParticipantsDto } from '../dto/import-participants.dto.js';
+import { RemoveParticipantsDto } from '../dto/remove-participants.dto.js';
 import { Class } from '../entities/class.entity.js';
 import { ClassAccessPolicy } from '../policies/class-access.policy.js';
 import {
@@ -18,6 +19,7 @@ import {
   ParticipantView,
 } from '../types/participant-view.type.js';
 import { AddStudentsResult } from '../types/add-students-result.type.js';
+import { RemoveStudentsResult } from '../types/remove-students-result.type.js';
 import { UserFacade } from '../../user/facades/user.facade.js';
 import { StudentSummary } from '../../user/types/student-summary.type.js';
 import { AuthenticatedUser } from '../../../common/types/authenticated-user.type.js';
@@ -170,6 +172,19 @@ export class ParticipantService {
         'This student is not a participant of the class',
       );
     }
+  }
+
+  /** Bulk Remove Participants (SCRUM-90). Only the enrolments are removed, never the student accounts. */
+  async removeMany(
+    classId: string,
+    actor: AuthenticatedUser,
+    dto: RemoveParticipantsDto,
+  ): Promise<RemoveStudentsResult> {
+    const cls = await this.loadManageableClass(classId, actor);
+    this.assertClassIsOpen(cls);
+    const ids = unique(dto.studentIds);
+    const removed = await this.participantRepo.removeMany(classId, ids);
+    return { removed };
   }
 
   /**

@@ -91,6 +91,7 @@ describe('ClassController', () => {
       countStudents: vi.fn(),
       update: vi.fn(),
       deactivate: vi.fn(),
+      remove: vi.fn(),
       findMyClasses: vi.fn(),
     };
     mockImportService = { importClasses: vi.fn(), plan: vi.fn() };
@@ -271,6 +272,30 @@ describe('ClassController', () => {
 
       expect(mockClassService.deactivate).toHaveBeenCalledWith('cls-uuid-1');
       expect(result.isActive).toBe(false);
+    });
+  });
+
+  describe('remove', () => {
+    it('delegates permanent soft-delete to ClassService with actor id', async () => {
+      const deletedAt = new Date();
+      const removedView = {
+        ...sampleClassView,
+        isActive: false,
+        deletedAt,
+      };
+      mockClassService.remove!.mockResolvedValue(removedView);
+
+      const result = await controller.remove('cls-uuid-1', {
+        id: 'admin-1',
+        email: 'admin@school.edu.vn',
+        role: Role.ADMIN,
+      });
+
+      expect(mockClassService.remove).toHaveBeenCalledWith(
+        'cls-uuid-1',
+        'admin-1',
+      );
+      expect(result.deletedAt).toEqual(deletedAt);
     });
   });
   describe('importClasses', () => {

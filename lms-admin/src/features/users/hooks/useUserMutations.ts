@@ -49,3 +49,11 @@ export const useActivateUser = () => {
     onSuccess: refresh,
   });
 };
+
+export const useRemoveUser = () => {
+  const refresh = useRefreshUsers();
+  return useMutation({
+    mutationFn: (id: string) => userService.removeUser(id),
+    onSuccess: refresh,
+  });
+};

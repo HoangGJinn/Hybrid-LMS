@@ -47,4 +47,10 @@ export class Class {
 
   @Column({ name: 'ended_at', type: 'timestamptz', nullable: true })
   endedAt?: Date | null;
+
+  @Column({ name: 'deleted_at', type: 'timestamptz', nullable: true })
+  deletedAt?: Date | null;
+
+  @Column({ name: 'deleted_by', type: 'uuid', nullable: true })
+  deletedBy?: string | null;
 }

@@ -1,5 +1,6 @@
 import { del, get, post } from '@/core/api/http';
 import type {
+  BulkRemoveParticipantsResult,
   ImportResult,
   ImportRowPayload,
   ParticipantCandidate,
@@ -32,6 +33,14 @@ export const participantService = {
 
   removeParticipant: (classId: string, studentId: string): Promise<void> =>
     del(`${base(classId)}/${studentId}`),
+
+  removeParticipants: (
+    classId: string,
+    studentIds: string[],
+  ): Promise<BulkRemoveParticipantsResult> =>
+    post<BulkRemoveParticipantsResult>(`${base(classId)}/bulk-remove`, {
+      studentIds,
+    }),
 
   /** `dryRun: true` only reports what the import would do. */
   importParticipants: (

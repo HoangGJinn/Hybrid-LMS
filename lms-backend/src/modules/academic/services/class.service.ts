@@ -90,14 +90,16 @@ export class ClassService {
 
   async findAll(filter?: {
     isActive?: boolean;
+    isDeleted?: boolean;
     semesterId?: string;
     subjectId?: string;
     search?: string;
   }): Promise<ClassView[]> {
-    const isActive = filter?.isActive ?? true;
+    const isDeleted = filter?.isDeleted ?? false;
     const classes = await this.classRepo.findAll({
       ...filter,
-      isActive,
+      isActive: isDeleted ? undefined : (filter?.isActive ?? true),
+      isDeleted,
     });
     const counts = await this.classRepo.countStudentsBatch(
       classes.map((c) => c.id),
@@ -154,6 +156,9 @@ export class ClassService {
 
   async update(id: string, dto: UpdateClassDto): Promise<ClassView> {
     const cls = await this.findById(id);
+    if (cls.deletedAt) {
+      throw new ConflictException('Removed classes cannot be modified');
+    }
     if (dto.classCode && dto.classCode !== cls.classCode) {
       const existing = await this.classRepo.findByCode(dto.classCode);
       if (existing) {
@@ -182,6 +187,9 @@ export class ClassService {
 
   async deactivate(id: string): Promise<ClassView> {
     const cls = await this.findById(id);
+    if (cls.deletedAt) {
+      throw new ConflictException('Removed classes cannot be modified');
+    }
     if (!cls.isActive) {
       throw new ConflictException('Class already deactivated');
     }
@@ -193,6 +201,23 @@ export class ClassService {
 
   async deactivateClass(id: string): Promise<ClassView> {
     return this.deactivate(id);
+  }
+
+  async remove(id: string, actorId: string | null = null): Promise<ClassView> {
+    const cls = await this.findById(id);
+    if (cls.deletedAt) {
+      throw new ConflictException('Class has already been permanently removed');
+    }
+    const now = new Date();
+    await this.classRepo.update(id, {
+      isActive: false,
+      endedAt: cls.endedAt ?? now,
+      deletedAt: now,
+      deletedBy: actorId,
+    });
+    const updated = await this.findById(id);
+    const count = await this.countStudents(id);
+    return ClassView.fromEntity(updated, count);
   }
 
   async getClassmates(

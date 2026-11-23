@@ -112,6 +112,16 @@ describe('ClassRepository', () => {
       });
     });
 
+    it('filters by isDeleted true and false', async () => {
+      const qb1 = mockListQuery([]);
+      await repository.findAll({ isDeleted: true });
+      expect(qb1.andWhere).toHaveBeenCalledWith('c.deletedAt IS NOT NULL');
+
+      const qb2 = mockListQuery([]);
+      await repository.findAll({ isDeleted: false });
+      expect(qb2.andWhere).toHaveBeenCalledWith('c.deletedAt IS NULL');
+    });
+
     it('filters by semester and subject', async () => {
       const qb = mockListQuery([]);
 

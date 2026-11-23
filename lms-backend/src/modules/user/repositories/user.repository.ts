@@ -29,6 +29,7 @@ export {
 export interface UserListFilters {
   readonly role?: Role;
   readonly isActive?: boolean;
+  readonly isDeleted?: boolean;
   /** false = pre-provisioned account nobody has signed in to yet; true = linked to a Google account. */
   readonly hasLoggedIn?: boolean;
   /** Student or lecturer profile status, e.g. WORKING. */
@@ -251,6 +252,11 @@ export class UserRepository {
     if (filters.isActive !== undefined) {
       query.andWhere('u.isActive = :isActive', { isActive: filters.isActive });
     }
+    if (filters.isDeleted === true) {
+      query.andWhere('u.deletedAt IS NOT NULL');
+    } else if (filters.isDeleted === false) {
+      query.andWhere('u.deletedAt IS NULL');
+    }
     if (filters.hasLoggedIn !== undefined) {
       query.andWhere(
         filters.hasLoggedIn ? 'u.ssoId IS NOT NULL' : 'u.ssoId IS NULL',
@@ -336,6 +342,16 @@ export class UserRepository {
   /** Soft delete / restore: users are never removed from the database. */
   async setActive(id: string, isActive: boolean): Promise<User> {
     await this.userRepo.update(id, { isActive });
+    return this.userRepo.findOneOrFail({ where: { id } });
+  }
+
+  /** Permanent soft delete (tombstone): the row stays in the database, but can never be restored. */
+  async softDelete(id: string, deletedBy: string | null = null): Promise<User> {
+    await this.userRepo.update(id, {
+      isActive: false,
+      deletedAt: new Date(),
+      deletedBy,
+    });
     return this.userRepo.findOneOrFail({ where: { id } });
   }
 

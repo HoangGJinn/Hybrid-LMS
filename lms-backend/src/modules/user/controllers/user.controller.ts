@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseUUIDPipe,
@@ -9,7 +10,9 @@ import {
   Query,
 } from '@nestjs/common';
 import { Auth } from '../../../common/decorators/auth.decorator.js';
+import { CurrentUser } from '../../../common/decorators/current-user.decorator.js';
 import { Role } from '../../../common/enums/role.enum.js';
+import { AuthenticatedUser } from '../../../common/types/authenticated-user.type.js';
 import { PaginatedResult } from '../../../common/types/paginated-result.type.js';
 import { CreateManagedUserDto } from '../dto/create-managed-user.dto.js';
 import { ListUsersQueryDto } from '../dto/list-users-query.dto.js';
@@ -62,5 +65,14 @@ export class UserController {
   @Patch(':id/activate')
   activate(@Param('id', ParseUUIDPipe) id: string): Promise<ManagedUserView> {
     return this.userService.activateUser(id);
+  }
+
+  /** Permanent soft delete: sets `isActive = false`, `deletedAt = now`, `deletedBy = actor.id`. Cannot be restored. */
+  @Delete(':id')
+  remove(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() actor?: AuthenticatedUser,
+  ): Promise<ManagedUserView> {
+    return this.userService.removeUser(id, actor?.id ?? null);
   }
 }

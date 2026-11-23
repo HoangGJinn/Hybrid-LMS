@@ -7,6 +7,7 @@ import {
   getStatusVariant,
   toHasLoggedIn,
   toIsActive,
+  toIsDeleted,
 } from './user-display';
 
 const createUser = (overrides: Partial<ManagedUser> = {}): ManagedUser => ({
@@ -37,6 +38,17 @@ describe('getAccountState', () => {
     expect(
       getAccountState(createUser({ isActive: false, hasLoggedIn: false })),
     ).toBe('inactive');
+  });
+
+  it('should be removed when deletedAt is set', () => {
+    expect(
+      getAccountState(
+        createUser({
+          isActive: false,
+          deletedAt: '2026-10-02T00:00:00Z',
+        }),
+      ),
+    ).toBe('removed');
   });
 });
 
@@ -91,5 +103,10 @@ describe('account filters', () => {
 
     expect(toIsActive('inactive')).toBe(false);
     expect(toHasLoggedIn('inactive')).toBeUndefined();
+    expect(toIsDeleted('inactive')).toBeUndefined();
+
+    expect(toIsActive('removed')).toBeUndefined();
+    expect(toHasLoggedIn('removed')).toBeUndefined();
+    expect(toIsDeleted('removed')).toBe(true);
   });
 });

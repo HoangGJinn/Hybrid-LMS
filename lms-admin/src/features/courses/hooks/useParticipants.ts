@@ -55,6 +55,15 @@ export const useRemoveParticipant = (classId: string) => {
   });
 };
 
+export const useRemoveParticipants = (classId: string) => {
+  const refresh = useRefreshParticipants(classId);
+  return useMutation({
+    mutationFn: (studentIds: string[]) =>
+      participantService.removeParticipants(classId, studentIds),
+    onSuccess: refresh,
+  });
+};
+
 interface ImportVariables {
   rows: ImportRowPayload[];
   /** true = preview only: nothing changes, so nothing is refreshed. */

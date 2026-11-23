@@ -121,4 +121,23 @@ describe('ClassStudentRepository', () => {
     expect(await repository.remove('cls-1', 'stu-1')).toBe(true);
     expect(await repository.remove('cls-1', 'stu-1')).toBe(false);
   });
+
+  describe('removeMany', () => {
+    it('does nothing for an empty list', async () => {
+      expect(await repository.removeMany('cls-1', [])).toBe(0);
+      expect(mockRepo.delete).not.toHaveBeenCalled();
+    });
+
+    it('deletes matching enrolments and returns affected count', async () => {
+      mockRepo.delete!.mockResolvedValueOnce({ affected: 2 });
+
+      const removed = await repository.removeMany('cls-1', ['stu-1', 'stu-2']);
+
+      expect(mockRepo.delete).toHaveBeenCalledWith({
+        classId: 'cls-1',
+        studentId: expect.anything(),
+      });
+      expect(removed).toBe(2);
+    });
+  });
 });
