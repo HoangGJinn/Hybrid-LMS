@@ -65,6 +65,14 @@ export class ListAuditLogsQueryDto {
   @IsOptional()
   readonly actorId?: string;
 
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
+  @IsString({ message: ValidationMessage.IS_STRING })
+  @MaxLength(100, { message: ValidationMessage.MAX_LENGTH })
+  @IsOptional()
+  readonly requestId?: string;
+
   @IsEnum(AuditResult, { message: ValidationMessage.IS_ENUM })
   @IsOptional()
   readonly result?: AuditResult;

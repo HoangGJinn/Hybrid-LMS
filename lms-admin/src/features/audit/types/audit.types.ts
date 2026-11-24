@@ -76,6 +76,7 @@ export interface AuditLogListParams {
   parentId?: string;
   relatedId?: string;
   actorId?: string;
+  requestId?: string;
   result?: AuditResult;
   from?: string;
   to?: string;

@@ -32,7 +32,7 @@ const CourseDetail = ({ course }: { course: ClassView }) => {
         actions={
           <div className="flex flex-wrap gap-2">
             <Link
-              to={`/audit-logs?relatedId=${course.id}`}
+              to={`/audit-logs?relatedId=${course.id}&contextLabel=${encodeURIComponent(course.classCode)}`}
               className={buttonClasses('outline', 'md')}
             >
               <History className="h-4 w-4" />

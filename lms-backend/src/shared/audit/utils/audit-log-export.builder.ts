@@ -21,10 +21,11 @@ const HEADERS = [
   'Target',
   'Summary',
   'IP Address',
+  'Request ID',
   'Changes',
 ] as const;
 
-const WIDTHS = [18, 24, 28, 12, 12, 26, 10, 14, 30, 44, 16, 40] as const;
+const WIDTHS = [18, 24, 28, 12, 12, 26, 10, 14, 30, 44, 16, 22, 40] as const;
 
 export const buildAuditLogsWorkbook = async (
   rows: readonly AuditLog[],
@@ -48,6 +49,7 @@ export const buildAuditLogsWorkbook = async (
       row.entityLabel ?? row.entityId ?? '',
       row.summary ?? '',
       row.ipAddress ?? '',
+      row.requestId ?? '',
       row.changes ? JSON.stringify(row.changes) : '',
     ]);
   }

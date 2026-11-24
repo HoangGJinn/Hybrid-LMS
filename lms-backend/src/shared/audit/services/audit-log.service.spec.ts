@@ -41,7 +41,11 @@ describe('AuditLogService', () => {
   beforeEach(() => {
     mockRepo = {
       insert: vi.fn().mockResolvedValue(undefined),
-      findActorName: vi.fn().mockResolvedValue('Admin User'),
+      findActorDetails: vi.fn().mockResolvedValue({
+        fullName: 'Admin User',
+        email: 'admin@school.edu.vn',
+        role: 'ADMIN',
+      }),
       findPage: vi.fn().mockResolvedValue([[sampleEntity], 1]),
       findById: vi.fn().mockResolvedValue(sampleEntity),
       findRecent: vi.fn().mockResolvedValue([sampleEntity]),
@@ -51,26 +55,25 @@ describe('AuditLogService', () => {
   });
 
   describe('record', () => {
-    it('merges AsyncLocalStorage request context and resolves actorName', async () => {
+    it('merges AsyncLocalStorage request context and resolves missing actor fields', async () => {
       await runWithAuditContext(
         {
-          actor: { id: 'admin-1', email: 'admin@school.edu.vn', role: 'ADMIN' },
+          actor: { id: 'admin-1' },
           ipAddress: '10.0.0.1',
           userAgent: 'Mozilla/5.0',
           requestId: 'req-123',
         },
         () =>
           service.record({
-            category: AuditCategory.ADMIN,
-            action: AuditAction.USER_REMOVED,
-            entityType: AuditEntityType.USER,
-            entityId: 'usr-1',
-            entityLabel: 'SV26000001 — Student',
-            summary: 'Removed user',
+            category: AuditCategory.SECURITY,
+            action: AuditAction.LOGOUT,
+            entityType: AuditEntityType.AUTH,
+            entityId: 'admin-1',
+            summary: 'User logged out',
           }),
       );
 
-      expect(mockRepo.findActorName).toHaveBeenCalledWith('admin-1');
+      expect(mockRepo.findActorDetails).toHaveBeenCalledWith('admin-1');
       expect(mockRepo.insert).toHaveBeenCalledWith(
         expect.objectContaining({
           actorId: 'admin-1',
@@ -99,12 +102,13 @@ describe('AuditLogService', () => {
   });
 
   describe('list', () => {
-    it('returns paginated AuditLogView results and parses date-only to-date to end of day', async () => {
+    it('returns paginated AuditLogView results and parses date-only bounds in Vietnam timezone', async () => {
       const result = await service.list({
         page: 1,
         limit: 20,
         from: '2026-11-01',
         to: '2026-11-23',
+        requestId: 'req-99',
         search: '  student  ',
       });
 
@@ -112,13 +116,30 @@ describe('AuditLogService', () => {
         expect.objectContaining({
           page: 1,
           limit: 20,
-          from: new Date('2026-11-01'),
-          to: new Date('2026-11-23T23:59:59.999Z'),
+          from: new Date('2026-11-01T00:00:00.000+07:00'),
+          to: new Date('2026-11-23T23:59:59.999+07:00'),
+          requestId: 'req-99',
           search: 'student',
         }),
       );
       expect(result.total).toBe(1);
       expect(result.items[0].id).toBe('log-1');
+    });
+
+    it('normalizes inverted date bounds so swapped from/to still covers full days', async () => {
+      await service.list({
+        page: 1,
+        limit: 20,
+        from: '2026-11-24',
+        to: '2026-11-20',
+      });
+
+      expect(mockRepo.findPage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          from: new Date('2026-11-20T00:00:00.000+07:00'),
+          to: new Date('2026-11-24T23:59:59.999+07:00'),
+        }),
+      );
     });
   });
 

@@ -214,7 +214,7 @@ export const UserManagement = ({ role }: { role: ManagedRole }) => {
             <FileSpreadsheet className="h-4 w-4" />
           </Button>
           <Link
-            to={`/audit-logs?entityType=USER&entityId=${item.id}`}
+            to={`/audit-logs?entityType=USER&entityId=${item.id}&contextLabel=${encodeURIComponent(item.code ? `${item.code} (${item.fullName})` : item.fullName)}`}
             aria-label={`View history of ${item.fullName}`}
             title="View history"
             className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"

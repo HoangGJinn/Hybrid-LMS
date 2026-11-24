@@ -15,7 +15,9 @@ describe('AuditLogRepository', () => {
   let mockQuery: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
-    mockQuery = vi.fn().mockResolvedValue([{ fullName: 'Admin User' }]);
+    mockQuery = vi.fn().mockResolvedValue([
+      { fullName: 'Admin User', email: 'admin@school.edu.vn', role: 'ADMIN' },
+    ]);
     mockRepo = {
       insert: vi.fn().mockResolvedValue(undefined),
       findOne: vi.fn().mockResolvedValue(null),
@@ -35,15 +37,19 @@ describe('AuditLogRepository', () => {
     });
   });
 
-  it('looks up actor full name from users table', async () => {
-    const name = await repository.findActorName('usr-1');
+  it('looks up actor profile details from users table', async () => {
+    const details = await repository.findActorDetails('usr-1');
     expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining('FROM users'), [
       'usr-1',
     ]);
-    expect(name).toBe('Admin User');
+    expect(details).toEqual({
+      fullName: 'Admin User',
+      email: 'admin@school.edu.vn',
+      role: 'ADMIN',
+    });
   });
 
-  it('applies filters, escaped search, and pagination in findPage', async () => {
+  it('applies filters, requestId, escaped search, and pagination in findPage', async () => {
     const qb = {
       andWhere: vi.fn().mockReturnThis(),
       orderBy: vi.fn().mockReturnThis(),
@@ -59,6 +65,7 @@ describe('AuditLogRepository', () => {
       action: AuditAction.CLASS_UPDATED,
       entityType: AuditEntityType.CLASS,
       relatedId: 'cls-1',
+      requestId: 'req-42',
       result: AuditResult.SUCCESS,
       search: '50%',
       page: 2,
@@ -72,8 +79,11 @@ describe('AuditLogRepository', () => {
       '(a.entityId = :relatedId OR a.parentId = :relatedId)',
       { relatedId: 'cls-1' },
     );
+    expect(qb.andWhere).toHaveBeenCalledWith('a.requestId = :requestId', {
+      requestId: 'req-42',
+    });
     expect(qb.andWhere).toHaveBeenCalledWith(
-      '(a.entityLabel ILIKE :search OR a.actorEmail ILIKE :search OR a.actorName ILIKE :search OR a.summary ILIKE :search)',
+      '(a.entityLabel ILIKE :search OR a.actorEmail ILIKE :search OR a.actorName ILIKE :search OR a.summary ILIKE :search OR a.ipAddress ILIKE :search OR a.requestId ILIKE :search OR a.entityId ILIKE :search)',
       { search: '%50\\%%' },
     );
     expect(qb.skip).toHaveBeenCalledWith(20);

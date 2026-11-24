@@ -18,20 +18,38 @@ import type { RecordAuditInput } from '../types/record-audit-input.type.js';
 import { buildAuditLogsWorkbook } from '../utils/audit-log-export.builder.js';
 
 const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const VN_OFFSET = '+07:00';
 const DEFAULT_RECENT_LIMIT = 8;
 const MAX_RECENT_LIMIT = 50;
 
 const parseFromDate = (value?: string): Date | undefined => {
   if (!value) return undefined;
+  if (DATE_ONLY_PATTERN.test(value)) {
+    return new Date(`${value}T00:00:00.000${VN_OFFSET}`);
+  }
   return new Date(value);
 };
 
 const parseToDate = (value?: string): Date | undefined => {
   if (!value) return undefined;
   if (DATE_ONLY_PATTERN.test(value)) {
-    return new Date(`${value}T23:59:59.999Z`);
+    return new Date(`${value}T23:59:59.999${VN_OFFSET}`);
   }
   return new Date(value);
+};
+
+const normalizeDateBounds = (
+  rawFrom?: string,
+  rawTo?: string,
+): { readonly from?: Date; readonly to?: Date } => {
+  if (
+    rawFrom &&
+    rawTo &&
+    new Date(rawFrom).getTime() > new Date(rawTo).getTime()
+  ) {
+    return { from: parseFromDate(rawTo), to: parseToDate(rawFrom) };
+  }
+  return { from: parseFromDate(rawFrom), to: parseToDate(rawTo) };
 };
 
 @Injectable()
@@ -50,15 +68,22 @@ export class AuditLogService {
       const actor = input.actor ?? ctx?.actor;
       const actorId = actor?.id ?? null;
       let actorName = actor?.fullName ?? null;
-      if (!actorName && actorId) {
-        actorName = await this.auditRepo.findActorName(actorId);
+      let actorEmail = actor?.email ?? null;
+      let actorRole = actor?.role ?? null;
+      if (actorId && (!actorName || !actorEmail || !actorRole)) {
+        const details = await this.auditRepo.findActorDetails(actorId);
+        if (details) {
+          actorName = actorName ?? details.fullName;
+          actorEmail = actorEmail ?? details.email;
+          actorRole = actorRole ?? details.role;
+        }
       }
 
       await this.auditRepo.insert({
         actorId,
-        actorEmail: actor?.email ?? null,
+        actorEmail,
         actorName,
-        actorRole: actor?.role ?? null,
+        actorRole,
         category: input.category,
         action: input.action,
         result: input.result ?? AuditResult.SUCCESS,
@@ -123,6 +148,7 @@ export class AuditLogService {
   private toFilters(
     query: ListAuditLogsQueryDto,
   ): Omit<AuditLogFilters, 'page' | 'limit'> {
+    const { from, to } = normalizeDateBounds(query.from, query.to);
     return {
       category: query.category,
       action: query.action,
@@ -131,9 +157,10 @@ export class AuditLogService {
       parentId: emptyToUndefined(query.parentId),
       relatedId: emptyToUndefined(query.relatedId),
       actorId: emptyToUndefined(query.actorId),
+      requestId: emptyToUndefined(query.requestId),
       result: query.result,
-      from: parseFromDate(query.from),
-      to: parseToDate(query.to),
+      from,
+      to,
       search: emptyToUndefined(query.search),
     };
   }
