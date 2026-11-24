@@ -68,7 +68,8 @@ export class GradebookService {
       rows,
       summary,
     });
-    return { fileName: `${safeFileName(`Bang-diem-${classCode}`)}.xlsx`, buffer };
+    const fileBaseName = safeFileName(`Bang-diem-${classCode}`);
+    return { fileName: `${fileBaseName}.xlsx`, buffer };
   }
 
   private async loadFullGradebook(classId: string): Promise<FullGradebook> {

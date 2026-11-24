@@ -405,35 +405,48 @@ export class ExamService {
   ): void {
     const type = question.type ?? ExamQuestionType.MULTIPLE_CHOICE;
     if (type === ExamQuestionType.FILL_IN_THE_BLANK) {
-      const placeholderCheck = validateClozePlaceholders(question.content);
-      if (!placeholderCheck.valid) {
-        throw new BadRequestException(
-          `Question ${position}: ${placeholderCheck.reason}`,
-        );
-      }
-      if (question.options.length !== placeholderCheck.count) {
-        throw new BadRequestException(
-          `Question ${position} has ${placeholderCheck.count} blank(s) in the text but ${question.options.length} blank answer(s) provided`,
-        );
-      }
-      if (
-        question.correctCount !== undefined &&
-        question.correctCount !== placeholderCheck.count
-      ) {
-        throw new BadRequestException(
-          `Question ${position} correctCount (${question.correctCount}) must match its ${placeholderCheck.count} blank(s)`,
-        );
-      }
-      question.options.forEach((option, index) => {
-        if (splitBlankVariants(option.content).length === 0) {
-          throw new BadRequestException(
-            `Question ${position} blank {{${index + 1}}} needs at least one valid answer`,
-          );
-        }
-      });
+      this.assertValidClozeQuestion(question, position);
       return;
     }
+    this.assertValidChoiceQuestion(question, position);
+  }
 
+  private assertValidClozeQuestion(
+    question: CreateExamQuestionDto,
+    position: number,
+  ): void {
+    const placeholderCheck = validateClozePlaceholders(question.content);
+    if (!placeholderCheck.valid) {
+      throw new BadRequestException(
+        `Question ${position}: ${placeholderCheck.reason}`,
+      );
+    }
+    if (question.options.length !== placeholderCheck.count) {
+      throw new BadRequestException(
+        `Question ${position} has ${placeholderCheck.count} blank(s) in the text but ${question.options.length} blank answer(s) provided`,
+      );
+    }
+    if (
+      question.correctCount !== undefined &&
+      question.correctCount !== placeholderCheck.count
+    ) {
+      throw new BadRequestException(
+        `Question ${position} correctCount (${question.correctCount}) must match its ${placeholderCheck.count} blank(s)`,
+      );
+    }
+    question.options.forEach((option, index) => {
+      if (splitBlankVariants(option.content).length === 0) {
+        throw new BadRequestException(
+          `Question ${position} blank {{${index + 1}}} needs at least one valid answer`,
+        );
+      }
+    });
+  }
+
+  private assertValidChoiceQuestion(
+    question: CreateExamQuestionDto,
+    position: number,
+  ): void {
     if (
       question.options.length < MIN_OPTIONS ||
       question.options.length > MAX_OPTIONS

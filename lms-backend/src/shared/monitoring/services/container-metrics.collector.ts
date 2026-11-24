@@ -225,58 +225,77 @@ export class ContainerMetricsCollector implements OnModuleInit, OnModuleDestroy 
     const hostActiveDelta = hostTotals.active - this.prevHostCpu.active;
     this.prevHostCpu = hostTotals;
 
-    let measuredSystemCpu =
+    const hostCpu =
       hostTotalDelta > 0
         ? roundPercent((hostActiveDelta / hostTotalDelta) * 100)
         : this.processCpuPercent;
 
-    if (process.platform === 'linux' && this.cgroupVersion !== null) {
-      const cpuStatPath =
-        this.cgroupVersion === 'v2'
-          ? '/sys/fs/cgroup/cpu.stat'
-          : '/sys/fs/cgroup/cpu/cpu.stat';
-      const stat = parseCgroupCpuStat(await readOptionalText(cpuStatPath));
-      if (stat.usageUsec !== null && this.prevCgroupCpuUsageUsec !== null) {
-        const deltaUsec = Math.max(0, stat.usageUsec - this.prevCgroupCpuUsageUsec);
-        measuredSystemCpu = roundPercent(
-          (deltaUsec / (elapsedMs * 1000 * effectiveCores)) * 100,
-        );
-      }
-      this.prevCgroupCpuUsageUsec = stat.usageUsec;
-
-      if (stat.nrThrottled !== null) {
-        this.throttledCount = stat.nrThrottled;
-        if (
-          stat.nrPeriods !== null &&
-          this.prevCgroupNrPeriods !== null &&
-          this.prevCgroupNrThrottled !== null
-        ) {
-          const dPeriods = stat.nrPeriods - this.prevCgroupNrPeriods;
-          const dThrottled = Math.max(
-            0,
-            stat.nrThrottled - this.prevCgroupNrThrottled,
-          );
-          if (dPeriods > 0) {
-            this.throttledPercent = roundPercent((dThrottled / dPeriods) * 100);
-          }
-        }
-        this.prevCgroupNrPeriods = stat.nrPeriods;
-        this.prevCgroupNrThrottled = stat.nrThrottled;
-      }
-    }
-
-    this.systemCpuPercent = measuredSystemCpu;
+    this.systemCpuPercent = await this.sampleCgroupCpu(
+      elapsedMs,
+      effectiveCores,
+      hostCpu,
+    );
     this.prevTimestampMs = nowMs;
 
     // 3. Event loop lag histogram (reset each sample interval)
-    if (this.eventLoopHistogram) {
-      this.eventLoopMeanMs = roundTwo(this.eventLoopHistogram.mean / NS_TO_MS);
-      this.eventLoopP95Ms = roundTwo(
-        this.eventLoopHistogram.percentile(95) / NS_TO_MS,
-      );
-      this.eventLoopMaxMs = roundTwo(this.eventLoopHistogram.max / NS_TO_MS);
-      this.eventLoopHistogram.reset();
+    this.sampleEventLoopLag();
+  }
+
+  private async sampleCgroupCpu(
+    elapsedMs: number,
+    effectiveCores: number,
+    fallbackCpu: number,
+  ): Promise<number> {
+    if (process.platform !== 'linux' || this.cgroupVersion === null) {
+      return fallbackCpu;
     }
+    const cpuStatPath =
+      this.cgroupVersion === 'v2'
+        ? '/sys/fs/cgroup/cpu.stat'
+        : '/sys/fs/cgroup/cpu/cpu.stat';
+    const stat = parseCgroupCpuStat(await readOptionalText(cpuStatPath));
+
+    let measuredCpu = fallbackCpu;
+    if (stat.usageUsec !== null && this.prevCgroupCpuUsageUsec !== null) {
+      const deltaUsec = Math.max(0, stat.usageUsec - this.prevCgroupCpuUsageUsec);
+      measuredCpu = roundPercent(
+        (deltaUsec / (elapsedMs * 1000 * effectiveCores)) * 100,
+      );
+    }
+    this.prevCgroupCpuUsageUsec = stat.usageUsec;
+    this.updateThrottlingStats(stat.nrPeriods, stat.nrThrottled);
+    return measuredCpu;
+  }
+
+  private updateThrottlingStats(
+    nrPeriods: number | null,
+    nrThrottled: number | null,
+  ): void {
+    if (nrThrottled === null) return;
+    this.throttledCount = nrThrottled;
+    if (
+      nrPeriods !== null &&
+      this.prevCgroupNrPeriods !== null &&
+      this.prevCgroupNrThrottled !== null
+    ) {
+      const dPeriods = nrPeriods - this.prevCgroupNrPeriods;
+      const dThrottled = Math.max(0, nrThrottled - this.prevCgroupNrThrottled);
+      if (dPeriods > 0) {
+        this.throttledPercent = roundPercent((dThrottled / dPeriods) * 100);
+      }
+    }
+    this.prevCgroupNrPeriods = nrPeriods;
+    this.prevCgroupNrThrottled = nrThrottled;
+  }
+
+  private sampleEventLoopLag(): void {
+    if (!this.eventLoopHistogram) return;
+    this.eventLoopMeanMs = roundTwo(this.eventLoopHistogram.mean / NS_TO_MS);
+    this.eventLoopP95Ms = roundTwo(
+      this.eventLoopHistogram.percentile(95) / NS_TO_MS,
+    );
+    this.eventLoopMaxMs = roundTwo(this.eventLoopHistogram.max / NS_TO_MS);
+    this.eventLoopHistogram.reset();
   }
 
   private async collectMemory(): Promise<MemoryMetrics> {

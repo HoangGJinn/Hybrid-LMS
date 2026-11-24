@@ -228,6 +228,9 @@ export class ParticipantService {
         studentCode && fullName
           ? `${studentCode} — ${fullName}`
           : studentId;
+      const studentDisplay = fullName
+        ? `${fullName} (${studentCode})`
+        : studentId;
       await this.auditFacade.record({
         category: AuditCategory.ADMIN,
         action: AuditAction.PARTICIPANT_REMOVED,
@@ -236,7 +239,7 @@ export class ParticipantService {
         entityLabel: label,
         parentType: AuditEntityType.CLASS,
         parentId: classId,
-        summary: `Removed ${fullName ? `${fullName} (${studentCode})` : studentId} from ${cls.classCode}`,
+        summary: `Removed ${studentDisplay} from ${cls.classCode}`,
         actor: { id: actor.id, email: actor.email, role: actor.role },
         metadata: {
           classCode: cls.classCode,

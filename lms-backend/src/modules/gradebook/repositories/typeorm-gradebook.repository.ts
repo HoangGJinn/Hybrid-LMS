@@ -67,6 +67,33 @@ export class TypeOrmGradebookRepository extends GradebookRepository {
     return { sections, items };
   }
 
+  private mapItemSections(
+    items: readonly SectionItem[],
+    examSections: readonly ExamSection[],
+    knownSections: ReadonlySet<string>,
+  ): {
+    readonly assignmentSection: Map<string, string>;
+    readonly examSection: Map<string, string>;
+  } {
+    const assignmentSection = new Map<string, string>();
+    const examSection = new Map<string, string>();
+    for (const item of items) {
+      if (item.assignmentId && !assignmentSection.has(item.assignmentId)) {
+        assignmentSection.set(item.assignmentId, item.sectionId);
+      }
+      if (item.examId && !examSection.has(item.examId)) {
+        examSection.set(item.examId, item.sectionId);
+      }
+    }
+    // Bài kiểm tra có thể chỉ được gắn section qua exam_sections.
+    for (const es of examSections) {
+      if (knownSections.has(es.sectionId) && !examSection.has(es.examScheduleId)) {
+        examSection.set(es.examScheduleId, es.sectionId);
+      }
+    }
+    return { assignmentSection, examSection };
+  }
+
   /**
    * Thứ tự cột: theo section; trong section là bài tập trước, kiểm tra sau
    * (khớp mẫu: S1 = BT1, KT1 · S2 = BT2, BT3, Giữa kỳ · S3 = BT4, BT5, KT2).
@@ -102,38 +129,21 @@ export class TypeOrmGradebookRepository extends GradebookRepository {
         : [];
 
     const known = new Set(sections.map((s) => s.id));
-
     const assignmentById = new Map(assignments.map((a) => [a.id, a]));
     const orderedAssignments = assignmentIds
       .map((id) => assignmentById.get(id))
       .filter((a): a is Assignment => a !== undefined);
 
-    const assignmentSection = new Map<string, string>();
-    const examSection = new Map<string, string>();
-    for (const item of items) {
-      if (item.assignmentId && !assignmentSection.has(item.assignmentId)) {
-        assignmentSection.set(item.assignmentId, item.sectionId);
-      }
-      if (item.examId && !examSection.has(item.examId)) {
-        examSection.set(item.examId, item.sectionId);
-      }
-    }
-    // Bài kiểm tra có thể chỉ được gắn section qua exam_sections.
-    for (const es of examSections) {
-      if (known.has(es.sectionId) && !examSection.has(es.examScheduleId)) {
-        examSection.set(es.examScheduleId, es.sectionId);
-      }
-    }
+    const { assignmentSection, examSection } = this.mapItemSections(
+      items,
+      examSections,
+      known,
+    );
 
     const buckets = sections.map((s) => ({ id: s.id, name: s.title }));
     if (exams.some((e) => !examSection.has(e.id))) {
       buckets.push({ id: FALLBACK_SECTION_ID, name: FALLBACK_SECTION_NAME });
     }
-
-    const examBelongsTo = (examId: string, bucketId: string) =>
-      bucketId === FALLBACK_SECTION_ID
-        ? !examSection.has(examId)
-        : examSection.get(examId) === bucketId;
 
     const columns: GradeColumnDef[] = [];
     let order = 0;
@@ -142,8 +152,10 @@ export class TypeOrmGradebookRepository extends GradebookRepository {
 
     for (const bucket of buckets) {
       const base = { sectionId: bucket.id, sectionName: bucket.name };
-      for (const a of orderedAssignments) {
-        if (assignmentSection.get(a.id) !== bucket.id) continue;
+      const bucketAssignments = orderedAssignments.filter(
+        (a) => assignmentSection.get(a.id) === bucket.id,
+      );
+      for (const a of bucketAssignments) {
         columns.push({
           ...base,
           id: a.id,
@@ -153,8 +165,12 @@ export class TypeOrmGradebookRepository extends GradebookRepository {
           order: order++,
         });
       }
-      for (const e of exams) {
-        if (!examBelongsTo(e.id, bucket.id)) continue;
+      const bucketExams = exams.filter((e) =>
+        bucket.id === FALLBACK_SECTION_ID
+          ? !examSection.has(e.id)
+          : examSection.get(e.id) === bucket.id,
+      );
+      for (const e of bucketExams) {
         const kind = examKind(e);
         columns.push({
           ...base,

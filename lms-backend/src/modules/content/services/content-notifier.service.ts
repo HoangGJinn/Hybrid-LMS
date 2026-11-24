@@ -76,12 +76,12 @@ export class ContentNotifier {
       const kind = NOTIFIABLE[item.itemType];
       if (!kind) return;
 
-      const path =
-        item.itemType === ItemType.ASSIGNMENT && item.assignmentId
-          ? `/student/courses/${classId}/assignments/${item.assignmentId}`
-          : item.itemType === ItemType.EXAM
-            ? '/student/exams'
-            : `/student/courses/${classId}`;
+      let path = `/student/courses/${classId}`;
+      if (item.itemType === ItemType.ASSIGNMENT && item.assignmentId) {
+        path = `/student/courses/${classId}/assignments/${item.assignmentId}`;
+      } else if (item.itemType === ItemType.EXAM) {
+        path = '/student/exams';
+      }
 
       const message = composeZaloMessage({
         header: kind.header,

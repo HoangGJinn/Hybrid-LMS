@@ -58,6 +58,29 @@ export class AuditLogService {
 
   constructor(private readonly auditRepo: AuditLogRepository) {}
 
+  private async resolveActorFields(
+    actor?: RecordAuditInput['actor'],
+  ): Promise<{
+    readonly actorId: string | null;
+    readonly actorName: string | null;
+    readonly actorEmail: string | null;
+    readonly actorRole: string | null;
+  }> {
+    const actorId = actor?.id ?? null;
+    let actorName = actor?.fullName ?? null;
+    let actorEmail = actor?.email ?? null;
+    let actorRole = actor?.role ?? null;
+    if (actorId && (!actorName || !actorEmail || !actorRole)) {
+      const details = await this.auditRepo.findActorDetails(actorId);
+      if (details) {
+        actorName = actorName ?? details.fullName;
+        actorEmail = actorEmail ?? details.email;
+        actorRole = actorRole ?? details.role;
+      }
+    }
+    return { actorId, actorName, actorEmail, actorRole };
+  }
+
   /**
    * Appends a single audit record. Merges request context (IP, UA, requestId, actor) from
    * AsyncLocalStorage and never throws so audit logging never breaks the primary operation.
@@ -65,25 +88,13 @@ export class AuditLogService {
   async record(input: RecordAuditInput): Promise<void> {
     try {
       const ctx = getAuditContext();
-      const actor = input.actor ?? ctx?.actor;
-      const actorId = actor?.id ?? null;
-      let actorName = actor?.fullName ?? null;
-      let actorEmail = actor?.email ?? null;
-      let actorRole = actor?.role ?? null;
-      if (actorId && (!actorName || !actorEmail || !actorRole)) {
-        const details = await this.auditRepo.findActorDetails(actorId);
-        if (details) {
-          actorName = actorName ?? details.fullName;
-          actorEmail = actorEmail ?? details.email;
-          actorRole = actorRole ?? details.role;
-        }
-      }
+      const actor = await this.resolveActorFields(input.actor ?? ctx?.actor);
 
       await this.auditRepo.insert({
-        actorId,
-        actorEmail,
-        actorName,
-        actorRole,
+        actorId: actor.actorId,
+        actorEmail: actor.actorEmail,
+        actorName: actor.actorName,
+        actorRole: actor.actorRole,
         category: input.category,
         action: input.action,
         result: input.result ?? AuditResult.SUCCESS,
@@ -139,8 +150,9 @@ export class AuditLogService {
   async exportExcel(query: ListAuditLogsQueryDto): Promise<ExportedFile> {
     const rows = await this.auditRepo.findForExport(this.toFilters(query));
     const dateTag = new Date().toISOString().slice(0, 10);
+    const fileBaseName = safeFileName(`Audit-Logs-${dateTag}`);
     return {
-      fileName: `${safeFileName(`Audit-Logs-${dateTag}`)}.xlsx`,
+      fileName: `${fileBaseName}.xlsx`,
       buffer: await buildAuditLogsWorkbook(rows),
     };
   }

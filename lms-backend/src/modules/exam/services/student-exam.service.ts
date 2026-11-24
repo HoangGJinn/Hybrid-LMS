@@ -531,86 +531,146 @@ export class StudentExamService {
           `Question ${item.questionId} does not belong to this exam`,
         );
       }
-      const type = question.type ?? ExamQuestionType.MULTIPLE_CHOICE;
       const options = content.optionsByQuestionId.get(item.questionId) ?? [];
-
-      if (type === ExamQuestionType.FILL_IN_THE_BLANK) {
-        if (
-          (item.optionId ?? null) !== null ||
-          (item.optionIds && item.optionIds.length > 0)
-        ) {
-          throw new BadRequestException(
-            `Fill-in-the-blank question ${item.questionId} does not accept option selections`,
-          );
-        }
-        const blankCount = question.correctCount ?? (options.length || 1);
-        const rawTexts = item.textAnswers ?? [];
-        if (rawTexts.length > blankCount) {
-          throw new BadRequestException(
-            `Question ${item.questionId} only has ${blankCount} blank(s)`,
-          );
-        }
-        const normalized = rawTexts.map((text) => text.trim());
-        byQuestion.set(item.questionId, {
-          questionId: item.questionId,
-          optionId: null,
-          optionIds: null,
-          textAnswers: normalized.every((text) => text === '')
-            ? null
-            : normalized,
-        });
-        continue;
-      }
-
-      if (
-        item.textAnswers &&
-        item.textAnswers.some((text) => text.trim() !== '')
-      ) {
-        throw new BadRequestException(
-          `Multiple-choice question ${item.questionId} does not accept text answers`,
-        );
-      }
-
-      if (item.optionIds !== undefined) {
-        const uniqueOptionIds = [...new Set(item.optionIds ?? [])];
-        for (const optId of uniqueOptionIds) {
-          if (!options.some((option) => option.id === optId)) {
-            throw new BadRequestException(
-              `Option ${optId} does not belong to question ${item.questionId}`,
-            );
-          }
-        }
-        const maxAllowed =
-          question.correctCount ??
-          (options.filter((option) => option.isCorrect).length || 1);
-        if (uniqueOptionIds.length > maxAllowed) {
-          throw new BadRequestException(
-            `Question ${item.questionId} allows at most ${maxAllowed} selected answer(s)`,
-          );
-        }
-        byQuestion.set(item.questionId, {
-          questionId: item.questionId,
-          optionId: uniqueOptionIds[0] ?? null,
-          optionIds: uniqueOptionIds.length > 0 ? uniqueOptionIds : null,
-          textAnswers: null,
-        });
-        continue;
-      }
-
-      const optionId = item.optionId ?? null;
-      if (optionId !== null) {
-        if (!options.some((option) => option.id === optionId)) {
-          throw new BadRequestException(
-            `Option ${optionId} does not belong to question ${item.questionId}`,
-          );
-        }
-      }
-      byQuestion.set(item.questionId, {
-        questionId: item.questionId,
-        optionId,
-      });
+      byQuestion.set(
+        item.questionId,
+        this.buildAnswerWrite(item, question, options),
+      );
     }
     return Array.from(byQuestion.values());
+  }
+
+  private buildAnswerWrite(
+    item: ExamAnswerInputDto,
+    question: ExamContent['questions'][number],
+    options: NonNullable<ReturnType<ExamContent['optionsByQuestionId']['get']>>,
+  ): SessionAnswerWrite {
+    const type = question.type ?? ExamQuestionType.MULTIPLE_CHOICE;
+    if (type === ExamQuestionType.FILL_IN_THE_BLANK) {
+      return this.buildBlankAnswerWrite(item, question, options);
+    }
+    if (item.textAnswers?.some((text) => text.trim() !== '')) {
+      throw new BadRequestException(
+        `Multiple-choice question ${item.questionId} does not accept text answers`,
+      );
+    }
+    if (item.optionIds !== undefined) {
+      return this.buildMultiAnswerWrite(item, question, options);
+    }
+    return this.buildSingleAnswerWrite(item, options);
+  }
+
+  private buildBlankAnswerWrite(
+    item: ExamAnswerInputDto,
+    question: ExamContent['questions'][number],
+    options: NonNullable<ReturnType<ExamContent['optionsByQuestionId']['get']>>,
+  ): SessionAnswerWrite {
+    if (
+      (item.optionId ?? null) !== null ||
+      (item.optionIds && item.optionIds.length > 0)
+    ) {
+      throw new BadRequestException(
+        `Fill-in-the-blank question ${item.questionId} does not accept option selections`,
+      );
+    }
+    const blankCount = question.correctCount ?? (options.length || 1);
+    const rawTexts = item.textAnswers ?? [];
+    if (rawTexts.length > blankCount) {
+      throw new BadRequestException(
+        `Question ${item.questionId} only has ${blankCount} blank(s)`,
+      );
+    }
+    const normalized = rawTexts.map((text) => text.trim());
+    return {
+      questionId: item.questionId,
+      optionId: null,
+      optionIds: null,
+      textAnswers: normalized.every((text) => text === '') ? null : normalized,
+    };
+  }
+
+  private buildMultiAnswerWrite(
+    item: ExamAnswerInputDto,
+    question: ExamContent['questions'][number],
+    options: NonNullable<ReturnType<ExamContent['optionsByQuestionId']['get']>>,
+  ): SessionAnswerWrite {
+    const uniqueOptionIds = [...new Set(item.optionIds ?? [])];
+    for (const optId of uniqueOptionIds) {
+      if (!options.some((option) => option.id === optId)) {
+        throw new BadRequestException(
+          `Option ${optId} does not belong to question ${item.questionId}`,
+        );
+      }
+    }
+    const maxAllowed =
+      question.correctCount ??
+      (options.filter((option) => option.isCorrect).length || 1);
+    if (uniqueOptionIds.length > maxAllowed) {
+      throw new BadRequestException(
+        `Question ${item.questionId} allows at most ${maxAllowed} selected answer(s)`,
+      );
+    }
+    return {
+      questionId: item.questionId,
+      optionId: uniqueOptionIds[0] ?? null,
+      optionIds: uniqueOptionIds.length > 0 ? uniqueOptionIds : null,
+      textAnswers: null,
+    };
+  }
+
+  private buildSingleAnswerWrite(
+    item: ExamAnswerInputDto,
+    options: NonNullable<ReturnType<ExamContent['optionsByQuestionId']['get']>>,
+  ): SessionAnswerWrite {
+    const optionId = item.optionId ?? null;
+    if (optionId !== null && !options.some((option) => option.id === optionId)) {
+      throw new BadRequestException(
+        `Option ${optionId} does not belong to question ${item.questionId}`,
+      );
+    }
+    return { questionId: item.questionId, optionId };
+  }
+
+  private async buildFileAttemptView(
+    exam: ExamSchedule,
+    session: ExamSession,
+    attemptNumber: number,
+    now: Date,
+  ): Promise<ExamAttemptView> {
+    const questionFile = exam.fileQuestionId
+      ? await this.fileFacade.getDownloadLink(exam.fileQuestionId)
+      : null;
+    const fileIds = await this.sessionRepository.findFileIds(session.id);
+    const submittedFiles =
+      fileIds.length > 0 ? await this.fileFacade.getDownloadLinks(fileIds) : [];
+    return {
+      session: {
+        id: session.id,
+        examScheduleId: session.examScheduleId,
+        attemptNumber,
+        status: session.status,
+        startedAt: session.startedAt,
+        endedAt: session.endedAt,
+        submittedAt: session.submittedAt ?? null,
+      },
+      exam: {
+        id: exam.id,
+        classId: exam.classId,
+        examName: exam.examName,
+        format: exam.format,
+        startTime: exam.startTime,
+        endTime: exam.endTime,
+        durationMinutes: exam.durationMinutes,
+        maxAttempts: 1,
+        showResults: exam.showResults ?? true,
+      },
+      deadline: computeSessionDeadline(exam, session.startedAt),
+      serverNow: now,
+      questions: [],
+      savedAnswers: {},
+      questionFile,
+      submittedFiles,
+    };
   }
 
   private async buildAttemptView(
@@ -620,42 +680,7 @@ export class StudentExamService {
     now: Date,
   ): Promise<ExamAttemptView> {
     if (exam.format === ExamFormat.FILE) {
-      const questionFile = exam.fileQuestionId
-        ? await this.fileFacade.getDownloadLink(exam.fileQuestionId)
-        : null;
-      const fileIds = await this.sessionRepository.findFileIds(session.id);
-      const submittedFiles =
-        fileIds.length > 0
-          ? await this.fileFacade.getDownloadLinks(fileIds)
-          : [];
-      return {
-        session: {
-          id: session.id,
-          examScheduleId: session.examScheduleId,
-          attemptNumber,
-          status: session.status,
-          startedAt: session.startedAt,
-          endedAt: session.endedAt,
-          submittedAt: session.submittedAt ?? null,
-        },
-        exam: {
-          id: exam.id,
-          classId: exam.classId,
-          examName: exam.examName,
-          format: exam.format,
-          startTime: exam.startTime,
-          endTime: exam.endTime,
-          durationMinutes: exam.durationMinutes,
-          maxAttempts: 1,
-          showResults: exam.showResults ?? true,
-        },
-        deadline: computeSessionDeadline(exam, session.startedAt),
-        serverNow: now,
-        questions: [],
-        savedAnswers: {},
-        questionFile,
-        submittedFiles,
-      };
+      return this.buildFileAttemptView(exam, session, attemptNumber, now);
     }
 
     const content = await this.examRepository.findContent(exam.id);

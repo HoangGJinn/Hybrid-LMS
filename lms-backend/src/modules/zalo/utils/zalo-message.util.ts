@@ -54,8 +54,17 @@ export const formatDuration = (ms: number): string => {
   return parts.join(' ');
 };
 
+const stripTrailingSlashes = (value: string): string => {
+  let end = value.length;
+  while (end > 0 && value.charCodeAt(end - 1) === 47) {
+    end -= 1;
+  }
+  return value.slice(0, end);
+};
+
 /** Ghép địa chỉ frontend (biến FRONTEND_URL) với đường dẫn; trả null nếu chưa cấu hình. */
 export const buildFrontendLink = (path: string): string | null => {
-  const base = process.env.FRONTEND_URL?.replace(/\/+$/, '');
+  const raw = process.env.FRONTEND_URL;
+  const base = raw ? stripTrailingSlashes(raw) : undefined;
   return base ? `${base}${path}` : null;
 };

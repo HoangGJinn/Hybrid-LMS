@@ -17,6 +17,17 @@ interface ExtractedExceptionDetails {
   field?: string;
 }
 
+/** Picks a short, stack-free message for the monitoring error feed. */
+const resolveSafeMessage = (
+  exception: unknown,
+  message: string | string[],
+): string => {
+  if (exception instanceof Error) {
+    return exception.message || 'Internal server error';
+  }
+  return Array.isArray(message) ? message.join('; ') : message;
+};
+
 /** Global HTTP exception filter — catches all errors and returns a consistent JSON response. */
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
@@ -39,12 +50,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       this.httpMetricsStore &&
       !this.httpMetricsStore.shouldIgnorePath(request.originalUrl || request.url)
     ) {
-      const safeMessage =
-        exception instanceof Error
-          ? exception.message || 'Internal server error'
-          : Array.isArray(message)
-            ? message.join('; ')
-            : message;
+      const safeMessage = resolveSafeMessage(exception, message);
       this.httpMetricsStore.recordServerError({
         occurredAt: new Date().toISOString(),
         method: request.method,

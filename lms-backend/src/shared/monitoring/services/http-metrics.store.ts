@@ -199,118 +199,38 @@ export class HttpMetricsStore {
     }
   }
 
-  getTrafficSummary(nowMs: number = Date.now()): TrafficSummary {
-    const currentEpoch = Math.floor(nowMs / MS_PER_MINUTE);
-    const oldestEpoch = currentEpoch - (WINDOW_MINUTES - 1);
-
-    const activeByEpoch = new Map<number, MinuteBucket>();
-    for (const bucket of this.buckets) {
-      if (bucket.minuteEpoch >= oldestEpoch && bucket.minuteEpoch <= currentEpoch) {
-        activeByEpoch.set(bucket.minuteEpoch, bucket);
-      }
-    }
-
-    const points: TrafficMinutePoint[] = [];
-    const allLatencies: number[] = [];
-    const endpointMap = new Map<
-      string,
-      {
-        readonly method: string;
-        readonly route: string;
-        requests: number;
-        errors4xx: number;
-        errors5xx: number;
-        totalDurationMs: number;
-        maxLatencyMs: number;
-        latencies: number[];
-      }
-    >();
-
-    let totalRequests60m = 0;
-    let status2xx60m = 0;
-    let status4xx60m = 0;
-    let status5xx60m = 0;
-    let totalDuration60m = 0;
-    let last5mRequests = 0;
-
-    for (let epoch = oldestEpoch; epoch <= currentEpoch; epoch += 1) {
-      const bucket = activeByEpoch.get(epoch);
-      if (!bucket) {
-        points.push({
-          minute: new Date(epoch * MS_PER_MINUTE).toISOString(),
-          requests: 0,
-          status2xx: 0,
-          status4xx: 0,
-          status5xx: 0,
-          avgLatencyMs: 0,
-          p95LatencyMs: 0,
+  private mergeBucketEndpoints(
+    endpointMap: Map<string, EndpointBucket>,
+    bucket: MinuteBucket,
+  ): void {
+    for (const [key, ep] of bucket.endpoints.entries()) {
+      const agg = endpointMap.get(key);
+      if (!agg) {
+        endpointMap.set(key, {
+          method: ep.method,
+          route: ep.route,
+          requests: ep.requests,
+          errors4xx: ep.errors4xx,
+          errors5xx: ep.errors5xx,
+          totalDurationMs: ep.totalDurationMs,
+          maxLatencyMs: ep.maxLatencyMs,
+          latencies: [...ep.latencies],
         });
         continue;
       }
-
-      const sorted = [...bucket.latencies].sort((a, b) => a - b);
-      const avgLatencyMs =
-        bucket.requests > 0 ? roundTwo(bucket.totalDurationMs / bucket.requests) : 0;
-      const p95LatencyMs = roundTwo(computePercentile(sorted, 95));
-
-      points.push({
-        minute: new Date(epoch * MS_PER_MINUTE).toISOString(),
-        requests: bucket.requests,
-        status2xx: bucket.status2xx,
-        status4xx: bucket.status4xx,
-        status5xx: bucket.status5xx,
-        avgLatencyMs,
-        p95LatencyMs,
-      });
-
-      totalRequests60m += bucket.requests;
-      status2xx60m += bucket.status2xx;
-      status4xx60m += bucket.status4xx;
-      status5xx60m += bucket.status5xx;
-      totalDuration60m += bucket.totalDurationMs;
-      if (epoch > currentEpoch - 5) {
-        last5mRequests += bucket.requests;
-      }
-      for (const sample of bucket.latencies) {
-        allLatencies.push(sample);
-      }
-
-      for (const [key, ep] of bucket.endpoints.entries()) {
-        const agg = endpointMap.get(key);
-        if (!agg) {
-          endpointMap.set(key, {
-            method: ep.method,
-            route: ep.route,
-            requests: ep.requests,
-            errors4xx: ep.errors4xx,
-            errors5xx: ep.errors5xx,
-            totalDurationMs: ep.totalDurationMs,
-            maxLatencyMs: ep.maxLatencyMs,
-            latencies: [...ep.latencies],
-          });
-        } else {
-          agg.requests += ep.requests;
-          agg.errors4xx += ep.errors4xx;
-          agg.errors5xx += ep.errors5xx;
-          agg.totalDurationMs += ep.totalDurationMs;
-          agg.maxLatencyMs = Math.max(agg.maxLatencyMs, ep.maxLatencyMs);
-          for (const sample of ep.latencies) {
-            agg.latencies.push(sample);
-          }
-        }
-      }
+      agg.requests += ep.requests;
+      agg.errors4xx += ep.errors4xx;
+      agg.errors5xx += ep.errors5xx;
+      agg.totalDurationMs += ep.totalDurationMs;
+      agg.maxLatencyMs = Math.max(agg.maxLatencyMs, ep.maxLatencyMs);
+      agg.latencies.push(...ep.latencies);
     }
+  }
 
-    allLatencies.sort((a, b) => a - b);
-    const avgLatencyMs60m =
-      totalRequests60m > 0 ? roundTwo(totalDuration60m / totalRequests60m) : 0;
-    const p95LatencyMs60m = roundTwo(computePercentile(allLatencies, 95));
-    const errorRate5xxPercent =
-      totalRequests60m > 0
-        ? roundTwo((status5xx60m / totalRequests60m) * 100)
-        : 0;
-
-    const topEndpoints: EndpointMetricItem[] = [...endpointMap.values()]
+  private toTopEndpoints(
+    endpointMap: ReadonlyMap<string, EndpointBucket>,
+  ): EndpointMetricItem[] {
+    return [...endpointMap.values()]
       .map((ep) => {
         const sorted = [...ep.latencies].sort((a, b) => a - b);
         const p95 = roundTwo(computePercentile(sorted, 95));
@@ -332,6 +252,86 @@ export class HttpMetricsStore {
       })
       .sort((a, b) => b.p95LatencyMs - a.p95LatencyMs || b.requests - a.requests)
       .slice(0, MAX_TOP_ENDPOINTS);
+  }
+
+  private buildMinutePoint(
+    epoch: number,
+    bucket: MinuteBucket | undefined,
+  ): TrafficMinutePoint {
+    const minute = new Date(epoch * MS_PER_MINUTE).toISOString();
+    if (!bucket) {
+      return {
+        minute,
+        requests: 0,
+        status2xx: 0,
+        status4xx: 0,
+        status5xx: 0,
+        avgLatencyMs: 0,
+        p95LatencyMs: 0,
+      };
+    }
+    const sorted = [...bucket.latencies].sort((a, b) => a - b);
+    return {
+      minute,
+      requests: bucket.requests,
+      status2xx: bucket.status2xx,
+      status4xx: bucket.status4xx,
+      status5xx: bucket.status5xx,
+      avgLatencyMs:
+        bucket.requests > 0
+          ? roundTwo(bucket.totalDurationMs / bucket.requests)
+          : 0,
+      p95LatencyMs: roundTwo(computePercentile(sorted, 95)),
+    };
+  }
+
+  getTrafficSummary(nowMs: number = Date.now()): TrafficSummary {
+    const currentEpoch = Math.floor(nowMs / MS_PER_MINUTE);
+    const oldestEpoch = currentEpoch - (WINDOW_MINUTES - 1);
+
+    const activeByEpoch = new Map<number, MinuteBucket>();
+    for (const bucket of this.buckets) {
+      if (bucket.minuteEpoch >= oldestEpoch && bucket.minuteEpoch <= currentEpoch) {
+        activeByEpoch.set(bucket.minuteEpoch, bucket);
+      }
+    }
+
+    const points: TrafficMinutePoint[] = [];
+    const allLatencies: number[] = [];
+    const endpointMap = new Map<string, EndpointBucket>();
+
+    let totalRequests60m = 0;
+    let status2xx60m = 0;
+    let status4xx60m = 0;
+    let status5xx60m = 0;
+    let totalDuration60m = 0;
+    let last5mRequests = 0;
+
+    for (let epoch = oldestEpoch; epoch <= currentEpoch; epoch += 1) {
+      const bucket = activeByEpoch.get(epoch);
+      points.push(this.buildMinutePoint(epoch, bucket));
+      if (!bucket) continue;
+
+      totalRequests60m += bucket.requests;
+      status2xx60m += bucket.status2xx;
+      status4xx60m += bucket.status4xx;
+      status5xx60m += bucket.status5xx;
+      totalDuration60m += bucket.totalDurationMs;
+      if (epoch > currentEpoch - 5) last5mRequests += bucket.requests;
+      allLatencies.push(...bucket.latencies);
+      this.mergeBucketEndpoints(endpointMap, bucket);
+    }
+
+    allLatencies.sort((a, b) => a - b);
+    const avgLatencyMs60m =
+      totalRequests60m > 0 ? roundTwo(totalDuration60m / totalRequests60m) : 0;
+    const p95LatencyMs60m = roundTwo(computePercentile(allLatencies, 95));
+    const errorRate5xxPercent =
+      totalRequests60m > 0
+        ? roundTwo((status5xx60m / totalRequests60m) * 100)
+        : 0;
+
+    const topEndpoints = this.toTopEndpoints(endpointMap);
 
     return {
       windowMinutes: WINDOW_MINUTES,

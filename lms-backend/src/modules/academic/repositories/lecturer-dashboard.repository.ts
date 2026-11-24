@@ -646,15 +646,14 @@ export class LecturerDashboardRepository {
     return {
       trend: row.trend,
       scoreBuckets: row.scoreBuckets,
-      atRiskStudents: row.atRiskStudents.map((s) => ({
-        ...s,
-        lastSeenAt:
-          s.lastSeenAt === null
-            ? null
-            : s.lastSeenAt instanceof Date
-              ? s.lastSeenAt
-              : new Date(s.lastSeenAt),
-      })),
+      atRiskStudents: row.atRiskStudents.map((s) => {
+        let lastSeenAt: Date | null = null;
+        if (s.lastSeenAt !== null) {
+          lastSeenAt =
+            s.lastSeenAt instanceof Date ? s.lastSeenAt : new Date(s.lastSeenAt);
+        }
+        return { ...s, lastSeenAt };
+      }),
     };
   }
 }

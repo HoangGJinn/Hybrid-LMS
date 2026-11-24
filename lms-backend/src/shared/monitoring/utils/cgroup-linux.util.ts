@@ -102,7 +102,7 @@ export const parseProcMeminfo = (
   if (!meminfoRaw) return null;
   const valuesKb = new Map<string, number>();
   for (const line of meminfoRaw.split(/\r?\n/)) {
-    const match = /^([A-Za-z0-9_()]+):\s+(\d+)\s*kB/i.exec(line.trim());
+    const match = /^([A-Za-z0-9_()]+):\s+(\d+)\s*kB/.exec(line.trim());
     if (match) {
       valuesKb.set(match[1], Number(match[2]));
     }

@@ -17,14 +17,23 @@ import { PresenceService } from '../services/presence.service.js';
 
 const MAX_IP_LENGTH = 45;
 
+const pickFirstForwarded = (
+  forwarded: string | string[] | undefined,
+): string | undefined => {
+  if (Array.isArray(forwarded)) return forwarded[0];
+  if (typeof forwarded === 'string') return forwarded.split(',')[0];
+  return undefined;
+};
+
+const nonEmpty = (value: string | undefined): string | undefined =>
+  value && value.length > 0 ? value : undefined;
+
 const extractIp = (req: Request): string | null => {
-  const forwarded = req.headers['x-forwarded-for'];
-  const firstForwarded = Array.isArray(forwarded)
-    ? forwarded[0]
-    : typeof forwarded === 'string'
-      ? forwarded.split(',')[0]
-      : undefined;
-  const raw = firstForwarded?.trim() || req.ip || req.socket?.remoteAddress;
+  const firstForwarded = pickFirstForwarded(req.headers['x-forwarded-for']);
+  const raw =
+    nonEmpty(firstForwarded?.trim()) ??
+    nonEmpty(req.ip) ??
+    nonEmpty(req.socket?.remoteAddress);
   return raw ? raw.slice(0, MAX_IP_LENGTH) : null;
 };
 
@@ -56,7 +65,7 @@ export class AuditContextInterceptor implements NestInterceptor {
       .switchToHttp()
       .getRequest<Request & { user?: AuthenticatedUser }>();
     if (req.user?.id) {
-      void this.presenceService?.touch(req.user.id);
+      this.presenceService?.touch(req.user.id).catch(() => undefined);
     }
     const ctx: AuditRequestContext = {
       actor: req.user

@@ -3,6 +3,10 @@ import { InjectEntityManager } from '@nestjs/typeorm';
 import { EntityManager } from 'typeorm';
 import type { StudentStudyActivityPoint } from '../types/student-dashboard-overview.type.js';
 
+/** Postgres drivers return timestamps as `Date` or ISO strings depending on the query path. */
+export type DateValue = string | Date;
+export type NullableDateValue = string | Date | null;
+
 export interface StudentCourseRow {
   readonly id: string;
   readonly code: string;
@@ -24,14 +28,14 @@ export interface StudentAssignmentRow {
   readonly classCode: string;
   readonly className: string;
   readonly title: string;
-  readonly openAt: Date | string;
-  readonly endAt: Date | string;
+  readonly openAt: DateValue;
+  readonly endAt: DateValue;
   readonly submissionType: 'FILE' | 'TEXT' | 'BOTH' | null;
   readonly submissionId: string | null;
-  readonly submittedAt: Date | string | null;
+  readonly submittedAt: NullableDateValue;
   readonly score: number | null;
   readonly comment: string | null;
-  readonly gradedAt: Date | string | null;
+  readonly gradedAt: NullableDateValue;
 }
 
 export interface StudentExamRow {
@@ -40,8 +44,8 @@ export interface StudentExamRow {
   readonly classCode: string;
   readonly className: string;
   readonly title: string;
-  readonly startTime: Date | string;
-  readonly endTime: Date | string;
+  readonly startTime: DateValue;
+  readonly endTime: DateValue;
   readonly durationMinutes: number;
   readonly maxAttempts: number | null;
   readonly showResults: boolean;
@@ -49,7 +53,7 @@ export interface StudentExamRow {
   readonly hasInProgressSession: boolean;
   readonly bestScore: number | null;
   readonly comment: string | null;
-  readonly gradedAt: Date | string | null;
+  readonly gradedAt: NullableDateValue;
 }
 
 export interface StudentMasteryTopicRow {
@@ -58,7 +62,7 @@ export interface StudentMasteryTopicRow {
   readonly kcName: string;
   readonly pMastery: number;
   readonly attemptsCount: number;
-  readonly lastUpdated: Date | string;
+  readonly lastUpdated: DateValue;
 }
 
 export interface StudentDashboardRawData {
