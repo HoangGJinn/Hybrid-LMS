@@ -123,7 +123,7 @@ const LecturerDashboard = () => {
               </header>
 
               {/* Row 1: Asymmetric 8:4 top strip (KPI left, height-matched Needs Attention right) */}
-              <section className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+              <section className="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-12">
                 <div className="flex flex-col gap-4 lg:col-span-8">
                   <div className="flex flex-col justify-between gap-3 rounded-[5px] border bg-card p-4">
                     <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -240,79 +240,77 @@ const LecturerDashboard = () => {
                   </div>
                 </div>
 
-                <div className="relative lg:col-span-4">
-                  <div className="lg:absolute lg:inset-0">
-                    <section className="flex h-full min-w-0 flex-col rounded-[5px] border bg-card">
-                      <header className="flex items-center justify-between gap-2 border-b px-4 py-3">
-                        <h2 className="m-0 text-sm font-semibold">
-                          Needs attention
-                        </h2>
-                        <span
-                          className={cn(
-                            'text-xs tabular-nums',
-                            issueCount > 0 ? 'text-foreground' : 'text-success',
-                          )}
-                        >
-                          {issueCount > 0
-                            ? `${issueCount} ${issueCount === 1 ? 'item' : 'items'}`
-                            : '0 issues'}
-                        </span>
-                      </header>
-                      <div className="flex-1 overflow-y-auto p-4">
-                        <ul className="m-0 -my-2 divide-y p-0">
-                          {attentionChecks.map((check) => (
-                            <li
-                              key={check.key}
-                              className="flex list-none flex-wrap items-center gap-x-2.5 gap-y-1.5 py-2.5"
+                <div className="lg:col-span-4">
+                  <section className="flex h-full min-w-0 flex-col rounded-[5px] border bg-card">
+                    <header className="flex min-h-[45px] items-center justify-between gap-2 border-b px-4 py-2.5">
+                      <h2 className="m-0 text-sm font-semibold">
+                        Needs attention
+                      </h2>
+                      <span
+                        className={cn(
+                          'text-xs tabular-nums',
+                          issueCount > 0 ? 'text-foreground' : 'text-success',
+                        )}
+                      >
+                        {issueCount > 0
+                          ? `${issueCount} ${issueCount === 1 ? 'item' : 'items'}`
+                          : '0 issues'}
+                      </span>
+                    </header>
+                    <div className="flex-1 overflow-y-auto p-4">
+                      <ul className="m-0 -my-2 divide-y p-0">
+                        {attentionChecks.map((check) => (
+                          <li
+                            key={check.key}
+                            className="flex list-none flex-wrap items-center gap-x-2.5 gap-y-1.5 py-2.5"
+                          >
+                            <span
+                              aria-label={check.severity}
+                              className={cn(
+                                'h-2 w-2 shrink-0 rounded-full',
+                                SEVERITY_DOT[check.severity],
+                              )}
+                            />
+                            <span
+                              className={cn(
+                                'min-w-0 flex-1 text-[13px]',
+                                check.severity === 'ok' &&
+                                  'text-muted-foreground',
+                              )}
                             >
-                              <span
-                                aria-label={check.severity}
-                                className={cn(
-                                  'h-2 w-2 shrink-0 rounded-full',
-                                  SEVERITY_DOT[check.severity],
-                                )}
-                              />
-                              <span
-                                className={cn(
-                                  'min-w-0 flex-1 text-[13px]',
-                                  check.severity === 'ok' &&
-                                    'text-muted-foreground',
-                                )}
-                              >
-                                {check.text}
+                              {check.text}
+                            </span>
+                            {check.links && check.links.length > 0 && (
+                              <span className="flex flex-wrap items-center gap-1">
+                                {check.links.map((link) => (
+                                  <Link
+                                    key={link.to}
+                                    to={link.to}
+                                    className="rounded-[4px] border px-1.5 py-0.5 font-mono text-xs text-foreground no-underline hover:border-brand hover:text-brand"
+                                  >
+                                    {link.label}
+                                  </Link>
+                                ))}
+                                {check.moreCount ? (
+                                  <span className="rounded-[4px] border bg-muted/50 px-1.5 py-0.5 font-mono text-xs tabular-nums text-muted-foreground">
+                                    +{check.moreCount}
+                                  </span>
+                                ) : null}
                               </span>
-                              {check.links && check.links.length > 0 && (
-                                <span className="flex flex-wrap items-center gap-1">
-                                  {check.links.map((link) => (
-                                    <Link
-                                      key={link.to}
-                                      to={link.to}
-                                      className="rounded-[4px] border px-1.5 py-0.5 font-mono text-xs text-foreground no-underline hover:border-brand hover:text-brand"
-                                    >
-                                      {link.label}
-                                    </Link>
-                                  ))}
-                                  {check.moreCount ? (
-                                    <span className="rounded-[4px] border bg-muted/50 px-1.5 py-0.5 font-mono text-xs tabular-nums text-muted-foreground">
-                                      +{check.moreCount}
-                                    </span>
-                                  ) : null}
-                                </span>
-                              )}
-                              {check.to && check.action && (
-                                <Link
-                                  to={check.to}
-                                  className="shrink-0 text-xs font-medium text-brand no-underline hover:underline"
-                                >
-                                  {check.action}
-                                </Link>
-                              )}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    </section>
-                  </div>
+                            )}
+                            {check.to && check.action && (
+                              <Link
+                                to={check.to}
+                                className="shrink-0 text-xs font-medium text-brand no-underline hover:underline"
+                              >
+                                {check.action}
+                              </Link>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </section>
                 </div>
               </section>
 
@@ -326,7 +324,7 @@ const LecturerDashboard = () => {
                   />
                 </div>
                 <section className="lg:col-span-5">
-                  <header className="flex items-baseline justify-between gap-2 border-b pb-2">
+                  <header className="flex min-h-[45px] items-center justify-between gap-2 border-b pb-2.5">
                     <h2 className="m-0 text-sm font-semibold">
                       Upcoming 7 days
                     </h2>
@@ -346,63 +344,62 @@ const LecturerDashboard = () => {
                             ? `/lecturer/classes/${ev.classId}/exams/${ev.sourceId}`
                             : `/lecturer/classes/${ev.classId}/assignments/${ev.sourceId}`;
                         return (
-                          <li
-                            key={ev.id}
-                            className="flex list-none items-center justify-between gap-3 py-2.5 text-[13px]"
-                          >
-                            <div className="flex min-w-0 items-center gap-2.5">
-                              <span
-                                aria-label={ev.kind}
-                                className={cn(
-                                  'h-2 w-2 shrink-0 rounded-full',
-                                  ev.isLive && ev.kind === 'exam'
-                                    ? 'bg-warning'
-                                    : ev.kind === 'exam'
-                                      ? 'bg-warning/70'
-                                      : 'bg-brand',
-                                )}
-                              />
-                              <div className="min-w-0">
-                                <Link
-                                  to={targetUrl}
-                                  className="block truncate font-medium text-foreground no-underline hover:text-brand hover:underline"
-                                >
-                                  {ev.title}
-                                </Link>
-                                <p className="m-0 truncate text-xs text-muted-foreground">
-                                  <span className="font-mono">
-                                    {ev.classCode}
+                          <li key={ev.id} className="list-none py-0.5">
+                            <Link
+                              to={targetUrl}
+                              className="-mx-2 flex items-center justify-between gap-3 rounded-[4px] px-2 py-2 text-[13px] text-foreground no-underline transition-colors hover:bg-muted/70"
+                            >
+                              <div className="flex min-w-0 items-center gap-2.5">
+                                <span
+                                  aria-label={ev.kind}
+                                  className={cn(
+                                    'h-2 w-2 shrink-0 rounded-full',
+                                    ev.isLive && ev.kind === 'exam'
+                                      ? 'bg-warning'
+                                      : ev.kind === 'exam'
+                                        ? 'bg-warning/70'
+                                        : 'bg-brand',
+                                  )}
+                                />
+                                <div className="min-w-0">
+                                  <span className="block truncate font-medium">
+                                    {ev.title}
                                   </span>
-                                  {ev.kind === 'exam'
-                                    ? ev.durationMinutes
-                                      ? `, Exam (${ev.durationMinutes}m)`
-                                      : ', Exam'
-                                    : ', Assignment'}
-                                </p>
+                                  <p className="m-0 truncate text-xs text-muted-foreground">
+                                    <span className="font-mono">
+                                      {ev.classCode}
+                                    </span>
+                                    {ev.kind === 'exam'
+                                      ? ev.durationMinutes
+                                        ? `, Exam (${ev.durationMinutes}m)`
+                                        : ', Exam'
+                                      : ', Assignment'}
+                                  </p>
+                                </div>
                               </div>
-                            </div>
-                            <div className="shrink-0 text-right text-xs tabular-nums">
-                              <span
-                                className={cn(
-                                  'block font-medium',
-                                  ev.isLive && ev.kind === 'exam'
-                                    ? 'text-warning'
-                                    : 'text-foreground',
-                                )}
-                              >
-                                {ev.isLive && ev.kind === 'exam'
-                                  ? 'Live now'
-                                  : formatDateTime(
-                                      ev.kind === 'exam'
-                                        ? ev.startAt
-                                        : ev.endAt,
-                                    )}
-                              </span>
-                              <span className="text-muted-foreground">
-                                {ev.submittedCount}/{ev.studentCount}{' '}
-                                {ev.kind === 'exam' ? 'started' : 'submitted'}
-                              </span>
-                            </div>
+                              <div className="shrink-0 text-right text-xs tabular-nums">
+                                <span
+                                  className={cn(
+                                    'block font-medium',
+                                    ev.isLive && ev.kind === 'exam'
+                                      ? 'text-warning'
+                                      : 'text-foreground',
+                                  )}
+                                >
+                                  {ev.isLive && ev.kind === 'exam'
+                                    ? 'Live now'
+                                    : formatDateTime(
+                                        ev.kind === 'exam'
+                                          ? ev.startAt
+                                          : ev.endAt,
+                                      )}
+                                </span>
+                                <span className="text-muted-foreground">
+                                  {ev.submittedCount}/{ev.studentCount}{' '}
+                                  {ev.kind === 'exam' ? 'started' : 'submitted'}
+                                </span>
+                              </div>
+                            </Link>
                           </li>
                         );
                       })}
@@ -414,7 +411,7 @@ const LecturerDashboard = () => {
               {/* Row 3: Active classes health table (7 col, bordered) + Grading queue (5 col, flat) */}
               <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
                 <section className="flex flex-col rounded-[5px] border bg-card lg:col-span-7">
-                  <header className="flex items-center justify-between gap-2 border-b px-4 py-3">
+                  <header className="flex min-h-[45px] items-center justify-between gap-2 border-b px-4 py-2.5">
                     <h2 className="m-0 text-sm font-semibold">
                       Active classes ({classes.length})
                     </h2>
@@ -498,7 +495,7 @@ const LecturerDashboard = () => {
                 </section>
 
                 <section className="lg:col-span-5">
-                  <header className="flex flex-wrap items-center justify-between gap-2 border-b pb-2">
+                  <header className="flex min-h-[45px] flex-wrap items-center justify-between gap-2 border-b pb-2.5">
                     <h2 className="m-0 text-sm font-semibold">Grading queue</h2>
                     <div
                       role="group"
@@ -530,10 +527,10 @@ const LecturerDashboard = () => {
                   ) : (
                     <ul className="m-0 divide-y p-0">
                       {filteredQueue.slice(0, 7).map((item) => (
-                        <li key={item.queueId} className="list-none py-2.5">
+                        <li key={item.queueId} className="list-none py-0.5">
                           <Link
                             to={`/lecturer/grading?type=${item.kind}`}
-                            className="flex items-baseline justify-between gap-3 text-[13px] text-foreground no-underline hover:text-brand"
+                            className="-mx-2 flex items-baseline justify-between gap-3 rounded-[4px] px-2 py-2 text-[13px] text-foreground no-underline transition-colors hover:bg-muted/70"
                           >
                             <div className="flex min-w-0 items-baseline gap-2">
                               <span
@@ -585,7 +582,7 @@ const LecturerDashboard = () => {
                   />
                 </div>
                 <section className="lg:col-span-5">
-                  <header className="flex items-baseline justify-between gap-2 border-b pb-2">
+                  <header className="flex min-h-[45px] items-center justify-between gap-2 border-b pb-2.5">
                     <h2 className="m-0 text-sm font-semibold">
                       Students needing attention
                     </h2>
@@ -614,11 +611,11 @@ const LecturerDashboard = () => {
                         return (
                           <li
                             key={`${st.classId}:${st.studentId}`}
-                            className="list-none py-2.5"
+                            className="list-none py-0.5"
                           >
                             <Link
                               to={`/lecturer/classes/${st.classId}/grades`}
-                              className="flex items-baseline justify-between gap-3 text-[13px] text-foreground no-underline hover:text-brand"
+                              className="-mx-2 flex items-baseline justify-between gap-3 rounded-[4px] px-2 py-2 text-[13px] text-foreground no-underline transition-colors hover:bg-muted/70"
                             >
                               <div className="min-w-0">
                                 <div className="flex flex-wrap items-baseline gap-1.5">

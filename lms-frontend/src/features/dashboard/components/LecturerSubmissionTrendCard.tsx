@@ -14,7 +14,7 @@ const RANGES: { value: LecturerTrendDays; label: string }[] = [
 
 const DEFAULT_W = 640;
 const H = 180;
-const PAD = { top: 10, right: 8, bottom: 22, left: 28 };
+const PAD = { top: 10, right: 16, bottom: 22, left: 28 };
 
 export const LecturerSubmissionTrendCard = ({
   points,
@@ -41,6 +41,8 @@ export const LecturerSubmissionTrendCard = ({
   }, []);
 
   const hasData = points.some((p) => p.submitted > 0 || p.graded > 0);
+  const totalSubmitted = points.reduce((sum, p) => sum + p.submitted, 0);
+  const totalGraded = points.reduce((sum, p) => sum + p.graded, 0);
   const innerW = width - PAD.left - PAD.right;
   const innerH = H - PAD.top - PAD.bottom;
   const max = niceChartMax(
@@ -65,8 +67,13 @@ export const LecturerSubmissionTrendCard = ({
 
   return (
     <section className="flex h-full min-w-0 flex-col rounded-[5px] border bg-card">
-      <header className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3">
-        <h2 className="m-0 text-sm font-semibold">Submissions vs graded</h2>
+      <header className="flex min-h-[45px] flex-wrap items-center justify-between gap-2 border-b px-4 py-2.5">
+        <div className="flex flex-wrap items-baseline gap-3">
+          <h2 className="m-0 text-sm font-semibold">Submissions vs graded</h2>
+          <span className="text-xs tabular-nums text-muted-foreground">
+            {totalSubmitted} submitted, {totalGraded} graded
+          </span>
+        </div>
         <div
           role="group"
           aria-label="Submission trend window"
@@ -182,7 +189,9 @@ export const LecturerSubmissionTrendCard = ({
                     key={p.date}
                     x={x(i)}
                     y={H - 6}
-                    textAnchor="middle"
+                    textAnchor={
+                      i === 0 ? 'start' : i === points.length - 1 ? 'end' : 'middle'
+                    }
                     fontSize="10"
                     fill="hsl(var(--muted-foreground))"
                   >

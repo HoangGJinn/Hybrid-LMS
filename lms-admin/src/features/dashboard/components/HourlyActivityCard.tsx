@@ -18,13 +18,18 @@ export const HourlyActivityCard = ({
 
   return (
     <Panel
+      variant="flat"
       className="h-full"
       title="Activity by hour"
-      aside={<span className="text-xs text-muted-foreground">Last 7 days · VN time</span>}
+      aside={
+        <span className="text-xs text-muted-foreground">
+          Last 7 days, VN time
+        </span>
+      }
     >
       {total === 0 || !peak ? (
-        <p className="m-auto py-10 text-center text-sm text-muted-foreground">
-          No activity recorded in the last 7 days.
+        <p className="m-auto py-8 text-center text-[13px] text-muted-foreground">
+          0 audit events in the last 7 days.
         </p>
       ) : (
         <>
@@ -33,16 +38,16 @@ export const HourlyActivityCard = ({
               <>
                 <span className="font-medium text-foreground">
                   {formatHourRange(selected.hour)}
-                </span>{' '}
-                · {selected.count} events
+                </span>
+                , {selected.count} events
               </>
             ) : (
               <>
                 Peak{' '}
                 <span className="font-medium text-foreground">
                   {formatHourRange(peak.hour)}
-                </span>{' '}
-                · {peak.count} events
+                </span>
+                , {peak.count} events
               </>
             )}
           </p>
@@ -66,9 +71,10 @@ export const HourlyActivityCard = ({
                     }}
                     className={cn(
                       'w-full rounded-t-[2px] transition-colors',
-                      p.hour === peak.hour ? 'bg-brand' : 'bg-brand/35',
+                      p.hour === peak.hour ? 'bg-brand' : 'bg-brand/45',
                       p.count === 0 && 'bg-muted',
-                      isHovered && (p.count > 0 ? 'bg-brand/80' : 'bg-muted-foreground/30'),
+                      isHovered &&
+                        (p.count > 0 ? 'bg-brand/85' : 'bg-muted-foreground/30'),
                     )}
                   />
                 </div>

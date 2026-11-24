@@ -6,32 +6,32 @@
 
 @layer base {
   :root {
-    /* Brand: lightskyblue (#87CEFA) */
-    --primary: 203 92% 75%;
-    --primary-foreground: 215 60% 14%;
-    --brand: 205 88% 32%;            /* darker azure for text/links on light surfaces */
+    /* High-contrast azure primary on neutral operational surfaces */
+    --primary: 205 88% 32%;
+    --primary-foreground: 0 0% 100%;
+    --brand: 205 88% 32%;
     --sidebar: 203 92% 75%;
     --sidebar-foreground: 215 60% 14%;
 
-    --background: 204 100% 97%;
+    --background: 210 20% 98%;
     --foreground: 215 50% 14%;
     --card: 0 0% 100%;
     --card-foreground: 215 50% 14%;
     --popover: 0 0% 100%;
     --popover-foreground: 215 50% 14%;
-    --secondary: 203 100% 94%;
+    --secondary: 210 25% 94%;
     --secondary-foreground: 215 55% 20%;
-    --muted: 204 60% 94%;
-    --muted-foreground: 215 20% 38%;
-    --accent: 203 100% 92%;
+    --muted: 210 20% 94%;
+    --muted-foreground: 215 16% 42%;
+    --accent: 210 30% 93%;
     --accent-foreground: 215 60% 14%;
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
     --success: 152 60% 32%;
     --warning: 38 92% 45%;
-    --border: 203 45% 86%;
-    --input: 203 45% 82%;
-    --ring: 205 90% 48%;
+    --border: 214 20% 88%;
+    --input: 214 20% 84%;
+    --ring: 205 88% 42%;
     --radius: 0.75rem;
   }
 }

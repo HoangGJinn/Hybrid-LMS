@@ -51,7 +51,7 @@ export const buildLecturerAttentionChecks = (
         : {
             key: 'grading-backlog',
             severity: 'ok',
-            text: 'Grading backlog — 0 ungraded submissions',
+            text: 'Grading backlog: 0 ungraded submissions',
           };
 
   const lowAssignments = attention.lowSubmissionAssignments;
@@ -74,7 +74,7 @@ export const buildLecturerAttentionChecks = (
       : {
           key: 'low-submissions',
           severity: 'ok',
-          text: 'Submission rate — all due assignments ≥ 50%',
+          text: 'Submission rate: all due assignments ≥ 50%',
         };
 
   const unconfigured = attention.unconfiguredClasses;
@@ -97,7 +97,7 @@ export const buildLecturerAttentionChecks = (
       : {
           key: 'class-setup',
           severity: 'ok',
-          text: 'Class setup — all classes have students and content',
+          text: 'Class setup: all classes have students and content',
         };
 
   return [backlogCheck, lowCheck, setupCheck].sort(

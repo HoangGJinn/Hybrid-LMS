@@ -164,7 +164,7 @@ const StudentDashboard = () => {
               </header>
 
               {/* Row 1: Asymmetric 8:4 top strip (KPIs left, height-matched Needs Attention right) */}
-              <section className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+              <section className="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-12">
                 <div className="flex flex-col gap-4 lg:col-span-8">
                   <div className="flex flex-col justify-between gap-3 rounded-[5px] border bg-card p-4">
                     <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -310,90 +310,89 @@ const StudentDashboard = () => {
                   </div>
                 </div>
 
-                <div className="relative lg:col-span-4">
-                  <div className="lg:absolute lg:inset-0">
-                    <section className="flex h-full min-w-0 flex-col rounded-[5px] border bg-card">
-                      <header className="flex items-center justify-between gap-2 border-b px-4 py-3">
-                        <h2 className="m-0 text-sm font-semibold">
-                          Needs attention
-                        </h2>
-                        <span
-                          className={cn(
-                            'text-xs tabular-nums',
-                            issueCount > 0 ? 'text-foreground' : 'text-success',
-                          )}
-                        >
-                          {issueCount > 0
-                            ? `${issueCount} ${issueCount === 1 ? 'item' : 'items'}`
-                            : '0 issues'}
-                        </span>
-                      </header>
-                      <div className="flex-1 overflow-y-auto p-4">
-                        <ul className="m-0 -my-2 divide-y p-0">
-                          {attention.map((item) => {
-                            const { visible, moreCount } =
-                              sliceAttentionClasses(item.classes);
-                            return (
-                              <li
-                                key={item.key}
-                                className="flex list-none flex-wrap items-center gap-x-2.5 gap-y-1.5 py-2.5"
+                <div className="lg:col-span-4">
+                  <section className="flex h-full min-w-0 flex-col rounded-[5px] border bg-card">
+                    <header className="flex min-h-[45px] items-center justify-between gap-2 border-b px-4 py-2.5">
+                      <h2 className="m-0 text-sm font-semibold">
+                        Needs attention
+                      </h2>
+                      <span
+                        className={cn(
+                          'text-xs tabular-nums',
+                          issueCount > 0 ? 'text-foreground' : 'text-success',
+                        )}
+                      >
+                        {issueCount > 0
+                          ? `${issueCount} ${issueCount === 1 ? 'item' : 'items'}`
+                          : '0 issues'}
+                      </span>
+                    </header>
+                    <div className="flex-1 overflow-y-auto p-4">
+                      <ul className="m-0 -my-2 divide-y p-0">
+                        {attention.map((item) => {
+                          const { visible, moreCount } = sliceAttentionClasses(
+                            item.classes,
+                          );
+                          return (
+                            <li
+                              key={item.key}
+                              className="flex list-none flex-wrap items-center gap-x-2.5 gap-y-1.5 py-2.5"
+                            >
+                              <span
+                                aria-label={item.severity}
+                                className={cn(
+                                  'h-2 w-2 shrink-0 rounded-full',
+                                  SEVERITY_DOT[item.severity],
+                                )}
+                              />
+                              <span
+                                className={cn(
+                                  'min-w-0 flex-1 text-[13px]',
+                                  item.severity === 'ok' &&
+                                    'text-muted-foreground',
+                                )}
                               >
-                                <span
-                                  aria-label={item.severity}
-                                  className={cn(
-                                    'h-2 w-2 shrink-0 rounded-full',
-                                    SEVERITY_DOT[item.severity],
+                                {item.title}
+                              </span>
+                              {visible.length > 0 && (
+                                <span className="flex flex-wrap items-center gap-1">
+                                  {visible.map((cls) => (
+                                    <Link
+                                      key={cls.id}
+                                      to={`/student/courses/${cls.id}`}
+                                      className="rounded-[4px] border px-1.5 py-0.5 font-mono text-xs text-foreground no-underline hover:border-brand hover:text-brand"
+                                    >
+                                      {cls.code}
+                                    </Link>
+                                  ))}
+                                  {moreCount > 0 && (
+                                    <span className="rounded-[4px] border bg-muted/50 px-1.5 py-0.5 font-mono text-xs tabular-nums text-muted-foreground">
+                                      +{moreCount}
+                                    </span>
                                   )}
-                                />
-                                <span
-                                  className={cn(
-                                    'min-w-0 flex-1 text-[13px]',
-                                    item.severity === 'ok' &&
-                                      'text-muted-foreground',
-                                  )}
-                                >
-                                  {item.title}
                                 </span>
-                                {visible.length > 0 && (
-                                  <span className="flex flex-wrap items-center gap-1">
-                                    {visible.map((cls) => (
-                                      <Link
-                                        key={cls.id}
-                                        to={`/student/courses/${cls.id}`}
-                                        className="rounded-[4px] border px-1.5 py-0.5 font-mono text-xs text-foreground no-underline hover:border-brand hover:text-brand"
-                                      >
-                                        {cls.code}
-                                      </Link>
-                                    ))}
-                                    {moreCount > 0 && (
-                                      <span className="rounded-[4px] border bg-muted/50 px-1.5 py-0.5 font-mono text-xs tabular-nums text-muted-foreground">
-                                        +{moreCount}
-                                      </span>
-                                    )}
-                                  </span>
-                                )}
-                                {item.severity !== 'ok' && (
-                                  <Link
-                                    to={item.link}
-                                    className="shrink-0 text-xs font-medium text-brand no-underline hover:underline"
-                                  >
-                                    {item.linkLabel}
-                                  </Link>
-                                )}
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      </div>
-                    </section>
-                  </div>
+                              )}
+                              {item.severity !== 'ok' && (
+                                <Link
+                                  to={item.link}
+                                  className="shrink-0 text-xs font-medium text-brand no-underline hover:underline"
+                                >
+                                  {item.linkLabel}
+                                </Link>
+                              )}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  </section>
                 </div>
               </section>
 
               {/* Row 2: Enrolled courses (7 col, bordered) + Deadlines & exams queue (5 col, flat) */}
               <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
                 <section className="flex flex-col rounded-[5px] border bg-card lg:col-span-7">
-                  <header className="flex items-center justify-between gap-2 border-b px-4 py-3">
+                  <header className="flex min-h-[45px] items-center justify-between gap-2 border-b px-4 py-2.5">
                     <h2 className="m-0 text-sm font-semibold">
                       Enrolled courses ({courses.length})
                     </h2>
@@ -492,7 +491,7 @@ const StudentDashboard = () => {
                 </section>
 
                 <section className="lg:col-span-5">
-                  <header className="flex flex-wrap items-center justify-between gap-2 border-b pb-2">
+                  <header className="flex min-h-[45px] flex-wrap items-center justify-between gap-2 border-b pb-2.5">
                     <h2 className="m-0 text-sm font-semibold">
                       Deadlines & exams queue
                     </h2>
@@ -528,57 +527,59 @@ const StudentDashboard = () => {
                       {filteredWork.slice(0, 7).map((item) => (
                         <li
                           key={`${item.type}:${item.id}`}
-                          className="flex list-none items-center justify-between gap-3 py-2.5 text-[13px]"
+                          className="list-none py-0.5"
                         >
-                          <div className="flex min-w-0 items-center gap-2.5">
-                            <span
-                              aria-label={item.status}
-                              className={cn(
-                                'h-2 w-2 shrink-0 rounded-full',
-                                WORK_DOT[item.status],
-                              )}
-                            />
-                            <div className="min-w-0">
-                              <Link
-                                to={item.link}
-                                className="block truncate font-medium text-foreground no-underline hover:text-brand hover:underline"
-                              >
-                                {item.title}
-                              </Link>
-                              <p className="m-0 truncate text-xs text-muted-foreground">
-                                <span className="font-mono">
-                                  {item.classCode}
+                          <Link
+                            to={item.link}
+                            className="-mx-2 flex items-center justify-between gap-3 rounded-[4px] px-2 py-2 text-[13px] text-foreground no-underline transition-colors hover:bg-muted/70"
+                          >
+                            <div className="flex min-w-0 items-center gap-2.5">
+                              <span
+                                aria-label={item.status}
+                                className={cn(
+                                  'h-2 w-2 shrink-0 rounded-full',
+                                  WORK_DOT[item.status],
+                                )}
+                              />
+                              <div className="min-w-0">
+                                <span className="block truncate font-medium">
+                                  {item.title}
                                 </span>
-                                {item.type === 'EXAM'
-                                  ? item.durationMinutes
-                                    ? `, Exam (${item.durationMinutes}m)`
-                                    : ', Exam'
-                                  : `, ${item.submissionType ?? 'Assignment'}`}
-                              </p>
+                                <p className="m-0 truncate text-xs text-muted-foreground">
+                                  <span className="font-mono">
+                                    {item.classCode}
+                                  </span>
+                                  {item.type === 'EXAM'
+                                    ? item.durationMinutes
+                                      ? `, Exam (${item.durationMinutes}m)`
+                                      : ', Exam'
+                                    : `, ${item.submissionType ?? 'Assignment'}`}
+                                </p>
+                              </div>
                             </div>
-                          </div>
-                          <div className="shrink-0 text-right text-xs tabular-nums">
-                            <span
-                              className={cn(
-                                'block font-medium',
-                                item.status === 'LIVE' ||
-                                  item.status === 'OVERDUE'
-                                  ? 'text-destructive'
-                                  : item.status === 'DUE_SOON'
-                                    ? 'text-warning'
-                                    : 'text-foreground',
-                              )}
-                            >
-                              {formatWorkDeadline(
-                                item.dueAt,
-                                item.status,
-                                nowMs,
-                              )}
-                            </span>
-                            <span className="text-muted-foreground">
-                              {formatDate(item.dueAt)}
-                            </span>
-                          </div>
+                            <div className="shrink-0 text-right text-xs tabular-nums">
+                              <span
+                                className={cn(
+                                  'block font-medium',
+                                  item.status === 'LIVE' ||
+                                    item.status === 'OVERDUE'
+                                    ? 'text-destructive'
+                                    : item.status === 'DUE_SOON'
+                                      ? 'text-warning'
+                                      : 'text-foreground',
+                                )}
+                              >
+                                {formatWorkDeadline(
+                                  item.dueAt,
+                                  item.status,
+                                  nowMs,
+                                )}
+                              </span>
+                              <span className="text-muted-foreground">
+                                {formatDate(item.dueAt)}
+                              </span>
+                            </div>
+                          </Link>
                         </li>
                       ))}
                     </ul>
@@ -597,7 +598,7 @@ const StudentDashboard = () => {
                 </div>
 
                 <section className="lg:col-span-5">
-                  <header className="flex items-baseline justify-between gap-2 border-b pb-2">
+                  <header className="flex min-h-[45px] items-center justify-between gap-2 border-b pb-2.5">
                     <h2 className="m-0 text-sm font-semibold">
                       Recent grades & feedback
                     </h2>
@@ -612,10 +613,10 @@ const StudentDashboard = () => {
                   ) : (
                     <ul className="m-0 divide-y p-0">
                       {recentGrades.map((item) => (
-                        <li key={item.id} className="list-none py-2.5">
+                        <li key={item.id} className="list-none py-0.5">
                           <Link
                             to={item.link}
-                            className="flex items-start justify-between gap-3 text-[13px] text-foreground no-underline hover:text-brand"
+                            className="-mx-2 flex items-start justify-between gap-3 rounded-[4px] px-2 py-2 text-[13px] text-foreground no-underline transition-colors hover:bg-muted/70"
                           >
                             <div className="min-w-0 flex-1">
                               <div className="flex flex-wrap items-baseline gap-2">
@@ -631,14 +632,14 @@ const StudentDashboard = () => {
                                 {formatDate(item.gradedAt)}
                               </p>
                               {item.comment && (
-                                <p className="m-0 mt-1 line-clamp-1 text-xs italic text-muted-foreground">
+                                <p className="m-0 mt-1.5 line-clamp-1 border-l-2 border-border pl-2.5 text-xs text-muted-foreground">
                                   {item.comment}
                                 </p>
                               )}
                             </div>
                             <span
                               className={cn(
-                                'shrink-0 text-sm font-semibold tabular-nums',
+                                'shrink-0 rounded-[4px] bg-muted/70 px-2 py-0.5 font-mono text-xs font-semibold tabular-nums',
                                 scoreToneClass(item.score),
                               )}
                             >

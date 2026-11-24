@@ -13,34 +13,34 @@ export const SubjectDistributionCard = ({
   return (
     <Panel
       className="h-full"
-      title="Courses and enrolment by subject"
+      title="Enrolment by subject"
       aside={
         <ul className="m-0 flex gap-3 p-0 text-xs text-muted-foreground">
           <li className="flex list-none items-center gap-1.5">
-            <span className="h-1.5 w-3 rounded-full bg-muted-foreground/40" />
+            <span className="h-2 w-3 rounded-[2px] bg-muted-foreground/40" />
             Courses
           </li>
           <li className="flex list-none items-center gap-1.5">
-            <span className="h-1.5 w-3 rounded-full bg-brand" />
+            <span className="h-2 w-3 rounded-[2px] bg-brand" />
             Students
           </li>
         </ul>
       }
     >
       {items.length === 0 ? (
-        <p className="m-auto py-10 text-center text-sm text-muted-foreground">
-          No active courses yet.
+        <p className="m-auto py-8 text-center text-[13px] text-muted-foreground">
+          0 active courses.
         </p>
       ) : (
         <ul className="m-0 space-y-3.5 p-0">
           {items.map((item) => (
             <li key={item.subjectId} className="list-none">
-              <div className="mb-1.5 flex items-baseline justify-between gap-3 text-sm">
+              <div className="mb-1.5 flex items-baseline justify-between gap-3 text-[13px]">
                 <span className="min-w-0 truncate">
                   <span className="font-mono text-xs text-muted-foreground">
                     {item.subjectCode}
                   </span>{' '}
-                  {item.subjectName}
+                  <span className="font-medium">{item.subjectName}</span>
                 </span>
                 <span
                   className={cn(
@@ -51,7 +51,7 @@ export const SubjectDistributionCard = ({
                   )}
                 >
                   {item.activeClassCount}{' '}
-                  {item.activeClassCount === 1 ? 'course' : 'courses'} ·{' '}
+                  {item.activeClassCount === 1 ? 'course' : 'courses'},{' '}
                   {item.enrolledStudentCount}{' '}
                   {item.enrolledStudentCount === 1 ? 'student' : 'students'}
                 </span>
@@ -59,7 +59,9 @@ export const SubjectDistributionCard = ({
               <div className="space-y-1">
                 <div className="h-1 rounded-full bg-muted">
                   <div
-                    style={{ width: `${(item.activeClassCount / maxClasses) * 100}%` }}
+                    style={{
+                      width: `${(item.activeClassCount / maxClasses) * 100}%`,
+                    }}
                     className="h-full rounded-full bg-muted-foreground/40"
                   />
                 </div>

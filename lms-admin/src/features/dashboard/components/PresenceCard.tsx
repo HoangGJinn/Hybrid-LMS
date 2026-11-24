@@ -26,6 +26,7 @@ export const PresenceCard = ({ traffic }: { traffic: TrafficOverviewStats }) => 
 
   return (
     <Panel
+      variant="flat"
       className="h-full"
       title={
         <span className="flex items-center gap-2">
@@ -46,41 +47,40 @@ export const PresenceCard = ({ traffic }: { traffic: TrafficOverviewStats }) => 
       }
     >
       {users.length === 0 ? (
-        <p className="m-auto py-10 text-center text-sm text-muted-foreground">
-          Nobody matching this filter was active in the last 5 minutes.
+        <p className="m-auto py-8 text-center text-[13px] text-muted-foreground">
+          0 active users in the last 5 minutes.
         </p>
       ) : (
-        <ul className="m-0 -my-1 max-h-72 divide-y overflow-y-auto p-0">
+        <ul className="m-0 max-h-72 divide-y overflow-y-auto p-0">
           {users.map((user) => (
             <li
               key={user.id}
               className="flex list-none items-center justify-between gap-3 py-2"
             >
               <div className="flex min-w-0 items-center gap-2.5">
-                <div className="relative shrink-0">
-                  {user.avatarUrl ? (
-                    <img
-                      src={user.avatarUrl}
-                      alt=""
-                      referrerPolicy="no-referrer"
-                      className="h-8 w-8 rounded-full object-cover"
-                    />
-                  ) : (
-                    <div
-                      aria-hidden="true"
-                      className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-xs font-semibold text-muted-foreground"
-                    >
-                      {initials(user.fullName)}
-                    </div>
-                  )}
-                  <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-card bg-success" />
-                </div>
+                {user.avatarUrl ? (
+                  <img
+                    src={user.avatarUrl}
+                    alt=""
+                    referrerPolicy="no-referrer"
+                    className="h-8 w-8 shrink-0 rounded-full object-cover"
+                  />
+                ) : (
+                  <div
+                    aria-hidden="true"
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-muted-foreground"
+                  >
+                    {initials(user.fullName)}
+                  </div>
+                )}
                 <div className="min-w-0">
-                  <p className="m-0 truncate text-sm font-medium">{user.fullName}</p>
+                  <p className="m-0 truncate text-[13px] font-medium">
+                    {user.fullName}
+                  </p>
                   <p className="m-0 truncate text-xs text-muted-foreground">
                     {ROLE_LABEL[user.role] ?? user.role}
                     {user.code && (
-                      <span className="font-mono"> · {user.code}</span>
+                      <span className="ml-1.5 font-mono">{user.code}</span>
                     )}
                   </p>
                 </div>

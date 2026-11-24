@@ -25,7 +25,7 @@ export const SemesterTimeline = ({
         {!notStarted && (
           <span
             style={{ left: `${pct}%` }}
-            title={`Today · ${pct}% of the term`}
+            title={`Today, ${pct}% of the term`}
             className="absolute top-1/2 h-3.5 w-0.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-foreground"
           />
         )}

@@ -486,7 +486,7 @@ export class StudentDashboardService {
             key: 'exams_schedule',
             label: 'Exams schedule',
             severity: 'ok',
-            title: 'Exams schedule — 0 exams in next 48h',
+            title: 'Exams schedule: 0 exams in next 48h',
             count: 0,
             link: '/student/exams',
             linkLabel: 'All exams',
@@ -520,7 +520,7 @@ export class StudentDashboardService {
             key: 'assignment_deadlines',
             label: 'Assignment deadlines',
             severity: 'ok',
-            title: 'Assignment deadlines — 0 overdue or due < 24h',
+            title: 'Assignment deadlines: 0 overdue or due < 24h',
             count: 0,
             link: '/student/assignments',
             linkLabel: 'All assignments',
@@ -543,8 +543,8 @@ export class StudentDashboardService {
           severity: 'ok',
           title:
             totalTopicsCount > 0
-              ? 'Knowledge review — 0 topics below 40% mastery'
-              : 'Knowledge review — 0 topics below threshold',
+              ? 'Knowledge review: 0 topics below 40% mastery'
+              : 'Knowledge review: 0 topics below threshold',
           count: 0,
           link: '/student/mastery',
           linkLabel: 'View mastery',

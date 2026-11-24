@@ -34,7 +34,7 @@ export const AttentionPanel = ({
         >
           {issueCount > 0
             ? `${issueCount} ${plural(issueCount, 'item', 'items')}`
-            : 'All clear'}
+            : '0 issues'}
         </span>
       }
     >
@@ -50,7 +50,7 @@ export const AttentionPanel = ({
             />
             <span
               className={cn(
-                'min-w-0 flex-1 text-sm',
+                'min-w-0 flex-1 text-[13px]',
                 item.severity === 'ok' && 'text-muted-foreground',
               )}
             >
@@ -62,13 +62,13 @@ export const AttentionPanel = ({
                   <Link
                     key={link.to}
                     to={link.to}
-                    className="rounded-sm border px-1.5 py-0.5 font-mono text-xs text-foreground no-underline hover:border-brand hover:text-brand"
+                    className="rounded-[4px] border px-1.5 py-0.5 font-mono text-xs text-foreground no-underline hover:border-brand hover:text-brand"
                   >
                     {link.label}
                   </Link>
                 ))}
                 {item.moreCount ? (
-                  <span className="rounded-sm border bg-muted/50 px-1.5 py-0.5 font-mono text-xs tabular-nums text-muted-foreground">
+                  <span className="rounded-[4px] border bg-muted/50 px-1.5 py-0.5 font-mono text-xs tabular-nums text-muted-foreground">
                     +{item.moreCount}
                   </span>
                 ) : null}
@@ -79,7 +79,7 @@ export const AttentionPanel = ({
                 to={item.to}
                 className="shrink-0 text-xs font-medium text-brand no-underline hover:underline"
               >
-                {item.action} →
+                {item.action}
               </Link>
             )}
           </li>

@@ -188,7 +188,7 @@ const buildMockOverview = (
         title:
           overdueCount > 0
             ? `${overdueCount} overdue assignment not submitted`
-            : 'Assignment deadlines — 0 overdue or due < 24h',
+            : 'Assignment deadlines: 0 overdue or due < 24h',
         count: overdueCount,
         classes: overdueCount > 0 ? [{ id: 'c2', code: 'IT007.Q12', name: 'Operating Systems' }] : [],
         link: '/student/assignments',
@@ -211,7 +211,7 @@ const buildMockOverview = (
         title:
           weakCount > 0
             ? `${weakCount} topics below 40% mastery`
-            : 'Knowledge review — 0 topics below 40% mastery',
+            : 'Knowledge review: 0 topics below 40% mastery',
         count: weakCount,
         link: '/student/mastery',
         linkLabel: 'Review mastery',

@@ -15,7 +15,7 @@ const RANGES: { value: TrendDays; label: string }[] = [
 
 const DEFAULT_W = 640;
 const H = 190;
-const PAD = { top: 10, right: 8, bottom: 22, left: 28 };
+const PAD = { top: 10, right: 16, bottom: 22, left: 28 };
 
 const TrendChart = ({ points }: { points: LoginTrendPoint[] }) => {
   const [hover, setHover] = useState<number | null>(null);
@@ -64,8 +64,8 @@ const TrendChart = ({ points }: { points: LoginTrendPoint[] }) => {
             <span className="font-medium text-foreground">
               {shortDate(current.date)}
             </span>
-            {' · '}
-            {current.succeeded} logins · {current.activeUsers} active users ·{' '}
+            {', '}
+            {current.succeeded} logins, {current.activeUsers} active users,{' '}
             <span className={current.failed > 0 ? 'text-destructive' : ''}>
               {current.failed} failed
             </span>
@@ -160,7 +160,9 @@ const TrendChart = ({ points }: { points: LoginTrendPoint[] }) => {
               key={p.date}
               x={x(i)}
               y={H - 6}
-              textAnchor="middle"
+              textAnchor={
+                i === 0 ? 'start' : i === points.length - 1 ? 'end' : 'middle'
+              }
               fontSize="10"
               fill="hsl(var(--muted-foreground))"
             >
@@ -256,8 +258,8 @@ export const TrafficTrendCard = ({
       {hasData ? (
         <TrendChart points={points} />
       ) : (
-        <p className="m-auto py-10 text-center text-sm text-muted-foreground">
-          No login activity recorded in the last {days} days.
+        <p className="m-auto py-10 text-center text-[13px] text-muted-foreground">
+          0 login events in the last {days} days.
         </p>
       )}
     </Panel>

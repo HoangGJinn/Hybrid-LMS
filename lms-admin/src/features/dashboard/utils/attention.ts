@@ -44,7 +44,7 @@ export const buildIssues = (overview: AdminDashboardOverview): Issue[] => {
       : {
           key: 'lecturer-unavailable',
           severity: 'ok',
-          text: 'Lecturer availability — all active courses covered',
+          text: 'Lecturer availability: all active courses covered',
         };
 
   const securityCheck: Issue =
@@ -59,7 +59,7 @@ export const buildIssues = (overview: AdminDashboardOverview): Issue[] => {
       : {
           key: 'security',
           severity: 'ok',
-          text: 'Security 24h — no failed or blocked sign-ins',
+          text: 'Security 24h: 0 failed or blocked sign-ins',
         };
 
   const empty = attention.emptyActiveClasses;
@@ -83,7 +83,7 @@ export const buildIssues = (overview: AdminDashboardOverview): Issue[] => {
       : {
           key: 'empty-classes',
           severity: 'ok',
-          text: 'Enrolment — every active course has students',
+          text: 'Enrolment: every active course has students',
         };
 
   return [lecturerCheck, securityCheck, enrolmentCheck].sort(

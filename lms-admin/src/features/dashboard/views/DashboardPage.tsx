@@ -1,23 +1,21 @@
 import { useState } from 'react';
-import { ArrowRight, BookOpen, FileSpreadsheet, ScrollText } from 'lucide-react';
 import { Link } from 'react-router';
 import {
   AuditDetailModal,
+  getActionDotTone,
   getActionMeta,
   useAuditLogs,
   type AuditCategory,
   type AuditLogItem,
 } from '@/features/audit';
-import { useAdminSession } from '@/features/auth';
 import { AsyncView } from '@/shared/components/AsyncView';
 import { EmptyState } from '@/shared/components/EmptyState';
-import { PageHeader } from '@/shared/components/PageHeader';
 import { buttonClasses } from '@/shared/components/ui/button-classes';
 import { cn } from '@/shared/utils/cn';
 import { formatDateTime, formatRelativeTime } from '@/shared/utils/date';
 import { AttentionPanel } from '../components/AttentionPanel';
 import { HourlyActivityCard } from '../components/HourlyActivityCard';
-import { KpiCard, StackedBar } from '../components/KpiCard';
+import { StackedBar } from '../components/KpiCard';
 import { Panel, Segmented } from '../components/Panel';
 import { PresenceCard } from '../components/PresenceCard';
 import { SemesterTimeline } from '../components/SemesterTimeline';
@@ -37,12 +35,6 @@ const ACTIVITY_TABS: { value: ActivityFilter; label: string }[] = [
   { value: 'SECURITY', label: 'Security' },
 ];
 
-const DOT_TONE: Record<string, string> = {
-  success: 'bg-success',
-  warning: 'bg-warning',
-  destructive: 'bg-destructive',
-};
-
 const formatClock = (timestamp: number): string =>
   timestamp
     ? new Date(timestamp).toLocaleTimeString('en-GB', {
@@ -55,7 +47,6 @@ const signedIn = (total: number, pending: number, inactive: number) =>
   Math.max(0, total - pending - inactive);
 
 const DashboardPage = () => {
-  const { data: user } = useAdminSession();
   const [trendDays, setTrendDays] = useState<TrendDays>(14);
   const overviewQuery = useDashboardOverview(trendDays);
   const [activityFilter, setActivityFilter] = useState<ActivityFilter>('ALL');
@@ -66,28 +57,47 @@ const DashboardPage = () => {
   });
   const [selectedLog, setSelectedLog] = useState<AuditLogItem | null>(null);
 
+  const summary = overviewQuery.data;
+  const subtitle = summary
+    ? `${summary.classes.activeCount} active courses, ${summary.traffic.onlineNowCount} online now, Updated ${formatClock(overviewQuery.dataUpdatedAt)}, refreshes every ${DASHBOARD_REFRESH_SECONDS}s`
+    : `Updated ${formatClock(overviewQuery.dataUpdatedAt)}, refreshes every ${DASHBOARD_REFRESH_SECONDS}s`;
+
   return (
     <>
-      <PageHeader
-        title="Dashboard"
-        subtitle={`Welcome back, ${user?.fullName ?? 'Admin'} · Updated ${formatClock(overviewQuery.dataUpdatedAt)} · refreshes every ${DASHBOARD_REFRESH_SECONDS}s`}
-        actions={
-          <div className="flex flex-wrap gap-2">
-            <Link to="/courses" className={buttonClasses('ghost', 'sm')}>
-              <BookOpen className="h-4 w-4" />
-              Manage Courses
-            </Link>
-            <Link to="/audit-logs" className={buttonClasses('outline', 'sm')}>
-              <ScrollText className="h-4 w-4" />
-              Audit Log
-            </Link>
-            <Link to="/import" className={buttonClasses('primary', 'sm')}>
-              <FileSpreadsheet className="h-4 w-4" />
-              Import Data
-            </Link>
-          </div>
-        }
-      />
+      <header className="mb-5 flex flex-wrap items-center justify-between gap-3 border-b pb-3">
+        <div>
+          <h1 className="m-0 text-xl font-semibold tracking-tight">
+            Dashboard
+          </h1>
+          <p className="m-0 mt-0.5 text-xs tabular-nums text-muted-foreground">
+            {subtitle}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <Link
+            to="/courses"
+            className="text-xs font-medium text-muted-foreground no-underline hover:text-brand hover:underline"
+          >
+            Courses
+          </Link>
+          <Link
+            to="/audit-logs"
+            className="text-xs font-medium text-muted-foreground no-underline hover:text-brand hover:underline"
+          >
+            Audit log
+          </Link>
+          <Link
+            to="/import"
+            className={buttonClasses(
+              'primary',
+              'sm',
+              'rounded-[5px] shadow-none',
+            )}
+          >
+            Import data
+          </Link>
+        </div>
+      </header>
 
       <AsyncView
         state={{
@@ -101,118 +111,168 @@ const DashboardPage = () => {
           const { classes, students, lecturers, activeSemester, traffic } =
             overview;
           return (
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:col-span-8">
-                  <KpiCard
-                    label="Active courses"
-                    value={classes.activeCount}
-                    to="/courses"
-                  >
-                    <StackedBar
-                      segments={[
-                        {
-                          label: 'this semester',
-                          value: classes.currentSemesterCount,
-                          tone: 'bg-brand',
-                        },
-                        {
-                          label: 'other',
-                          value: Math.max(
-                            0,
-                            classes.activeCount - classes.currentSemesterCount,
-                          ),
-                          tone: 'bg-muted-foreground/40',
-                        },
-                        {
-                          label: 'ended',
-                          value: classes.endedCount,
-                          tone: 'bg-muted-foreground/15',
-                        },
-                      ]}
-                    />
-                  </KpiCard>
-
-                  <KpiCard label="Students" value={students.totalCount} to="/students">
-                    <StackedBar
-                      segments={[
-                        {
-                          label: 'active',
-                          value: signedIn(
-                            students.totalCount,
-                            students.pendingCount,
-                            students.inactiveCount,
-                          ),
-                          tone: 'bg-success',
-                        },
-                        {
-                          label: 'not signed in',
-                          value: students.pendingCount,
-                          tone: 'bg-warning',
-                          to: '/students',
-                        },
-                        {
-                          label: 'inactive',
-                          value: students.inactiveCount,
-                          tone: 'bg-muted-foreground/40',
-                        },
-                      ]}
-                    />
-                  </KpiCard>
-
-                  <KpiCard label="Lecturers" value={lecturers.totalCount} to="/lecturers">
-                    <StackedBar
-                      segments={[
-                        {
-                          label: 'active',
-                          value: signedIn(
-                            lecturers.totalCount,
-                            lecturers.pendingCount,
-                            lecturers.inactiveCount,
-                          ),
-                          tone: 'bg-success',
-                        },
-                        {
-                          label: 'not signed in',
-                          value: lecturers.pendingCount,
-                          tone: 'bg-warning',
-                          to: '/lecturers',
-                        },
-                        {
-                          label: 'inactive',
-                          value: lecturers.inactiveCount,
-                          tone: 'bg-muted-foreground/40',
-                        },
-                      ]}
-                    />
-                  </KpiCard>
-
-                  <KpiCard
-                    label="Current semester"
-                    value={activeSemester?.semesterCode ?? '—'}
-                  >
-                    {activeSemester ? (
-                      <SemesterTimeline
-                        semester={activeSemester}
-                        nowMs={overviewQuery.dataUpdatedAt}
-                      />
-                    ) : (
-                      <p className="m-0 text-xs text-muted-foreground">
-                        No semester configured.
+            <div className="space-y-6">
+              {/* Row 1: Asymmetric 8:4 top strip — focal courses/term card + 2 flat personnel metrics | Needs attention */}
+              <div className="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-12">
+                <div className="flex flex-col gap-4 lg:col-span-8">
+                  <div className="grid grid-cols-1 gap-4 rounded-[5px] border bg-card p-4 sm:grid-cols-12">
+                    <div className="flex flex-col justify-between gap-3 sm:col-span-7">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="text-[13px] text-muted-foreground">
+                          Active courses
+                        </span>
+                        <Link
+                          to="/courses"
+                          className="text-xs font-medium text-brand no-underline hover:underline"
+                        >
+                          All courses →
+                        </Link>
+                      </div>
+                      <p className="m-0 text-2xl font-semibold leading-none tabular-nums">
+                        {classes.activeCount}
                       </p>
-                    )}
-                  </KpiCard>
+                      <StackedBar
+                        segments={[
+                          {
+                            label: 'this semester',
+                            value: classes.currentSemesterCount,
+                            tone: 'bg-brand',
+                          },
+                          {
+                            label: 'other',
+                            value: Math.max(
+                              0,
+                              classes.activeCount - classes.currentSemesterCount,
+                            ),
+                            tone: 'bg-muted-foreground/40',
+                          },
+                          {
+                            label: 'ended',
+                            value: classes.endedCount,
+                            tone: 'bg-muted-foreground/20',
+                          },
+                        ]}
+                      />
+                    </div>
+
+                    <div className="flex flex-col justify-between gap-3 border-t pt-3 sm:col-span-5 sm:border-l sm:border-t-0 sm:pl-5 sm:pt-0">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="text-[13px] text-muted-foreground">
+                          Current semester
+                        </span>
+                        <span className="font-mono text-sm font-semibold tabular-nums">
+                          {activeSemester?.semesterCode ?? '—'}
+                        </span>
+                      </div>
+                      {activeSemester ? (
+                        <SemesterTimeline
+                          semester={activeSemester}
+                          nowMs={overviewQuery.dataUpdatedAt}
+                        />
+                      ) : (
+                        <p className="m-0 text-xs text-muted-foreground">
+                          No semester configured.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="grid flex-1 grid-cols-1 divide-y border-y sm:grid-cols-2 sm:divide-x sm:divide-y-0">
+                    <div className="flex flex-col justify-between gap-2.5 py-3 sm:pr-4">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="text-[13px] text-muted-foreground">
+                          Students
+                        </span>
+                        <div className="flex items-baseline gap-2.5">
+                          <span className="text-lg font-semibold tabular-nums">
+                            {students.totalCount}
+                          </span>
+                          <Link
+                            to="/students"
+                            className="text-xs font-medium text-brand no-underline hover:underline"
+                          >
+                            Manage
+                          </Link>
+                        </div>
+                      </div>
+                      <StackedBar
+                        segments={[
+                          {
+                            label: 'active',
+                            value: signedIn(
+                              students.totalCount,
+                              students.pendingCount,
+                              students.inactiveCount,
+                            ),
+                            tone: 'bg-success',
+                          },
+                          {
+                            label: 'not signed in',
+                            value: students.pendingCount,
+                            tone: 'bg-warning',
+                            to: '/students',
+                          },
+                          {
+                            label: 'inactive',
+                            value: students.inactiveCount,
+                            tone: 'bg-muted-foreground/40',
+                          },
+                        ]}
+                      />
+                    </div>
+
+                    <div className="flex flex-col justify-between gap-2.5 py-3 sm:pl-4">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="text-[13px] text-muted-foreground">
+                          Lecturers
+                        </span>
+                        <div className="flex items-baseline gap-2.5">
+                          <span className="text-lg font-semibold tabular-nums">
+                            {lecturers.totalCount}
+                          </span>
+                          <Link
+                            to="/lecturers"
+                            className="text-xs font-medium text-brand no-underline hover:underline"
+                          >
+                            Manage
+                          </Link>
+                        </div>
+                      </div>
+                      <StackedBar
+                        segments={[
+                          {
+                            label: 'active',
+                            value: signedIn(
+                              lecturers.totalCount,
+                              lecturers.pendingCount,
+                              lecturers.inactiveCount,
+                            ),
+                            tone: 'bg-success',
+                          },
+                          {
+                            label: 'not signed in',
+                            value: lecturers.pendingCount,
+                            tone: 'bg-warning',
+                            to: '/lecturers',
+                          },
+                          {
+                            label: 'inactive',
+                            value: lecturers.inactiveCount,
+                            tone: 'bg-muted-foreground/40',
+                          },
+                        ]}
+                      />
+                    </div>
+                  </div>
                 </div>
 
-                {/* On desktop the panel is absolutely sized so it matches the KPI grid height and scrolls if needed. */}
-                <div className="relative lg:col-span-4">
-                  <div className="lg:absolute lg:inset-0">
-                    <AttentionPanel overview={overview} />
-                  </div>
+                <div className="lg:col-span-4">
+                  <AttentionPanel overview={overview} />
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+              {/* Row 2: Traffic trend (card) + Online users (flat) */}
+              <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
                 <div className="lg:col-span-7">
                   <TrafficTrendCard
                     traffic={traffic}
@@ -226,9 +286,12 @@ const DashboardPage = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+              {/* Row 3: Subject enrolment (card) + Hourly activity (flat) */}
+              <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
                 <div className="lg:col-span-7">
-                  <SubjectDistributionCard items={overview.subjectDistribution} />
+                  <SubjectDistributionCard
+                    items={overview.subjectDistribution}
+                  />
                 </div>
                 <div className="lg:col-span-5">
                   <HourlyActivityCard points={overview.trends.activityByHour} />
@@ -239,20 +302,23 @@ const DashboardPage = () => {
         }}
       </AsyncView>
 
-      <div className="mt-4">
+      <div className="mt-6">
         <Panel
+          variant="flat"
           title="Recent activity"
           aside={
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
               <Segmented
                 label="Activity filter"
                 value={activityFilter}
                 options={ACTIVITY_TABS}
                 onChange={setActivityFilter}
               />
-              <Link to="/audit-logs" className={buttonClasses('ghost', 'sm')}>
-                View all
-                <ArrowRight className="h-3.5 w-3.5" />
+              <Link
+                to="/audit-logs"
+                className="text-xs font-medium text-brand no-underline hover:underline"
+              >
+                All logs
               </Link>
             </div>
           }
@@ -267,13 +333,13 @@ const DashboardPage = () => {
             isEmpty={(rows) => rows.length === 0}
             empty={
               <EmptyState
-                title="No recent activity yet"
-                description="Administrative actions and login events will appear here."
+                title="0 recent activity events"
+                description="Administrative actions and sign-in events will appear here."
               />
             }
           >
             {(rows) => (
-              <ul className="m-0 -my-1 divide-y p-0">
+              <ul className="m-0 divide-y p-0">
                 {rows.map((item) => {
                   const meta = getActionMeta(item.action);
                   return (
@@ -281,25 +347,29 @@ const DashboardPage = () => {
                       <button
                         type="button"
                         onClick={() => setSelectedLog(item)}
-                        className="flex w-full items-center gap-3 border-0 bg-transparent px-1 py-2.5 text-left transition-colors hover:bg-accent/40"
+                        className="-mx-2 flex w-[calc(100%+1rem)] items-center gap-3 rounded-[4px] border-0 bg-transparent px-2 py-2.5 text-left transition-colors hover:bg-muted/70"
                       >
                         <span
                           aria-hidden="true"
                           className={cn(
                             'h-2 w-2 shrink-0 rounded-full',
-                            DOT_TONE[meta.variant] ?? 'bg-muted-foreground/50',
+                            getActionDotTone(item),
                           )}
                         />
                         <span className="w-36 shrink-0 truncate text-xs font-medium text-muted-foreground">
                           {meta.label}
                         </span>
                         <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm">
+                          <span className="block truncate text-[13px]">
                             {item.summary ?? item.entityLabel ?? meta.label}
                           </span>
                           <span className="block truncate text-xs text-muted-foreground">
                             {item.actorName ?? item.actorEmail ?? 'System'}
-                            {item.ipAddress ? ` · ${item.ipAddress}` : ''}
+                            {item.ipAddress && (
+                              <span className="ml-2 font-mono">
+                                {item.ipAddress}
+                              </span>
+                            )}
                           </span>
                         </span>
                         <span
