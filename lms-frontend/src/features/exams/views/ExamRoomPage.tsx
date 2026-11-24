@@ -9,6 +9,7 @@ import {
   Clock,
   Eye,
   Flag,
+  Info,
   Play,
   RefreshCw,
   RotateCcw,
@@ -30,10 +31,17 @@ import {
   useStartExamSession,
   useSubmitExamSession,
 } from '../hooks/useExamSession';
-import { useExamAutosave } from '../hooks/useExamAutosave';
+import {
+  buildSubmitPayload,
+  getQuestionAnswerState,
+  hasAnyDraftContent,
+  useExamAutosave,
+  type StudentQuestionDraftAnswer,
+} from '../hooks/useExamAutosave';
 import type {
   ExamAttempt,
   StudentExamLobby,
+  StudentExamQuestion,
 } from '../types/exams.types';
 import QuestionPalette from '../components/QuestionPalette';
 import SubmitReviewDialog from '../components/SubmitReviewDialog';
@@ -44,6 +52,7 @@ import { scoreTone } from '../utils/score-tone';
 /** UTEx-style fixed 10-question batch per page. */
 const QUESTIONS_PER_PAGE = 10;
 const OPTION_LETTERS = ['A', 'B', 'C', 'D', 'E', 'F'];
+const CLOZE_SPLIT_REGEX = /(\{\{\d+\}\})/g;
 
 const ExamRoomPage = () => {
   const { courseId = '', examId = '' } = useParams();
@@ -167,7 +176,6 @@ const LobbyView = ({
   const attemptsLeft =
     lobby.maxAttempts === null ? null : lobby.maxAttempts - lobby.attemptsUsed;
 
-  // What the student should know right now, per state.
   const headline = hasActive
     ? 'You have an attempt in progress'
     : lobby.canStartNewAttempt
@@ -203,7 +211,7 @@ const LobbyView = ({
         subtitle={
           isFile
             ? 'File submission exam'
-            : `${lobby.questionCount} multiple-choice questions`
+            : `${lobby.questionCount} ${lobby.questionCount === 1 ? 'question' : 'questions'}`
         }
         actions={
           <div className="flex items-center gap-2">
@@ -289,6 +297,39 @@ const LobbyView = ({
             </div>
           </section>
 
+          {/* Answering & grading rules */}
+          {!isFile && (
+            <section className="rounded-lg border bg-card p-5">
+              <h2 className="m-0 flex items-center gap-2 text-sm font-semibold">
+                <Info className="h-4 w-4 text-brand" />
+                Answering &amp; grading rules
+              </h2>
+              <ul className="m-0 mt-2.5 list-disc space-y-1.5 pl-5 text-xs text-muted-foreground">
+                <li>
+                  <strong className="text-foreground">Single-choice:</strong>{' '}
+                  Select the one best option.
+                </li>
+                <li>
+                  <strong className="text-foreground">Multiple-answer:</strong>{' '}
+                  Select the exact number of correct options requested (you
+                  cannot exceed the limit). You must select all correct options
+                  to earn points for that question.
+                </li>
+                <li>
+                  <strong className="text-foreground">
+                    Fill-in-the-blank (Cloze):
+                  </strong>{' '}
+                  Type your answer directly into each numbered blank{' '}
+                  <code>(1)</code>, <code>(2)</code>… inside the text. Answers
+                  are <strong>not case-sensitive</strong> and extra spaces are
+                  ignored, but{' '}
+                  <strong>every blank in the question must be correct</strong>{' '}
+                  to earn points.
+                </li>
+              </ul>
+            </section>
+          )}
+
           {/* Attempts history */}
           {lobby.attempts.length > 0 && (
             <section className="overflow-hidden rounded-lg border bg-card">
@@ -372,13 +413,13 @@ const LobbyView = ({
           )}
         </div>
 
-        {/* Static facts live in a quiet sidebar instead of three big cards */}
+        {/* Static facts sidebar */}
         <aside className="h-fit rounded-lg border bg-card px-5 py-3 lg:sticky lg:top-4">
           <h2 className="m-0 py-1 text-sm font-semibold">Exam details</h2>
           <dl className="m-0 divide-y">
             <InfoRow
               label="Format"
-              value={isFile ? 'File submission' : 'Multiple choice'}
+              value={isFile ? 'File submission' : 'Interactive questions'}
             />
             {!isFile && (
               <InfoRow label="Questions" value={String(lobby.questionCount)} />
@@ -432,18 +473,24 @@ const ActiveAttemptRoom = ({
   const flagsKey = `exam-draft-${session.id}-flags`;
 
   const {
-    answers,
+    draftAnswers,
     savedQuestionIds,
     dirtyQuestionIds,
     isSaving,
     isOfflineError,
     deadlineMs,
-    selectOption,
+    selectSingleOption,
+    toggleMultiOption,
+    updateBlankText,
+    clearQuestionAnswer,
     flushDirty,
     clearLocalDraft,
   } = useExamAutosave({
     sessionId: session.id,
+    questions,
     initialSavedAnswers: attempt.savedAnswers,
+    initialSavedMultiAnswers: attempt.savedMultiAnswers,
+    initialSavedTextAnswers: attempt.savedTextAnswers,
     initialDeadlineIso: attempt.deadline,
     initialServerNowIso: attempt.serverNow,
   });
@@ -473,7 +520,6 @@ const ActiveAttemptRoom = ({
     localStorage.setItem(flagsKey, JSON.stringify(flags));
   }, [flags, flagsKey]);
 
-  // Inform the student upon entering the exam room that their work is automatically saved.
   useEffect(() => {
     toast.info('Your answers are automatically saved as you make progress.', {
       id: `autosave-info-${session.id}`,
@@ -483,7 +529,6 @@ const ActiveAttemptRoom = ({
     });
   }, [session.id]);
 
-  // Smoothly scroll to a specific question after switching to its 10-question page.
   useEffect(() => {
     const questionId = pendingScrollQuestionIdRef.current;
     if (!questionId) return;
@@ -503,10 +548,7 @@ const ActiveAttemptRoom = ({
   const submit = useCallback(() => {
     if (submitted.current) return;
     submitted.current = true;
-    const payload = questions.map((q) => ({
-      questionId: q.id,
-      optionId: answers[q.id] ?? null,
-    }));
+    const payload = buildSubmitPayload(questions, draftAnswers);
     submitSession(
       {
         sessionId: session.id,
@@ -530,8 +572,8 @@ const ActiveAttemptRoom = ({
       },
     );
   }, [
-    answers,
     clearLocalDraft,
+    draftAnswers,
     onSubmitted,
     questions,
     session.id,
@@ -579,7 +621,7 @@ const ActiveAttemptRoom = ({
   }
 
   const answeredCount = questions.filter(
-    (q) => answers[q.id] !== undefined,
+    (q) => getQuestionAnswerState(q, draftAnswers[q.id]) === 'ANSWERED',
   ).length;
   const flaggedCount = questions.filter((q) => flags[q.id]).length;
   const low = cd.ms < 5 * 60 * 1000;
@@ -680,91 +722,38 @@ const ActiveAttemptRoom = ({
           <ol className="m-0 list-none space-y-4 p-0">
             {pageQuestions.map((q, offset) => {
               const globalIndex = pageStart + offset;
-              const selectedOptionId = answers[q.id];
+              const draft = draftAnswers[q.id];
+              const answerState = getQuestionAnswerState(q, draft);
+              const hasDraft = hasAnyDraftContent(draft);
               const isSaved =
-                selectedOptionId !== undefined && savedQuestionIds.has(q.id);
-              const isDirty =
-                selectedOptionId !== undefined && dirtyQuestionIds.has(q.id);
+                answerState === 'ANSWERED' &&
+                savedQuestionIds.has(q.id) &&
+                !dirtyQuestionIds.has(q.id);
+              const isDirty = hasDraft && dirtyQuestionIds.has(q.id);
+
               return (
-                <li
+                <QuestionAttemptCard
                   key={q.id}
-                  id={`exam-question-${q.id}`}
-                  className="rounded-lg border bg-card p-5"
-                >
-                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold">
-                        Question {globalIndex + 1} of {questions.length}
-                      </span>
-                      {isSaved && (
-                        <span className="rounded-full bg-success/15 px-2 py-0.5 text-xs font-medium text-success">
-                          Answer saved
-                        </span>
-                      )}
-                      {isDirty && (
-                        <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-                          Pending save
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {selectedOptionId !== undefined && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => selectOption(q.id, null)}
-                          className="text-xs text-muted-foreground"
-                        >
-                          Clear choice
-                        </Button>
-                      )}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        aria-pressed={Boolean(flags[q.id])}
-                        onClick={() => toggleFlag(q.id)}
-                      >
-                        <Flag
-                          className={cn(
-                            'mr-1 h-4 w-4',
-                            flags[q.id] && 'fill-warning text-warning',
-                          )}
-                        />
-                        {flags[q.id] ? 'Flagged' : 'Flag'}
-                      </Button>
-                    </div>
-                  </div>
-                  <p className="mt-0 whitespace-pre-line font-medium">
-                    {q.content}
-                  </p>
-                  <div className="space-y-2">
-                    {q.options.map((opt, oi) => {
-                      const isSelected = selectedOptionId === opt.id;
-                      return (
-                        <label
-                          key={opt.id}
-                          className={cn(
-                            'flex cursor-pointer items-center gap-3 rounded-md border p-3 text-sm transition-colors',
-                            isSelected
-                              ? 'border-primary bg-primary/15 font-medium'
-                              : 'hover:bg-accent/50',
-                          )}
-                        >
-                          <input
-                            type="radio"
-                            name={`q-${q.id}`}
-                            checked={isSelected}
-                            onChange={() => selectOption(q.id, opt.id)}
-                          />
-                          <span className="font-semibold text-muted-foreground">
-                            {OPTION_LETTERS[oi]}.
-                          </span>
-                          <span className="flex-1">{opt.content}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                </li>
+                  question={q}
+                  globalIndex={globalIndex}
+                  totalQuestions={questions.length}
+                  draft={draft}
+                  answerState={answerState}
+                  hasDraft={hasDraft}
+                  isSaved={isSaved}
+                  isDirty={isDirty}
+                  isFlagged={Boolean(flags[q.id])}
+                  onSelectSingle={(optId) => selectSingleOption(q.id, optId)}
+                  onToggleMulti={(optId, max) =>
+                    toggleMultiOption(q.id, optId, max)
+                  }
+                  onUpdateBlank={(blankIdx, val, count) =>
+                    updateBlankText(q.id, blankIdx, val, count)
+                  }
+                  onBlurBlank={() => void flushDirty()}
+                  onClear={() => clearQuestionAnswer(q.id)}
+                  onToggleFlag={() => toggleFlag(q.id)}
+                />
               );
             })}
           </ol>
@@ -800,7 +789,7 @@ const ActiveAttemptRoom = ({
         <aside className="h-fit rounded-lg border bg-card p-4 lg:sticky lg:top-4">
           <QuestionPalette
             questions={questions}
-            answers={answers}
+            draftAnswers={draftAnswers}
             savedQuestionIds={savedQuestionIds}
             dirtyQuestionIds={dirtyQuestionIds}
             flags={flags}
@@ -821,7 +810,7 @@ const ActiveAttemptRoom = ({
       <SubmitReviewDialog
         open={isReviewOpen}
         questions={questions}
-        answers={answers}
+        draftAnswers={draftAnswers}
         flags={flags}
         isSubmitting={submitting}
         onClose={() => setIsReviewOpen(false)}
@@ -829,6 +818,234 @@ const ActiveAttemptRoom = ({
         onConfirm={submit}
       />
     </div>
+  );
+};
+
+interface QuestionAttemptCardProps {
+  question: StudentExamQuestion;
+  globalIndex: number;
+  totalQuestions: number;
+  draft: StudentQuestionDraftAnswer | undefined;
+  answerState: 'UNANSWERED' | 'PARTIAL' | 'ANSWERED';
+  hasDraft: boolean;
+  isSaved: boolean;
+  isDirty: boolean;
+  isFlagged: boolean;
+  onSelectSingle: (optionId: string) => void;
+  onToggleMulti: (optionId: string, maxAllowed: number) => void;
+  onUpdateBlank: (blankIdx: number, value: string, blankCount: number) => void;
+  onBlurBlank: () => void;
+  onClear: () => void;
+  onToggleFlag: () => void;
+}
+
+const QuestionAttemptCard = ({
+  question,
+  globalIndex,
+  totalQuestions,
+  draft,
+  answerState,
+  hasDraft,
+  isSaved,
+  isDirty,
+  isFlagged,
+  onSelectSingle,
+  onToggleMulti,
+  onUpdateBlank,
+  onBlurBlank,
+  onClear,
+  onToggleFlag,
+}: QuestionAttemptCardProps) => {
+  const type = question.type ?? 'MULTIPLE_CHOICE';
+  const requiredCount = question.correctCount ?? 1;
+  const isFib = type === 'FILL_IN_THE_BLANK';
+  const isMulti = !isFib && requiredCount > 1;
+  const selectedIds = draft?.optionIds ?? [];
+  const textAnswers = draft?.textAnswers ?? [];
+  const filledBlanksCount = Array.from(
+    { length: requiredCount },
+    (_, i) => (textAnswers[i] ?? '').trim(),
+  ).filter((t) => t !== '').length;
+
+  const typeBadgeLabel = isFib
+    ? `Fill in the blank · ${filledBlanksCount}/${requiredCount} filled`
+    : isMulti
+      ? `Multiple answers · Select ${requiredCount} (${selectedIds.length}/${requiredCount})`
+      : 'Single choice';
+
+  return (
+    <li
+      id={`exam-question-${question.id}`}
+      className="rounded-lg border bg-card p-5"
+    >
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm font-semibold">
+            Question {globalIndex + 1} of {totalQuestions}
+          </span>
+          <span className="rounded-full bg-muted px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">
+            {typeBadgeLabel}
+          </span>
+          {answerState === 'PARTIAL' && (
+            <span className="rounded-full bg-warning/15 px-2 py-0.5 text-xs font-medium text-warning">
+              Incomplete
+            </span>
+          )}
+          {isSaved && (
+            <span className="rounded-full bg-success/15 px-2 py-0.5 text-xs font-medium text-success">
+              Answer saved
+            </span>
+          )}
+          {isDirty && (
+            <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+              Pending save
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          {hasDraft && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onClear}
+              className="text-xs text-muted-foreground"
+            >
+              {isFib || isMulti ? 'Clear answer' : 'Clear choice'}
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            aria-pressed={isFlagged}
+            onClick={onToggleFlag}
+          >
+            <Flag
+              className={cn(
+                'mr-1 h-4 w-4',
+                isFlagged && 'fill-warning text-warning',
+              )}
+            />
+            {isFlagged ? 'Flagged' : 'Flag'}
+          </Button>
+        </div>
+      </div>
+
+      {/* Per-question Rule Note for Fill-in-the-Blank and Multi-answer MCQ */}
+      {isFib && (
+        <div className="mb-3 flex items-start gap-2 rounded-md border border-brand/25 bg-brand/5 px-3 py-2 text-xs text-muted-foreground">
+          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand" />
+          <span>
+            <strong className="text-foreground">Rule:</strong> Fill in all{' '}
+            {requiredCount === 1
+              ? 'numbered blank'
+              : `${requiredCount} numbered blanks`}{' '}
+            directly inside the text below. Answers are{' '}
+            <strong className="text-foreground">not case-sensitive</strong> and
+            extra spaces are ignored. All blanks must be correct to earn points.
+          </span>
+        </div>
+      )}
+
+      {isMulti && (
+        <div className="mb-3 flex items-start gap-2 rounded-md border border-brand/25 bg-brand/5 px-3 py-2 text-xs text-muted-foreground">
+          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand" />
+          <span>
+            <strong className="text-foreground">Rule:</strong> Select exactly{' '}
+            <strong className="text-foreground">{requiredCount}</strong> correct
+            answers (maximum {requiredCount} selections allowed). All{' '}
+            {requiredCount} selections must be correct to earn points.
+          </span>
+        </div>
+      )}
+
+      {isFib ? (
+        <div className="whitespace-pre-line font-medium leading-loose text-foreground">
+          {question.content.split(CLOZE_SPLIT_REGEX).map((part, idx) => {
+            const match = /^\{\{(\d+)\}\}$/.exec(part);
+            if (!match) return <span key={idx}>{part}</span>;
+            const blankNum = Number(match[1]);
+            const blankIndex = blankNum - 1;
+            const value = textAnswers[blankIndex] ?? '';
+            const chWidth = Math.min(28, Math.max(10, value.length + 3));
+            return (
+              <span
+                key={idx}
+                className="mx-1 inline-flex items-center gap-1 rounded-md border border-input bg-background px-2 py-0.5 align-baseline shadow-xs focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20"
+              >
+                <span className="select-none text-[11px] font-bold text-primary">
+                  ({blankNum})
+                </span>
+                <input
+                  type="text"
+                  aria-label={`Blank ${blankNum} for question ${globalIndex + 1}`}
+                  placeholder={`Blank ${blankNum}`}
+                  maxLength={500}
+                  value={value}
+                  style={{ width: `${chWidth}ch` }}
+                  onChange={(e) =>
+                    onUpdateBlank(blankIndex, e.target.value, requiredCount)
+                  }
+                  onBlur={onBlurBlank}
+                  className="border-0 bg-transparent p-0 text-sm font-normal text-foreground outline-none placeholder:text-muted-foreground/60"
+                />
+              </span>
+            );
+          })}
+        </div>
+      ) : (
+        <>
+          <p className="mt-0 whitespace-pre-line font-medium">
+            {question.content}
+          </p>
+          <div className="space-y-2">
+            {question.options.map((opt, oi) => {
+              const isSelected = selectedIds.includes(opt.id);
+              const isCapped =
+                isMulti && !isSelected && selectedIds.length >= requiredCount;
+              return (
+                <label
+                  key={opt.id}
+                  title={
+                    isCapped
+                      ? `Maximum ${requiredCount} selections reached. Uncheck one first to change.`
+                      : undefined
+                  }
+                  className={cn(
+                    'flex items-center gap-3 rounded-md border p-3 text-sm transition-colors',
+                    isCapped
+                      ? 'cursor-not-allowed opacity-60'
+                      : 'cursor-pointer',
+                    isSelected
+                      ? 'border-primary bg-primary/15 font-medium'
+                      : !isCapped && 'hover:bg-accent/50',
+                  )}
+                >
+                  {isMulti ? (
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      disabled={isCapped}
+                      onChange={() => onToggleMulti(opt.id, requiredCount)}
+                    />
+                  ) : (
+                    <input
+                      type="radio"
+                      name={`q-${question.id}`}
+                      checked={isSelected}
+                      onChange={() => onSelectSingle(opt.id)}
+                    />
+                  )}
+                  <span className="font-semibold text-muted-foreground">
+                    {OPTION_LETTERS[oi]}.
+                  </span>
+                  <span className="flex-1">{opt.content}</span>
+                </label>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </li>
   );
 };
 

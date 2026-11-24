@@ -105,4 +105,18 @@ describe('ClassExportService', () => {
     expect(classRepo.findAllByLecturerId).not.toHaveBeenCalled();
     expect(classRepo.findEnrollmentsByStudentId).not.toHaveBeenCalled();
   });
+
+  it('returns JSON class rows with class id for lecturer and student views', async () => {
+    const lecturerRows = await service.getLecturerClasses(LECTURER_ID);
+    const studentRows = await service.getStudentClasses(STUDENT_ID);
+
+    expect(lecturerRows).toHaveLength(2);
+    expect(lecturerRows[0]).toMatchObject({ id: 'c1', classCode: 'WEB26.01', studentCount: 40 });
+    expect(studentRows).toHaveLength(1);
+    expect(studentRows[0]).toMatchObject({
+      id: 'c1',
+      classCode: 'WEB26.01',
+      lecturerName: 'Tran Van B',
+    });
+  });
 });

@@ -14,7 +14,7 @@ export const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
     return <FullPageLoader />;
   }
 
-  if (!user) {
+  if (!user || user.role === 'ADMIN') {
     return <Navigate to="/login" replace />;
   }
 

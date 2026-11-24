@@ -1,11 +1,15 @@
 import { Modal } from '@shared/components/Modal';
 import { Button } from '@shared/components/ui/button';
+import {
+  getQuestionAnswerState,
+  type StudentQuestionDraftAnswer,
+} from '../hooks/useExamAutosave';
 import type { StudentExamQuestion } from '../types/exams.types';
 
 interface SubmitReviewDialogProps {
   open: boolean;
   questions: StudentExamQuestion[];
-  answers: Record<string, string>;
+  draftAnswers: Record<string, StudentQuestionDraftAnswer>;
   flags: Record<string, boolean>;
   isSubmitting: boolean;
   onClose: () => void;
@@ -47,30 +51,50 @@ const JumpList = ({
   </div>
 );
 
-/** Final review before submitting: lists unanswered and flagged questions so they can be revisited. */
+/** Final review before submitting: lists unanswered, partially answered, and flagged questions so they can be revisited. */
 const SubmitReviewDialog = ({
   open,
   questions,
-  answers,
+  draftAnswers,
   flags,
   isSubmitting,
   onClose,
   onJump,
   onConfirm,
 }: SubmitReviewDialogProps) => {
-  const unanswered = questions.flatMap((q, i) =>
-    answers[q.id] === undefined ? [i] : [],
+  const states = questions.map((q) =>
+    getQuestionAnswerState(q, draftAnswers[q.id]),
+  );
+  const unanswered = questions.flatMap((_, i) =>
+    states[i] === 'UNANSWERED' ? [i] : [],
+  );
+  const partiallyAnswered = questions.flatMap((_, i) =>
+    states[i] === 'PARTIAL' ? [i] : [],
   );
   const flagged = questions.flatMap((q, i) => (flags[q.id] ? [i] : []));
+  const completeCount =
+    questions.length - unanswered.length - partiallyAnswered.length;
 
   return (
     <Modal open={open} title="Submit exam?" onClose={onClose}>
       <p className="mt-0 text-sm text-muted-foreground">
-        {questions.length - unanswered.length} of {questions.length} questions
-        answered. You cannot change your answers for this attempt after
-        submitting.
+        {completeCount} of {questions.length} questions completely answered. You
+        cannot change your answers for this attempt after submitting.
       </p>
       <JumpList label="Unanswered" indexes={unanswered} onJump={onJump} />
+      {partiallyAnswered.length > 0 && (
+        <div className="mb-3 rounded-md border border-warning/40 bg-warning/10 p-3">
+          <JumpList
+            label="Partially answered (missing blanks or required selections)"
+            indexes={partiallyAnswered}
+            onJump={onJump}
+          />
+          <p className="m-0 text-xs text-muted-foreground">
+            All blanks in a fill-in-the-blank question and all required options
+            in a multi-answer question must be completed to earn points.
+          </p>
+        </div>
+      )}
       <JumpList label="Flagged for review" indexes={flagged} onJump={onJump} />
       <div className="mt-5 flex justify-end gap-2">
         <Button variant="outline" onClick={onClose}>

@@ -2,24 +2,38 @@ import { describe, expect, it } from 'vitest';
 import { createEmptyQuestion, type ExamQuestionDraft } from './exam-form';
 import {
   buildExamDetailedAttemptsCsv,
+  buildExamQuestionsCsv,
   buildExamSummaryResultsCsv,
   isBlankQuestion,
   parseQuestionCsv,
+  QUESTION_CSV_HEADER,
   QUESTION_TEMPLATE_CSV,
   validateQuestionFile,
 } from './exam-csv';
-import type { LecturerExamResults } from '../types/exams.types';
+import type { ExamQuestion, LecturerExamResults } from '../types/exams.types';
 
 const HEADER = 'Question,Option A,Option B,Option C,Option D,Option E,Option F,Correct';
+const HEADER_9 = QUESTION_CSV_HEADER.join(',');
 
 describe('QUESTION_TEMPLATE_CSV', () => {
-  it('should be a file the importer accepts as it is', () => {
+  it('should be a file the importer accepts with MCQ single, MCQ multi-answer, and Cloze FIB examples', () => {
     const actual = parseQuestionCsv(QUESTION_TEMPLATE_CSV, 0);
 
     expect(actual.errors).toEqual([]);
-    expect(actual.questions).toHaveLength(1);
+    expect(actual.questions).toHaveLength(3);
     expect(actual.questions[0].options).toEqual(['3', '4', '5', '6']);
     expect(actual.questions[0].correctIndex).toBe(1);
+    expect(actual.questions[1]).toMatchObject({
+      type: 'MULTIPLE_CHOICE',
+      correctIndices: [0, 2],
+      correctCount: 2,
+    });
+    expect(actual.questions[2]).toMatchObject({
+      type: 'FILL_IN_THE_BLANK',
+      content: 'The capital of {{1}} is {{2}}.',
+      options: ['Vietnam | Viet Nam', 'Hanoi | Ha Noi'],
+      correctCount: 2,
+    });
   });
 });
 
@@ -145,6 +159,113 @@ describe('parseQuestionCsv', () => {
       expect(actual.questions).toEqual([]);
       expect(actual.errors[0]).toMatch(/at most 100 questions.*101/);
     });
+  });
+
+  describe('9-column format (multi-answer MCQ & Cloze FIB)', () => {
+    it('parses multi-answer MCQ with comma or pipe separated letters and Cloze FIB rows', () => {
+      const text = [
+        HEADER_9,
+        'MCQ,"Pick primes",2,4,5,9,,,"A,C"',
+        'FIB,"{{1}} runs on {{2}}.","Node.js | NodeJS","V8",,,,,',
+      ].join('\n');
+
+      const actual = parseQuestionCsv(text, 0);
+
+      expect(actual.errors).toEqual([]);
+      expect(actual.questions).toHaveLength(2);
+      expect(actual.questions[0]).toMatchObject({
+        type: 'MULTIPLE_CHOICE',
+        correctIndices: [0, 2],
+        correctCount: 2,
+      });
+      expect(actual.questions[1]).toMatchObject({
+        type: 'FILL_IN_THE_BLANK',
+        content: '{{1}} runs on {{2}}.',
+        options: ['Node.js | NodeJS', 'V8'],
+        correctCount: 2,
+      });
+    });
+
+    it('reports errors for invalid Type, duplicate Correct letters, and mismatched FIB blanks', () => {
+      const text = [
+        HEADER_9,
+        'ESSAY,Q1,a,b,,,,,A',
+        'MCQ,Q2,a,b,,,,,"A,A"',
+        'FIB,"No blank here",ans,,,,,,',
+        'FIB,"Has {{1}} and {{2}}",onlyOne,,,,,,',
+      ].join('\n');
+
+      const actual = parseQuestionCsv(text, 0);
+
+      expect(actual.questions).toEqual([]);
+      expect(actual.errors).toEqual([
+        'Row 2: Type must be MCQ or FIB',
+        'Row 3: Correct lists answer A more than once',
+        'Row 4: Include at least one blank placeholder like {{1}} in the question text',
+        'Row 5: has 2 blank(s) in the question text but 1 blank answer column(s) filled',
+      ]);
+    });
+  });
+});
+
+describe('buildExamQuestionsCsv (round-trip export)', () => {
+  it('exports drafts (skipping blank) and saved ExamQuestions into re-importable 9-column CSV', () => {
+    const drafts: ExamQuestionDraft[] = [
+      createEmptyQuestion(),
+      {
+        key: 'q-multi',
+        type: 'MULTIPLE_CHOICE',
+        content: 'Primes?',
+        options: ['2', '4', '5'],
+        correctIndex: 0,
+        correctIndices: [0, 2],
+        correctCount: 2,
+      },
+      {
+        key: 'q-fib',
+        type: 'FILL_IN_THE_BLANK',
+        content: 'Capital of {{1}} is {{2}}.',
+        options: ['Vietnam | Viet Nam', 'Hanoi'],
+        correctIndex: 0,
+        correctIndices: [0, 1],
+        correctCount: 2,
+      },
+    ];
+
+    const csv = buildExamQuestionsCsv(drafts);
+    const reimported = parseQuestionCsv(csv, 0);
+
+    expect(reimported.errors).toEqual([]);
+    expect(reimported.questions).toHaveLength(2);
+    expect(reimported.questions[0]).toMatchObject({
+      type: 'MULTIPLE_CHOICE',
+      content: 'Primes?',
+      options: ['2', '4', '5'],
+      correctIndices: [0, 2],
+      correctCount: 2,
+    });
+    expect(reimported.questions[1]).toMatchObject({
+      type: 'FILL_IN_THE_BLANK',
+      content: 'Capital of {{1}} is {{2}}.',
+      options: ['Vietnam | Viet Nam', 'Hanoi'],
+      correctCount: 2,
+    });
+
+    const savedQuestions: ExamQuestion[] = [
+      {
+        id: 's-1',
+        type: 'MULTIPLE_CHOICE',
+        correctCount: 1,
+        content: '1+1?',
+        orderIndex: 0,
+        options: [
+          { id: 'o-1', content: '1', isCorrect: false },
+          { id: 'o-2', content: '2', isCorrect: true },
+        ],
+      },
+    ];
+    const savedCsv = buildExamQuestionsCsv(savedQuestions);
+    expect(parseQuestionCsv(savedCsv, 0).questions).toHaveLength(1);
   });
 });
 

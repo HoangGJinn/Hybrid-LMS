@@ -22,18 +22,19 @@ import {
   MAX_ATTEMPTS,
   MAX_DURATION_MINUTES,
   MIN_ATTEMPTS,
+  MIN_BLANKS,
   MIN_DURATION_MINUTES,
   OPTION_MAX_LENGTH,
   MAX_OPTIONS,
-  MIN_OPTIONS,
   QUESTION_MAX_LENGTH,
 } from '../constants/exam-rules.constant.js';
 import { ExamFormat } from '../enums/exam-format.enum.js';
+import { ExamQuestionType } from '../enums/exam-question-type.enum.js';
 
 const trim = ({ value }: { value: unknown }): unknown =>
   typeof value === 'string' ? value.trim() : value;
 
-/** One answer of a multiple-choice question. */
+/** One answer option of an MCQ question, or one numbered blank's acceptable answers (`a | b`). */
 export class CreateExamOptionDto {
   @Transform(trim)
   @IsString()
@@ -45,16 +46,27 @@ export class CreateExamOptionDto {
   readonly isCorrect: boolean;
 }
 
-/** One multiple-choice question: its text and 2 to 6 answers, exactly one of them correct. */
+/** One interactive question: either multiple-choice (2..6 options, 1+ correct) or cloze fill-in-the-blank (1..6 blanks). */
 export class CreateExamQuestionDto {
+  @IsOptional()
+  @IsEnum(ExamQuestionType)
+  readonly type?: ExamQuestionType;
+
   @Transform(trim)
   @IsString()
   @MinLength(1)
   @MaxLength(QUESTION_MAX_LENGTH)
   readonly content: string;
 
+  /** Required correct option count for MCQ (defaults to 1), or number of blanks for FILL_IN_THE_BLANK. */
+  @IsOptional()
+  @IsInt()
+  @Min(MIN_BLANKS)
+  @Max(MAX_OPTIONS)
+  readonly correctCount?: number;
+
   @IsArray()
-  @ArrayMinSize(MIN_OPTIONS)
+  @ArrayMinSize(MIN_BLANKS)
   @ArrayMaxSize(MAX_OPTIONS)
   @ValidateNested({ each: true })
   @Type(() => CreateExamOptionDto)

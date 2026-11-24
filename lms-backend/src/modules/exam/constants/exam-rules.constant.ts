@@ -3,9 +3,13 @@ export const EXAM_NAME_MAX_LENGTH = 255;
 export const EXAM_MAX_QUESTIONS = 100;
 export const QUESTION_MAX_LENGTH = 2000;
 export const OPTION_MAX_LENGTH = 500;
-/** A question has between these many answers, exactly one of them correct. */
+/** A multiple-choice question has between these many options, with 1 or more marked correct. */
 export const MIN_OPTIONS = 2;
 export const MAX_OPTIONS = 6;
+/** A fill-in-the-blank question has between 1 and 6 numbered blanks (`{{1}}`..`{{6}}`). */
+export const MIN_BLANKS = 1;
+export const MAX_BLANKS = 6;
+export const BLANK_VARIANT_SEPARATOR = '|';
 export const MIN_DURATION_MINUTES = 1;
 export const MAX_DURATION_MINUTES = 480;
 export const MIN_ATTEMPTS = 1;

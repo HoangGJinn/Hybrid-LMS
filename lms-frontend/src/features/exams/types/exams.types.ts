@@ -36,6 +36,9 @@ export type ExamFormat = 'MULTIPLE_CHOICE' | 'FILE';
 /** Where an exam is in time: before `startTime`, between `startTime` and `endTime`, or from `endTime` on. */
 export type ExamStatus = 'UPCOMING' | 'OPEN' | 'CLOSED';
 
+/** Question format for interactive (non-FILE) exams. */
+export type ExamQuestionType = 'MULTIPLE_CHOICE' | 'FILL_IN_THE_BLANK';
+
 /** One answer, with whether it is the correct one. Only lecturers (or students reviewing when `showResults` is true) receive this. */
 export interface ExamOption {
   id: string;
@@ -45,6 +48,8 @@ export interface ExamOption {
 
 export interface ExamQuestion {
   id: string;
+  type?: ExamQuestionType;
+  correctCount?: number;
   content: string;
   orderIndex: number;
   options: ExamOption[];
@@ -96,8 +101,10 @@ export interface NewExamOption {
   isCorrect: boolean;
 }
 
-/** A question to create: its text and 2 to 6 answers, exactly one of them correct. */
+/** A question to create: MCQ (2..6 options, 1+ correct) or Cloze Fill-in-the-Blank (1..6 blanks). */
 export interface NewExamQuestion {
+  type?: ExamQuestionType;
+  correctCount?: number;
   content: string;
   options: NewExamOption[];
 }
@@ -138,6 +145,8 @@ export interface StudentExamOption {
 /** One question shown to a student taking an exam. */
 export interface StudentExamQuestion {
   id: string;
+  type?: ExamQuestionType;
+  correctCount?: number;
   content: string;
   orderIndex: number;
   options: StudentExamOption[];
@@ -224,13 +233,17 @@ export interface ExamAttempt {
   serverNow: string;
   questions: StudentExamQuestion[];
   savedAnswers: Record<string, string>;
+  savedMultiAnswers?: Record<string, string[]>;
+  savedTextAnswers?: Record<string, string[]>;
   questionFile?: ExamFileLink | null;
   submittedFiles?: ExamFileLink[];
 }
 
 export interface ExamAnswerInput {
   questionId: string;
-  optionId: string | null;
+  optionId?: string | null;
+  optionIds?: string[] | null;
+  textAnswers?: string[] | null;
 }
 
 export interface SaveExamAnswersResult {
@@ -264,8 +277,12 @@ export interface SubmitExamResult {
 
 export interface ExamReviewQuestion {
   id: string;
+  type?: ExamQuestionType;
+  correctCount?: number;
   content: string;
   selectedOptionId: string | null;
+  selectedOptionIds?: string[];
+  textAnswers?: string[];
   options: ExamOption[];
 }
 

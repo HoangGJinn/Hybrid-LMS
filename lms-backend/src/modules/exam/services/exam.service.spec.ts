@@ -18,6 +18,7 @@ import type {
 } from '../dto/create-exam.dto.js';
 import type { ExamSchedule } from '../entities/exam-schedule.entity.js';
 import { ExamFormat } from '../enums/exam-format.enum.js';
+import { ExamQuestionType } from '../enums/exam-question-type.enum.js';
 import type {
   ExamRepository,
   ExamUpdate,
@@ -353,6 +354,84 @@ describe('ExamService', () => {
         await expect(
           service.create(CLASS_ID, buildDto({ questions: [duplicated] }), lecturer, NOW),
         ).rejects.toThrow('Question 1 has duplicate answers');
+      });
+
+      it('should accept a multi-select MCQ when correctCount matches marked options', async () => {
+        const multiQuestion = {
+          type: ExamQuestionType.MULTIPLE_CHOICE,
+          content: 'Which are prime?',
+          correctCount: 2,
+          options: [
+            { content: '2', isCorrect: true },
+            { content: '4', isCorrect: false },
+            { content: '5', isCorrect: true },
+            { content: '9', isCorrect: false },
+          ],
+        };
+
+        await expect(
+          service.create(CLASS_ID, buildDto({ questions: [multiQuestion] }), lecturer, NOW),
+        ).resolves.toBeDefined();
+      });
+
+      it('should reject a multi-select MCQ whose marked answers do not match correctCount', async () => {
+        const mismatched = {
+          type: ExamQuestionType.MULTIPLE_CHOICE,
+          content: 'Which are prime?',
+          correctCount: 2,
+          options: [
+            { content: '2', isCorrect: true },
+            { content: '4', isCorrect: false },
+            { content: '5', isCorrect: false },
+          ],
+        };
+
+        await expect(
+          service.create(CLASS_ID, buildDto({ questions: [mismatched] }), lecturer, NOW),
+        ).rejects.toThrow('Question 1 needs exactly 2 correct answers');
+      });
+
+      it('should accept mixed MCQ and cloze fill-in-the-blank questions', async () => {
+        const fibQuestion = {
+          type: ExamQuestionType.FILL_IN_THE_BLANK,
+          content: 'Thủ đô của {{1}} là {{2}}.',
+          correctCount: 2,
+          options: [
+            { content: 'Việt Nam | Viet Nam', isCorrect: true },
+            { content: 'Hà Nội | Ha Noi', isCorrect: true },
+          ],
+        };
+
+        await expect(
+          service.create(
+            CLASS_ID,
+            buildDto({ questions: [buildQuestion(), fibQuestion] }),
+            lecturer,
+            NOW,
+          ),
+        ).resolves.toBeDefined();
+      });
+
+      it('should reject a fill-in-the-blank question without {{1}} or with mismatched blanks', async () => {
+        const missingPlaceholder = {
+          type: ExamQuestionType.FILL_IN_THE_BLANK,
+          content: 'Thủ đô của Việt Nam là gì?',
+          correctCount: 1,
+          options: [{ content: 'Hà Nội', isCorrect: true }],
+        };
+        await expect(
+          service.create(CLASS_ID, buildDto({ questions: [missingPlaceholder] }), lecturer, NOW),
+        ).rejects.toThrow('must include at least one blank placeholder like {{1}}');
+
+        const mismatchedBlanks = {
+          type: ExamQuestionType.FILL_IN_THE_BLANK,
+          content: 'Thủ đô của {{1}} là {{2}}.',
+          correctCount: 2,
+          options: [{ content: 'Việt Nam', isCorrect: true }],
+        };
+        await expect(
+          service.create(CLASS_ID, buildDto({ questions: [mismatchedBlanks] }), lecturer, NOW),
+        ).rejects.toThrow('has 2 blank(s) in the text but 1 blank answer(s) provided');
       });
     });
 

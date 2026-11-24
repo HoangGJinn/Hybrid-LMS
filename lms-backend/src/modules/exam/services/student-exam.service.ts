@@ -19,6 +19,7 @@ import type {
 import type { ExamSchedule } from '../entities/exam-schedule.entity.js';
 import type { ExamSession } from '../entities/exam-session.entity.js';
 import { ExamFormat } from '../enums/exam-format.enum.js';
+import { ExamQuestionType } from '../enums/exam-question-type.enum.js';
 import { ExamSessionStatus } from '../enums/exam-session-status.enum.js';
 import { ExamStatus } from '../enums/exam-status.enum.js';
 import {
@@ -46,8 +47,11 @@ import {
   isPastDeadlineWithGrace,
 } from '../utils/exam-deadline.util.js';
 import {
+  buildExamReviewQuestions,
+  computeExamContentGrade,
+  extractSavedAnswerFields,
   type GradeSummary,
-  gradeMultipleChoiceAttempt,
+  type SavedSessionAnswer,
 } from '../utils/exam-grading.util.js';
 import { shuffleWithSeed } from '../utils/exam-shuffle.util.js';
 import {
@@ -448,14 +452,9 @@ export class StudentExamService {
 
   private computeGrade(
     content: ExamContent,
-    answers: ReadonlyMap<string, string>,
+    answers: ReadonlyMap<string, string | SavedSessionAnswer>,
   ): GradeSummary {
-    const gradable = content.questions.map((question) => {
-      const options = content.optionsByQuestionId.get(question.id) ?? [];
-      const correct = options.find((option) => option.isCorrect);
-      return { id: question.id, correctOptionId: correct?.id ?? null };
-    });
-    return gradeMultipleChoiceAttempt(gradable, answers);
+    return computeExamContentGrade(content, answers);
   }
 
   private async resolveOrCreateSession(
@@ -521,29 +520,97 @@ export class StudentExamService {
     inputs: readonly ExamAnswerInputDto[],
     content: ExamContent,
   ): SessionAnswerWrite[] {
-    const questionIds = new Set(content.questions.map((question) => question.id));
-    const byQuestion = new Map<string, string | null>();
+    const questionById = new Map(
+      content.questions.map((question) => [question.id, question]),
+    );
+    const byQuestion = new Map<string, SessionAnswerWrite>();
     for (const item of inputs) {
-      if (!questionIds.has(item.questionId)) {
+      const question = questionById.get(item.questionId);
+      if (!question) {
         throw new BadRequestException(
           `Question ${item.questionId} does not belong to this exam`,
         );
       }
+      const type = question.type ?? ExamQuestionType.MULTIPLE_CHOICE;
+      const options = content.optionsByQuestionId.get(item.questionId) ?? [];
+
+      if (type === ExamQuestionType.FILL_IN_THE_BLANK) {
+        if (
+          (item.optionId ?? null) !== null ||
+          (item.optionIds && item.optionIds.length > 0)
+        ) {
+          throw new BadRequestException(
+            `Fill-in-the-blank question ${item.questionId} does not accept option selections`,
+          );
+        }
+        const blankCount = question.correctCount ?? (options.length || 1);
+        const rawTexts = item.textAnswers ?? [];
+        if (rawTexts.length > blankCount) {
+          throw new BadRequestException(
+            `Question ${item.questionId} only has ${blankCount} blank(s)`,
+          );
+        }
+        const normalized = rawTexts.map((text) => text.trim());
+        byQuestion.set(item.questionId, {
+          questionId: item.questionId,
+          optionId: null,
+          optionIds: null,
+          textAnswers: normalized.every((text) => text === '')
+            ? null
+            : normalized,
+        });
+        continue;
+      }
+
+      if (
+        item.textAnswers &&
+        item.textAnswers.some((text) => text.trim() !== '')
+      ) {
+        throw new BadRequestException(
+          `Multiple-choice question ${item.questionId} does not accept text answers`,
+        );
+      }
+
+      if (item.optionIds !== undefined) {
+        const uniqueOptionIds = [...new Set(item.optionIds ?? [])];
+        for (const optId of uniqueOptionIds) {
+          if (!options.some((option) => option.id === optId)) {
+            throw new BadRequestException(
+              `Option ${optId} does not belong to question ${item.questionId}`,
+            );
+          }
+        }
+        const maxAllowed =
+          question.correctCount ??
+          (options.filter((option) => option.isCorrect).length || 1);
+        if (uniqueOptionIds.length > maxAllowed) {
+          throw new BadRequestException(
+            `Question ${item.questionId} allows at most ${maxAllowed} selected answer(s)`,
+          );
+        }
+        byQuestion.set(item.questionId, {
+          questionId: item.questionId,
+          optionId: uniqueOptionIds[0] ?? null,
+          optionIds: uniqueOptionIds.length > 0 ? uniqueOptionIds : null,
+          textAnswers: null,
+        });
+        continue;
+      }
+
       const optionId = item.optionId ?? null;
       if (optionId !== null) {
-        const options = content.optionsByQuestionId.get(item.questionId) ?? [];
         if (!options.some((option) => option.id === optionId)) {
           throw new BadRequestException(
             `Option ${optionId} does not belong to question ${item.questionId}`,
           );
         }
       }
-      byQuestion.set(item.questionId, optionId);
+      byQuestion.set(item.questionId, {
+        questionId: item.questionId,
+        optionId,
+      });
     }
-    return Array.from(byQuestion.entries()).map(([questionId, optionId]) => ({
-      questionId,
-      optionId,
-    }));
+    return Array.from(byQuestion.values());
   }
 
   private async buildAttemptView(
@@ -594,6 +661,21 @@ export class StudentExamService {
     const content = await this.examRepository.findContent(exam.id);
     const savedMap = await this.sessionRepository.findAnswers(session.id);
     const questions = this.buildStudentQuestions(exam, session.id, content);
+    const savedAnswers: Record<string, string> = {};
+    const savedMultiAnswers: Record<string, readonly string[]> = {};
+    const savedTextAnswers: Record<string, readonly string[]> = {};
+    for (const [questionId, raw] of savedMap.entries()) {
+      const extracted = extractSavedAnswerFields(raw);
+      if (extracted.selectedOptionId) {
+        savedAnswers[questionId] = extracted.selectedOptionId;
+      }
+      if (extracted.selectedOptionIds.length > 0) {
+        savedMultiAnswers[questionId] = extracted.selectedOptionIds;
+      }
+      if (extracted.textAnswers.length > 0) {
+        savedTextAnswers[questionId] = extracted.textAnswers;
+      }
+    }
     return {
       session: {
         id: session.id,
@@ -618,7 +700,9 @@ export class StudentExamService {
       deadline: computeSessionDeadline(exam, session.startedAt),
       serverNow: now,
       questions,
-      savedAnswers: Object.fromEntries(savedMap),
+      savedAnswers,
+      savedMultiAnswers,
+      savedTextAnswers,
     };
   }
 
@@ -631,12 +715,30 @@ export class StudentExamService {
       ? shuffleWithSeed(content.questions, sessionId)
       : content.questions;
     return orderedQuestions.map((question, index) => {
+      const type = question.type ?? ExamQuestionType.MULTIPLE_CHOICE;
       const rawOptions = content.optionsByQuestionId.get(question.id) ?? [];
+      const correctCount =
+        question.correctCount ??
+        (type === ExamQuestionType.FILL_IN_THE_BLANK
+          ? rawOptions.length || 1
+          : rawOptions.filter((option) => option.isCorrect).length || 1);
+      if (type === ExamQuestionType.FILL_IN_THE_BLANK) {
+        return {
+          id: question.id,
+          type,
+          correctCount,
+          content: question.content,
+          orderIndex: index,
+          options: [],
+        };
+      }
       const orderedOptions = exam.shuffleOptions
         ? shuffleWithSeed(rawOptions, `${sessionId}:${question.id}`)
         : rawOptions;
       return {
         id: question.id,
+        type,
+        correctCount,
         content: question.content,
         orderIndex: index,
         options: orderedOptions.map((option) => ({
@@ -809,26 +911,11 @@ export class StudentExamService {
     const content = await this.examRepository.findContent(exam.id);
     const savedAnswers = await this.sessionRepository.findAnswers(session.id);
     const grade = this.computeGrade(content, savedAnswers);
-    const orderedQuestions = exam.shuffleQuestions
-      ? shuffleWithSeed(content.questions, session.id)
-      : content.questions;
-    const questions: ExamReviewQuestionView[] = orderedQuestions.map(
-      (question) => {
-        const rawOptions = content.optionsByQuestionId.get(question.id) ?? [];
-        const orderedOptions = exam.shuffleOptions
-          ? shuffleWithSeed(rawOptions, `${session.id}:${question.id}`)
-          : rawOptions;
-        return {
-          id: question.id,
-          content: question.content,
-          selectedOptionId: savedAnswers.get(question.id) ?? null,
-          options: orderedOptions.map((option) => ({
-            id: option.id,
-            content: option.content,
-            isCorrect: option.isCorrect,
-          })),
-        };
-      },
+    const questions: ExamReviewQuestionView[] = buildExamReviewQuestions(
+      exam,
+      session.id,
+      content,
+      savedAnswers,
     );
     return {
       sessionId: session.id,

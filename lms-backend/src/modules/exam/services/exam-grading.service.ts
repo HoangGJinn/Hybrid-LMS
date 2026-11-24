@@ -33,8 +33,11 @@ import type {
   ExamAttemptReviewView,
   ExamReviewQuestionView,
 } from '../types/student-exam-view.type.js';
-import { gradeMultipleChoiceAttempt } from '../utils/exam-grading.util.js';
-import { shuffleWithSeed } from '../utils/exam-shuffle.util.js';
+import {
+  buildExamReviewQuestions,
+  computeExamContentGrade,
+  type SavedSessionAnswer,
+} from '../utils/exam-grading.util.js';
 import { resolveExamMaxAttempts } from '../utils/exam-status.util.js';
 import { StudentExamService } from './student-exam.service.js';
 
@@ -86,7 +89,7 @@ export class ExamGradingService {
       : { questions: [], optionsByQuestionId: new Map() };
     const answersBySession = isMcq
       ? await this.sessionRepository.findAnswersBySessions(sessionIds)
-      : new Map<string, ReadonlyMap<string, string>>();
+      : new Map<string, ReadonlyMap<string, string | SavedSessionAnswer>>();
 
     const fileIdsBySession = !isMcq
       ? await this.sessionRepository.findFileIdsBySessions(sessionIds)
@@ -422,26 +425,11 @@ export class ExamGradingService {
     const content = await this.examRepository.findContent(exam.id);
     const savedAnswers = await this.sessionRepository.findAnswers(session.id);
     const grade = this.computeGrade(content, savedAnswers);
-    const orderedQuestions = exam.shuffleQuestions
-      ? shuffleWithSeed(content.questions, session.id)
-      : content.questions;
-    const questions: ExamReviewQuestionView[] = orderedQuestions.map(
-      (question) => {
-        const rawOptions = content.optionsByQuestionId.get(question.id) ?? [];
-        const orderedOptions = exam.shuffleOptions
-          ? shuffleWithSeed(rawOptions, `${session.id}:${question.id}`)
-          : rawOptions;
-        return {
-          id: question.id,
-          content: question.content,
-          selectedOptionId: savedAnswers.get(question.id) ?? null,
-          options: orderedOptions.map((option) => ({
-            id: option.id,
-            content: option.content,
-            isCorrect: option.isCorrect,
-          })),
-        };
-      },
+    const questions: ExamReviewQuestionView[] = buildExamReviewQuestions(
+      exam,
+      session.id,
+      content,
+      savedAnswers,
     );
     return {
       sessionId: session.id,
@@ -551,7 +539,10 @@ export class ExamGradingService {
     exam: ExamSchedule,
     sessions: readonly ExamSession[],
     content: ExamContent,
-    answersBySession: ReadonlyMap<string, ReadonlyMap<string, string>>,
+    answersBySession: ReadonlyMap<
+      string,
+      ReadonlyMap<string, string | SavedSessionAnswer>
+    >,
     fileIdsBySession: ReadonlyMap<string, string[]>,
     linkById: ReadonlyMap<string, FileDownloadView>,
   ): LecturerStudentExamResultView {
@@ -681,14 +672,9 @@ export class ExamGradingService {
 
   private computeGrade(
     content: ExamContent,
-    answers: ReadonlyMap<string, string>,
+    answers: ReadonlyMap<string, string | SavedSessionAnswer>,
   ) {
-    const gradable = content.questions.map((question) => {
-      const options = content.optionsByQuestionId.get(question.id) ?? [];
-      const correct = options.find((option) => option.isCorrect);
-      return { id: question.id, correctOptionId: correct?.id ?? null };
-    });
-    return gradeMultipleChoiceAttempt(gradable, answers);
+    return computeExamContentGrade(content, answers);
   }
 }
 

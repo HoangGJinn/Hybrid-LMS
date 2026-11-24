@@ -5,11 +5,39 @@ import { ExamSessionAnswer } from '../entities/exam-session-answer.entity.js';
 import { ExamSessionFile } from '../entities/exam-session-file.entity.js';
 import { ExamSession } from '../entities/exam-session.entity.js';
 import { ExamSessionStatus } from '../enums/exam-session-status.enum.js';
+import type { SavedSessionAnswer } from '../utils/exam-grading.util.js';
 
 export interface SessionAnswerWrite {
   readonly questionId: string;
   readonly optionId: string | null;
+  readonly optionIds?: readonly string[] | null;
+  readonly textAnswers?: readonly string[] | null;
 }
+
+const mapRowToSavedAnswer = (row: ExamSessionAnswer): SavedSessionAnswer => {
+  const selectedOptionIds =
+    row.selectedOptionIds && row.selectedOptionIds.length > 0
+      ? row.selectedOptionIds
+      : row.selectedOptionId
+        ? [row.selectedOptionId]
+        : [];
+  const textAnswers = row.textAnswers ?? [];
+  return {
+    selectedOptionId: row.selectedOptionId ?? selectedOptionIds[0] ?? null,
+    selectedOptionIds,
+    textAnswers,
+  };
+};
+
+const isClearedWrite = (item: SessionAnswerWrite): boolean => {
+  const hasOptionId = item.optionId !== null && item.optionId !== undefined;
+  const hasOptionIds =
+    Array.isArray(item.optionIds) && item.optionIds.length > 0;
+  const hasTextAnswers =
+    Array.isArray(item.textAnswers) &&
+    item.textAnswers.some((text) => text.trim() !== '');
+  return !hasOptionId && !hasOptionIds && !hasTextAnswers;
+};
 
 /** TypeORM access for student exam attempts (`exam_sessions`), saved answers (`exam_session_answers`) and file submissions (`exam_session_files`). */
 @Injectable()
@@ -81,37 +109,44 @@ export class ExamSessionRepository {
     return this.sessionOrmRepository.save(session);
   }
 
-  /** Returns the saved answers of a session as a map `questionId -> selectedOptionId`. */
-  async findAnswers(sessionId: string): Promise<ReadonlyMap<string, string>> {
+  /** Returns the saved answers of a session as a map `questionId -> SavedSessionAnswer`. */
+  async findAnswers(
+    sessionId: string,
+  ): Promise<ReadonlyMap<string, string | SavedSessionAnswer>> {
     const rows = await this.answerOrmRepository.find({
       where: { examSessionId: sessionId },
     });
-    return new Map(rows.map((row) => [row.questionId, row.selectedOptionId]));
+    return new Map(
+      rows.map((row) => [row.questionId, mapRowToSavedAnswer(row)]),
+    );
   }
 
   /** Returns the saved answers of many sessions at once, keyed by `sessionId`. */
   async findAnswersBySessions(
     sessionIds: string[],
-  ): Promise<ReadonlyMap<string, ReadonlyMap<string, string>>> {
+  ): Promise<ReadonlyMap<string, ReadonlyMap<string, string | SavedSessionAnswer>>> {
     if (sessionIds.length === 0) return new Map();
     const rows = await this.answerOrmRepository.find({
       where: { examSessionId: In(sessionIds) },
     });
-    const bySession = new Map<string, Map<string, string>>();
+    const bySession = new Map<
+      string,
+      Map<string, string | SavedSessionAnswer>
+    >();
     for (const row of rows) {
       let map = bySession.get(row.examSessionId);
       if (!map) {
         map = new Map();
         bySession.set(row.examSessionId, map);
       }
-      map.set(row.questionId, row.selectedOptionId);
+      map.set(row.questionId, mapRowToSavedAnswer(row));
     }
     return bySession;
   }
 
   /**
-   * Batch upserts selected options (`ON CONFLICT (exam_session_id, question_id) DO UPDATE`)
-   * and deletes rows whose `optionId` is `null` (cleared selection), all in one transaction.
+   * Batch upserts selected options / blank text answers (`ON CONFLICT (exam_session_id, question_id) DO UPDATE`)
+   * and deletes rows whose selection/text has been cleared, all in one transaction.
    */
   async saveAnswers(
     sessionId: string,
@@ -121,7 +156,7 @@ export class ExamSessionRepository {
     if (answers.length === 0) return;
     await this.answerOrmRepository.manager.transaction(async (manager) => {
       const clearedQuestionIds = answers
-        .filter((item) => item.optionId === null)
+        .filter(isClearedWrite)
         .map((item) => item.questionId);
       if (clearedQuestionIds.length > 0) {
         await manager.delete(ExamSessionAnswer, {
@@ -130,16 +165,27 @@ export class ExamSessionRepository {
         });
       }
       const upserts = answers
-        .filter(
-          (item): item is { questionId: string; optionId: string } =>
-            item.optionId !== null,
-        )
-        .map((item) => ({
-          examSessionId: sessionId,
-          questionId: item.questionId,
-          selectedOptionId: item.optionId,
-          answeredAt,
-        }));
+        .filter((item) => !isClearedWrite(item))
+        .map((item) => {
+          const hasOptionIds =
+            Array.isArray(item.optionIds) && item.optionIds.length > 0;
+          const selectedOptionIds = hasOptionIds
+            ? [...item.optionIds!]
+            : item.optionId
+              ? [item.optionId]
+              : null;
+          const hasTextAnswers =
+            Array.isArray(item.textAnswers) &&
+            item.textAnswers.some((text) => text.trim() !== '');
+          return {
+            examSessionId: sessionId,
+            questionId: item.questionId,
+            selectedOptionId: item.optionId ?? selectedOptionIds?.[0] ?? null,
+            selectedOptionIds,
+            textAnswers: hasTextAnswers ? [...item.textAnswers!] : null,
+            answeredAt,
+          };
+        });
       if (upserts.length > 0) {
         await manager.upsert(ExamSessionAnswer, upserts, [
           'examSessionId',

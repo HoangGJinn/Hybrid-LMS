@@ -97,6 +97,8 @@ describe('ClassController', () => {
     mockDataImportService = { importData: vi.fn() };
     const file = { fileName: 'Classes.xlsx', buffer: Buffer.from('xlsx') };
     mockExportService = {
+      getLecturerClasses: vi.fn().mockResolvedValue([]),
+      getStudentClasses: vi.fn().mockResolvedValue([]),
       exportLecturerClasses: vi.fn().mockResolvedValue(file),
       exportStudentClasses: vi.fn().mockResolvedValue(file),
     };
@@ -305,6 +307,32 @@ describe('ClassController', () => {
 
       expect(mockExportService.exportStudentClasses).toHaveBeenCalledWith('stu-uuid');
       expect(response.end).toHaveBeenCalledWith(Buffer.from('xlsx'));
+    });
+
+    it('returns lecturer class list as JSON for admin modal', async () => {
+      const rows = [{ id: 'c1', classCode: 'WEB26.01' }];
+      mockExportService.getLecturerClasses.mockResolvedValue(rows);
+
+      await expect(controller.getLecturerClasses('lec-uuid')).resolves.toBe(rows);
+      expect(mockExportService.getLecturerClasses).toHaveBeenCalledWith('lec-uuid');
+    });
+
+    it('returns student class list as JSON for admin modal', async () => {
+      const rows = [{ id: 'c1', classCode: 'WEB26.01' }];
+      mockExportService.getStudentClasses.mockResolvedValue(rows);
+
+      await expect(controller.getStudentClasses('stu-uuid')).resolves.toBe(rows);
+      expect(mockExportService.getStudentClasses).toHaveBeenCalledWith('stu-uuid');
+    });
+  });
+  describe('importClassData', () => {
+    it('delegates the files to ClassDataImportService and returns its result', async () => {
+      const dto = { files: [], dryRun: true };
+      const result = { dryRun: true, files: [] };
+      mockDataImportService.importData.mockResolvedValue(result);
+
+      await expect(controller.importClassData(dto as never)).resolves.toBe(result);
+      expect(mockDataImportService.importData).toHaveBeenCalledWith(dto);
     });
   });
   describe('importClassData', () => {

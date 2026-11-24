@@ -6,6 +6,7 @@ import type {
   ManagedRole,
   ManagedUser,
   UpdateUserPayload,
+  UserClassItem,
   UserListParams,
 } from '../types/users.types';
 
@@ -27,6 +28,12 @@ export const userService = {
 
   activateUser: (id: string): Promise<ManagedUser> =>
     patch<ManagedUser>(`/api/users/${id}/activate`),
+
+  /** Lists every class a lecturer teaches or a student is enrolled in (ended ones included). */
+  getUserClasses: (role: ManagedRole, userId: string): Promise<UserClassItem[]> => {
+    const segment = role === 'LECTURER' ? 'lecturers' : 'students';
+    return get<UserClassItem[]>(`/api/classes/${segment}/${userId}`);
+  },
 
   /**
    * Excel list of the classes a lecturer teaches / a student is enrolled in (ended ones included).

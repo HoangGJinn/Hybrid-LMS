@@ -1,13 +1,17 @@
 import { useState } from 'react';
 import { Flag } from 'lucide-react';
 import { cn } from '@shared/utils/cn';
+import {
+  getQuestionAnswerState,
+  type StudentQuestionDraftAnswer,
+} from '../hooks/useExamAutosave';
 import type { StudentExamQuestion } from '../types/exams.types';
 
 type PaletteFilter = 'all' | 'unanswered' | 'flagged';
 
 interface QuestionPaletteProps {
   questions: StudentExamQuestion[];
-  answers: Record<string, string>;
+  draftAnswers: Record<string, StudentQuestionDraftAnswer>;
   savedQuestionIds: ReadonlySet<string>;
   dirtyQuestionIds: ReadonlySet<string>;
   flags: Record<string, boolean>;
@@ -18,22 +22,25 @@ interface QuestionPaletteProps {
 
 const FILTER_LABEL: Record<PaletteFilter, string> = {
   all: 'All',
-  unanswered: 'Unanswered',
+  unanswered: 'Incomplete',
   flagged: 'Flagged',
 };
 
 const describeQuestion = (
   index: number,
   isSaved: boolean,
+  isPartial: boolean,
   isDirty: boolean,
   isFlagged: boolean,
   isOnCurrentPage: boolean,
 ): string => {
-  const status = isSaved
-    ? 'answer saved'
-    : isDirty
-      ? 'answered (saving...)'
-      : 'not answered';
+  const status = isPartial
+    ? 'partially answered (incomplete)'
+    : isSaved
+      ? 'answer saved'
+      : isDirty
+        ? 'answered (saving...)'
+        : 'not answered';
   return [
     `Question ${index + 1}`,
     status,
@@ -44,10 +51,10 @@ const describeQuestion = (
     .join(', ');
 };
 
-/** Question navigator for the exam room: status per question (saved vs pending save), legend, and filters. */
+/** Question navigator for the exam room: status per question (saved vs incomplete/pending), legend, and filters. */
 const QuestionPalette = ({
   questions,
-  answers,
+  draftAnswers,
   savedQuestionIds,
   dirtyQuestionIds,
   flags,
@@ -56,19 +63,20 @@ const QuestionPalette = ({
   onSelect,
 }: QuestionPaletteProps) => {
   const [filter, setFilter] = useState<PaletteFilter>('all');
-  const answeredCount = questions.filter(
-    (q) => answers[q.id] !== undefined,
-  ).length;
+  const states = questions.map((q) =>
+    getQuestionAnswerState(q, draftAnswers[q.id]),
+  );
+  const completedCount = states.filter((s) => s === 'ANSWERED').length;
   const flaggedCount = questions.filter((q) => flags[q.id]).length;
   const counts: Record<PaletteFilter, number> = {
     all: questions.length,
-    unanswered: questions.length - answeredCount,
+    unanswered: questions.length - completedCount,
     flagged: flaggedCount,
   };
 
-  const matchesFilter = (q: StudentExamQuestion) =>
+  const matchesFilter = (q: StudentExamQuestion, index: number) =>
     filter === 'all' ||
-    (filter === 'unanswered' && answers[q.id] === undefined) ||
+    (filter === 'unanswered' && states[index] !== 'ANSWERED') ||
     (filter === 'flagged' && Boolean(flags[q.id]));
 
   return (
@@ -98,14 +106,21 @@ const QuestionPalette = ({
       </div>
       <div className="grid grid-cols-5 gap-2">
         {questions.map((q, i) => {
-          const isAnswered = answers[q.id] !== undefined;
-          const isSaved = isAnswered && savedQuestionIds.has(q.id);
-          const isDirty = isAnswered && dirtyQuestionIds.has(q.id);
+          const state = states[i];
+          const isPartial = state === 'PARTIAL';
+          const isAnswered = state === 'ANSWERED';
+          const isSaved =
+            isAnswered &&
+            savedQuestionIds.has(q.id) &&
+            !dirtyQuestionIds.has(q.id);
+          const isDirty =
+            isPartial || (isAnswered && dirtyQuestionIds.has(q.id));
           const isFlagged = Boolean(flags[q.id]);
           const isOnCurrentPage = i >= pageStart && i < pageEnd;
           const label = describeQuestion(
             i,
             isSaved,
+            isPartial,
             isDirty,
             isFlagged,
             isOnCurrentPage,
@@ -122,13 +137,15 @@ const QuestionPalette = ({
                 'relative h-9 rounded-md border text-sm font-medium transition-opacity',
                 isSaved
                   ? 'border-primary bg-primary text-primary-foreground'
-                  : isDirty
-                    ? 'border-dashed border-primary bg-primary/20 text-foreground'
-                    : 'bg-card text-foreground hover:bg-accent',
+                  : isPartial
+                    ? 'border-dashed border-warning bg-warning/15 text-foreground'
+                    : isDirty
+                      ? 'border-dashed border-primary bg-primary/20 text-foreground'
+                      : 'bg-card text-foreground hover:bg-accent',
                 isFlagged && 'border-warning',
                 isOnCurrentPage &&
                   'ring-2 ring-ring ring-offset-1 ring-offset-card',
-                !matchesFilter(q) && 'opacity-30',
+                !matchesFilter(q, i) && 'opacity-30',
               )}
             >
               {i + 1}
@@ -150,6 +167,10 @@ const QuestionPalette = ({
         <li className="flex items-center gap-2">
           <span className="h-3 w-3 rounded-sm border border-dashed border-primary bg-primary/20" />
           Answered (pending save)
+        </li>
+        <li className="flex items-center gap-2">
+          <span className="h-3 w-3 rounded-sm border border-dashed border-warning bg-warning/15" />
+          Partially answered (incomplete)
         </li>
         <li className="flex items-center gap-2">
           <span className="h-3 w-3 rounded-sm border bg-card" />

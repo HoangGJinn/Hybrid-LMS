@@ -5,6 +5,7 @@ import type { ExamQuestion } from '../entities/exam-question.entity.js';
 import type { ExamSchedule } from '../entities/exam-schedule.entity.js';
 import type { ExamSession } from '../entities/exam-session.entity.js';
 import { ExamFormat } from '../enums/exam-format.enum.js';
+import { ExamQuestionType } from '../enums/exam-question-type.enum.js';
 import { ExamRepository } from './exam.repository.js';
 
 type Mock = ReturnType<typeof vi.fn>;
@@ -187,6 +188,58 @@ describe('ExamRepository', () => {
 
     await repository.deleteById('ex-1');
     expect(examOrm.delete).toHaveBeenCalledWith({ id: 'ex-1' });
+  });
+
+  it('persists question type and correctCount for multi-answer MCQ and FIB questions', async () => {
+    await repository.create({
+      ...sampleInput,
+      questions: [
+        {
+          type: ExamQuestionType.MULTIPLE_CHOICE,
+          content: 'Multi',
+          correctCount: 2,
+          options: [
+            { content: 'A', isCorrect: true },
+            { content: 'B', isCorrect: false },
+            { content: 'C', isCorrect: true },
+          ],
+        },
+        {
+          type: ExamQuestionType.FILL_IN_THE_BLANK,
+          content: 'Capital of {{1}} is {{2}}',
+          correctCount: 2,
+          options: [
+            { content: 'Vietnam', isCorrect: false },
+            { content: 'Hanoi', isCorrect: true },
+          ],
+        },
+      ],
+    });
+
+    expect(managerMock.insert).toHaveBeenNthCalledWith(
+      1,
+      expect.anything(),
+      [
+        expect.objectContaining({
+          type: ExamQuestionType.MULTIPLE_CHOICE,
+          correctCount: 2,
+          orderIndex: 0,
+        }),
+        expect.objectContaining({
+          type: ExamQuestionType.FILL_IN_THE_BLANK,
+          correctCount: 2,
+          orderIndex: 1,
+        }),
+      ],
+    );
+    expect(managerMock.insert).toHaveBeenNthCalledWith(
+      2,
+      expect.anything(),
+      expect.arrayContaining([
+        expect.objectContaining({ content: 'Vietnam', isCorrect: true, orderIndex: 0 }),
+        expect.objectContaining({ content: 'Hanoi', isCorrect: true, orderIndex: 1 }),
+      ]),
+    );
   });
 });
 

@@ -1,5 +1,6 @@
 import type { FileDownloadView } from '../../../shared/file/types/file-download-view.type.js';
 import type { ExamFormat } from '../enums/exam-format.enum.js';
+import type { ExamQuestionType } from '../enums/exam-question-type.enum.js';
 import type { ExamSessionStatus } from '../enums/exam-session-status.enum.js';
 import type { ExamStatus } from '../enums/exam-status.enum.js';
 
@@ -12,6 +13,8 @@ export interface StudentExamOptionView {
 /** One question shown to a student taking an exam. */
 export interface StudentExamQuestionView {
   readonly id: string;
+  readonly type?: ExamQuestionType;
+  readonly correctCount?: number;
   readonly content: string;
   readonly orderIndex: number;
   readonly options: readonly StudentExamOptionView[];
@@ -99,8 +102,12 @@ export interface ExamAttemptView {
   readonly deadline: Date;
   readonly serverNow: Date;
   readonly questions: readonly StudentExamQuestionView[];
-  /** Previously saved answers from `exam_session_answers` (`questionId -> selectedOptionId`). */
+  /** Previously saved answers from `exam_session_answers` (`questionId -> first selectedOptionId`). */
   readonly savedAnswers: Readonly<Record<string, string>>;
+  /** Previously saved multi-select MCQ option IDs (`questionId -> optionId[]`). */
+  readonly savedMultiAnswers?: Readonly<Record<string, readonly string[]>>;
+  /** Previously saved fill-in-the-blank answers (`questionId -> string[]` indexed by blank 0..k-1). */
+  readonly savedTextAnswers?: Readonly<Record<string, readonly string[]>>;
   /** For FILE exams: signed download link for the lecturer's question file. */
   readonly questionFile?: FileDownloadView | null;
   /** For FILE exams: signed download links for files the student has already submitted in this attempt. */
@@ -142,8 +149,12 @@ export interface SubmitExamResultView {
 /** Question in the post-submission review (`GET /api/exam-sessions/:sessionId/review`). */
 export interface ExamReviewQuestionView {
   readonly id: string;
+  readonly type?: ExamQuestionType;
+  readonly correctCount?: number;
   readonly content: string;
   readonly selectedOptionId: string | null;
+  readonly selectedOptionIds?: readonly string[];
+  readonly textAnswers?: readonly string[];
   readonly options: readonly {
     readonly id: string;
     readonly content: string;

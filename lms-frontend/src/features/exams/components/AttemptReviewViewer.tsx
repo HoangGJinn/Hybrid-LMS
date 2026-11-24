@@ -5,12 +5,12 @@ import {
   ChevronLeft,
   ChevronRight,
   Circle,
+  Clock,
   Download,
   FileText,
   MessageSquare,
   Trophy,
   XCircle,
-  Clock,
 } from 'lucide-react';
 import { PageHeader } from '@shared/components/PageHeader';
 import { Button } from '@shared/components/ui/button';
@@ -21,17 +21,27 @@ import type {
   ExamOption,
   ExamReviewQuestion,
 } from '../types/exams.types';
+import { normalizeBlankAnswer, splitBlankVariants } from '../utils/exam-form';
 import { scoreTone } from '../utils/score-tone';
 
 const OPTION_LETTERS = ['A', 'B', 'C', 'D', 'E', 'F'] as const;
 const QUESTIONS_PER_PAGE = 10;
+const CLOZE_SPLIT_REGEX = /(\{\{\d+\}\})/g;
 
 type ReviewFilter = 'ALL' | 'CORRECT' | 'INCORRECT' | 'UNANSWERED';
+
+interface BlankReviewResult {
+  blankNumber: number;
+  studentAnswer: string;
+  acceptedVariants: string[];
+  isCorrect: boolean;
+}
 
 interface QuestionMeta {
   question: ExamReviewQuestion;
   originalIndex: number;
-  selectedOption: ExamOption | undefined;
+  selectedOptionIds: ReadonlySet<string>;
+  blankResults: readonly BlankReviewResult[];
   isAnswered: boolean;
   isCorrect: boolean;
   status: 'CORRECT' | 'INCORRECT' | 'UNANSWERED';
@@ -42,6 +52,93 @@ interface AttemptReviewViewerProps {
   onBack: () => void;
 }
 
+const evaluateReviewQuestion = (
+  question: ExamReviewQuestion,
+  originalIndex: number,
+): QuestionMeta => {
+  const type = question.type ?? 'MULTIPLE_CHOICE';
+  if (type === 'FILL_IN_THE_BLANK') {
+    const textAnswers = question.textAnswers ?? [];
+    const hasAnyText = textAnswers.some((t) => t.trim() !== '');
+    const blankResults: BlankReviewResult[] = question.options.map(
+      (blankOption, idx) => {
+        const studentAnswer = (textAnswers[idx] ?? '').trim();
+        const acceptedVariants = splitBlankVariants(blankOption.content);
+        const studentNorm = normalizeBlankAnswer(studentAnswer);
+        const isBlankCorrect =
+          studentNorm !== '' &&
+          acceptedVariants.map(normalizeBlankAnswer).includes(studentNorm);
+        return {
+          blankNumber: idx + 1,
+          studentAnswer,
+          acceptedVariants,
+          isCorrect: isBlankCorrect,
+        };
+      },
+    );
+    const isAnswered = hasAnyText;
+    const isCorrect =
+      blankResults.length > 0 && blankResults.every((b) => b.isCorrect);
+    const status = !isAnswered
+      ? 'UNANSWERED'
+      : isCorrect
+        ? 'CORRECT'
+        : 'INCORRECT';
+    return {
+      question,
+      originalIndex,
+      selectedOptionIds: new Set<string>(),
+      blankResults,
+      isAnswered,
+      isCorrect,
+      status,
+    };
+  }
+
+  const selectedList =
+    question.selectedOptionIds && question.selectedOptionIds.length > 0
+      ? question.selectedOptionIds
+      : question.selectedOptionId
+        ? [question.selectedOptionId]
+        : [];
+  const selectedOptionIds = new Set(selectedList);
+  const correctIds = question.options
+    .filter((o) => o.isCorrect)
+    .map((o) => o.id);
+  const isAnswered = selectedOptionIds.size > 0;
+  const isCorrect =
+    correctIds.length > 0 &&
+    selectedOptionIds.size === correctIds.length &&
+    correctIds.every((id) => selectedOptionIds.has(id));
+  const status = !isAnswered
+    ? 'UNANSWERED'
+    : isCorrect
+      ? 'CORRECT'
+      : 'INCORRECT';
+
+  return {
+    question,
+    originalIndex,
+    selectedOptionIds,
+    blankResults: [],
+    isAnswered,
+    isCorrect,
+    status,
+  };
+};
+
+const getReviewTypeLabel = (question: ExamReviewQuestion): string => {
+  const type = question.type ?? 'MULTIPLE_CHOICE';
+  if (type === 'FILL_IN_THE_BLANK') {
+    const count = question.options.length;
+    return `Fill in the Blank · ${count} ${count === 1 ? 'blank' : 'blanks'}`;
+  }
+  const required =
+    question.correctCount ??
+    (question.options.filter((o) => o.isCorrect).length || 1);
+  return required > 1 ? `Multiple Choice · Pick ${required}` : 'Single Choice';
+};
+
 export const AttemptReviewViewer = ({
   review,
   onBack,
@@ -50,30 +147,11 @@ export const AttemptReviewViewer = ({
   const [page, setPage] = useState(0);
   const pendingScrollIdRef = useRef<string | null>(null);
 
-  // Pre-calculate status and metadata for all questions.
   const questionMetas: QuestionMeta[] = useMemo(
     () =>
-      review.questions.map((question: ExamReviewQuestion, index: number) => {
-        const selectedOption = question.options.find(
-          (o: ExamOption) => o.id === question.selectedOptionId,
-        );
-        const isAnswered = question.selectedOptionId !== null;
-        const isCorrect = Boolean(selectedOption?.isCorrect);
-        const status: 'CORRECT' | 'INCORRECT' | 'UNANSWERED' = !isAnswered
-          ? 'UNANSWERED'
-          : isCorrect
-            ? 'CORRECT'
-            : 'INCORRECT';
-
-        return {
-          question,
-          originalIndex: index,
-          selectedOption,
-          isAnswered,
-          isCorrect,
-          status,
-        };
-      }),
+      review.questions.map((question, index) =>
+        evaluateReviewQuestion(question, index),
+      ),
     [review.questions],
   );
 
@@ -126,12 +204,10 @@ export const AttemptReviewViewer = ({
     const targetMeta = questionMetas[targetOriginalIndex];
     if (!targetMeta) return;
 
-    // If current filter hides this question, reset to ALL.
     if (filter !== 'ALL' && targetMeta.status !== filter) {
       setFilter('ALL');
     }
 
-    // Determine target page in the filtered list (or ALL list).
     const listToSearch =
       filter !== 'ALL' && targetMeta.status !== filter
         ? questionMetas
@@ -188,7 +264,6 @@ export const AttemptReviewViewer = ({
         />
 
         <div className="grid gap-5 lg:grid-cols-[1fr_320px]">
-          {/* Main content: what the student handed in */}
           <section className="overflow-hidden rounded-lg border bg-card">
             <h2 className="m-0 border-b px-5 py-3 text-sm font-semibold">
               Your submission
@@ -235,7 +310,6 @@ export const AttemptReviewViewer = ({
           </section>
 
           <aside className="space-y-4">
-            {/* Grade + feedback share one card; no empty card for missing feedback */}
             <div className="rounded-lg border bg-card p-5">
               <h2 className="m-0 text-sm font-semibold">Grade</h2>
               {isGraded ? (
@@ -336,7 +410,6 @@ export const AttemptReviewViewer = ({
       <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
         {/* Left Column: Filter Chips, Questions, and Pagination */}
         <div className="space-y-4">
-          {/* Smart Filter Chips Bar */}
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card p-3 text-sm">
             <div
               role="group"
@@ -415,7 +488,6 @@ export const AttemptReviewViewer = ({
               </button>
             </div>
 
-            {/* Pagination Controls */}
             {totalPages > 1 && (
               <div className="flex items-center gap-1 text-xs">
                 <Button
@@ -449,7 +521,6 @@ export const AttemptReviewViewer = ({
             )}
           </div>
 
-          {/* Question Cards List */}
           {displayedQuestions.length === 0 ? (
             <div className="rounded-lg border bg-card p-8 text-center text-muted-foreground">
               No questions found for this filter.
@@ -457,17 +528,33 @@ export const AttemptReviewViewer = ({
           ) : (
             <ol className="m-0 list-none space-y-4 p-0">
               {displayedQuestions.map((meta: QuestionMeta) => {
-                const { question, originalIndex, status } = meta;
+                const {
+                  question,
+                  originalIndex,
+                  selectedOptionIds,
+                  blankResults,
+                  isAnswered,
+                  status,
+                } = meta;
+                const isFib =
+                  (question.type ?? 'MULTIPLE_CHOICE') === 'FILL_IN_THE_BLANK';
+
                 return (
                   <li
                     key={question.id}
                     id={`review-question-${question.id}`}
                     className="rounded-lg border bg-card p-5 transition-colors"
                   >
-                    <div className="mb-2 flex items-center justify-between gap-2">
-                      <span className="text-sm font-semibold text-brand">
-                        Question {originalIndex + 1} of {review.totalQuestions}
-                      </span>
+                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-semibold text-brand">
+                          Question {originalIndex + 1} of{' '}
+                          {review.totalQuestions}
+                        </span>
+                        <span className="rounded-full bg-muted px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">
+                          {getReviewTypeLabel(question)}
+                        </span>
+                      </div>
                       {status === 'UNANSWERED' ? (
                         <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
                           Not answered
@@ -485,78 +572,186 @@ export const AttemptReviewViewer = ({
                       )}
                     </div>
 
-                    <p className="mt-0 whitespace-pre-line font-medium text-foreground">
-                      {question.content}
-                    </p>
+                    {isFib ? (
+                      <>
+                        <p className="mt-0 whitespace-pre-line font-medium leading-loose text-foreground">
+                          {question.content
+                            .split(CLOZE_SPLIT_REGEX)
+                            .map((part, idx) => {
+                              const match = /^\{\{(\d+)\}\}$/.exec(part);
+                              if (!match) return <span key={idx}>{part}</span>;
+                              const num = Number(match[1]);
+                              const result = blankResults[num - 1];
+                              if (!result) {
+                                return <span key={idx}>{part}</span>;
+                              }
+                              return (
+                                <span
+                                  key={idx}
+                                  className="mx-1 inline-flex flex-wrap items-center gap-1 align-baseline"
+                                >
+                                  <span
+                                    className={cn(
+                                      'inline-flex items-center gap-1 rounded border px-2 py-0.5 text-xs font-semibold',
+                                      result.isCorrect
+                                        ? 'border-success bg-success/15 text-success'
+                                        : 'border-destructive bg-destructive/15 text-destructive',
+                                    )}
+                                  >
+                                    <span className="opacity-75">({num})</span>
+                                    <span
+                                      className={cn(
+                                        !result.isCorrect &&
+                                          result.studentAnswer !== '' &&
+                                          'line-through',
+                                      )}
+                                    >
+                                      {result.studentAnswer || '(empty)'}
+                                    </span>
+                                    {result.isCorrect ? (
+                                      <CheckCircle2 className="h-3 w-3" />
+                                    ) : (
+                                      <XCircle className="h-3 w-3" />
+                                    )}
+                                  </span>
+                                  {!result.isCorrect &&
+                                    result.acceptedVariants.length > 0 && (
+                                      <span className="inline-flex items-center rounded border border-success/50 bg-success/10 px-2 py-0.5 text-xs font-medium text-success">
+                                        {result.acceptedVariants[0]}
+                                      </span>
+                                    )}
+                                </span>
+                              );
+                            })}
+                        </p>
 
-                    <ul className="m-0 list-none space-y-2 p-0">
-                      {question.options.map(
-                        (option: ExamOption, optionIndex: number) => {
-                          const isSelected =
-                            question.selectedOptionId === option.id;
-                          return (
+                        <ul className="m-0 list-none space-y-2 p-0">
+                          {blankResults.map((b) => (
                             <li
-                              key={option.id}
+                              key={b.blankNumber}
                               className={cn(
-                                'flex items-center gap-3 rounded-md border p-3 text-sm transition-colors',
-                                option.isCorrect
-                                  ? 'border-success bg-success/10 font-medium'
-                                  : isSelected
-                                    ? 'border-destructive bg-destructive/10'
-                                    : 'bg-background text-muted-foreground',
+                                'flex flex-wrap items-center justify-between gap-2 rounded-md border p-2.5 text-xs',
+                                b.isCorrect
+                                  ? 'border-success/50 bg-success/5'
+                                  : 'border-destructive/40 bg-destructive/5',
                               )}
                             >
-                              {option.isCorrect ? (
-                                <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />
-                              ) : isSelected ? (
-                                <XCircle className="h-4 w-4 shrink-0 text-destructive" />
-                              ) : (
-                                <span className="h-4 w-4 shrink-0" />
-                              )}
-                              <span
-                                className={cn(
-                                  'font-semibold',
-                                  option.isCorrect
-                                    ? 'text-success'
-                                    : isSelected
-                                      ? 'text-destructive'
-                                      : 'text-foreground',
-                                )}
-                              >
-                                {OPTION_LETTERS[optionIndex]}.
-                              </span>
-                              <span className="flex-1 text-foreground">
-                                {option.content}
-                              </span>
-                              {isSelected && (
-                                <span
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="rounded bg-primary/10 px-2 py-0.5 font-semibold text-primary">
+                                  {`Blank {{${b.blankNumber}}}`}
+                                </span>
+                                <span className="text-muted-foreground">
+                                  Your answer:{' '}
+                                  <strong
+                                    className={cn(
+                                      b.isCorrect
+                                        ? 'text-success'
+                                        : 'text-destructive',
+                                    )}
+                                  >
+                                    {b.studentAnswer || '(empty)'}
+                                  </strong>
+                                </span>
+                              </div>
+                              <div className="flex flex-wrap items-center gap-1">
+                                <span className="text-muted-foreground">
+                                  Accepted:
+                                </span>
+                                {b.acceptedVariants.map((variant, vIdx) => (
+                                  <span
+                                    key={`${vIdx}-${variant}`}
+                                    className="rounded bg-success/15 px-1.5 py-0.5 font-medium text-success"
+                                  >
+                                    {variant}
+                                  </span>
+                                ))}
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      </>
+                    ) : (
+                      <>
+                        <p className="mt-0 whitespace-pre-line font-medium text-foreground">
+                          {question.content}
+                        </p>
+
+                        <ul className="m-0 list-none space-y-2 p-0">
+                          {question.options.map(
+                            (option: ExamOption, optionIndex: number) => {
+                              const isSelected = selectedOptionIds.has(
+                                option.id,
+                              );
+                              const isMissedCorrect =
+                                isAnswered && option.isCorrect && !isSelected;
+                              return (
+                                <li
+                                  key={option.id}
                                   className={cn(
-                                    'text-xs font-semibold',
+                                    'flex items-center gap-3 rounded-md border p-3 text-sm transition-colors',
                                     option.isCorrect
-                                      ? 'text-success'
-                                      : 'text-destructive',
+                                      ? isMissedCorrect
+                                        ? 'border-dashed border-success bg-success/5 font-medium'
+                                        : 'border-success bg-success/10 font-medium'
+                                      : isSelected
+                                        ? 'border-destructive bg-destructive/10'
+                                        : 'bg-background text-muted-foreground',
                                   )}
                                 >
-                                  Your answer
-                                </span>
-                              )}
-                              {option.isCorrect && (
-                                <span className="text-xs font-semibold text-success">
-                                  Correct answer
-                                </span>
-                              )}
-                            </li>
-                          );
-                        },
-                      )}
-                    </ul>
+                                  {option.isCorrect ? (
+                                    <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />
+                                  ) : isSelected ? (
+                                    <XCircle className="h-4 w-4 shrink-0 text-destructive" />
+                                  ) : (
+                                    <span className="h-4 w-4 shrink-0" />
+                                  )}
+                                  <span
+                                    className={cn(
+                                      'font-semibold',
+                                      option.isCorrect
+                                        ? 'text-success'
+                                        : isSelected
+                                          ? 'text-destructive'
+                                          : 'text-foreground',
+                                    )}
+                                  >
+                                    {OPTION_LETTERS[optionIndex]}.
+                                  </span>
+                                  <span className="flex-1 text-foreground">
+                                    {option.content}
+                                  </span>
+                                  {isSelected && (
+                                    <span
+                                      className={cn(
+                                        'text-xs font-semibold',
+                                        option.isCorrect
+                                          ? 'text-success'
+                                          : 'text-destructive',
+                                      )}
+                                    >
+                                      Your answer
+                                    </span>
+                                  )}
+                                  {option.isCorrect && (
+                                    <span className="text-xs font-semibold text-success">
+                                      {isMissedCorrect
+                                        ? 'Correct answer (missed)'
+                                        : 'Correct answer'}
+                                    </span>
+                                  )}
+                                </li>
+                              );
+                            },
+                          )}
+                        </ul>
+                      </>
+                    )}
                   </li>
                 );
               })}
             </ol>
           )}
 
-          {/* Bottom Pagination */}
           {totalPages > 1 && (
             <div className="flex items-center justify-between border-t pt-4">
               <Button
@@ -592,7 +787,6 @@ export const AttemptReviewViewer = ({
 
         {/* Right Column: Result Summary Card & Question Navigator Palette */}
         <aside className="space-y-4 lg:sticky lg:top-4 lg:self-start">
-          {/* Result Summary Card */}
           <div className="rounded-lg border bg-card p-4 shadow-sm">
             <p className="mt-0 flex items-center gap-1.5 text-sm font-semibold text-foreground">
               <Trophy className="h-4 w-4 text-brand" />
@@ -635,7 +829,6 @@ export const AttemptReviewViewer = ({
             </dl>
           </div>
 
-          {/* Review Question Palette */}
           <div className="rounded-lg border bg-card p-4 shadow-sm">
             <div className="mb-2 flex items-center justify-between">
               <p className="m-0 text-sm font-semibold text-foreground">

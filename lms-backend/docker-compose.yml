@@ -9,6 +9,10 @@ services:
       - '9595:9595'
     env_file:
       - .env
+    environment:
+      ZALO_BOT_TOKEN: ${ZALO_BOT_TOKEN:-}
+      ZALO_MODE: ${ZALO_MODE:-polling}
+      ZALO_BOT_WEBHOOK_SECRET: ${ZALO_BOT_WEBHOOK_SECRET:-}
+      ZALO_DEBUG: ${ZALO_DEBUG:-false}
     volumes:
       - ./ca.pem:/app/ca.pem:ro
-
