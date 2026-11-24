@@ -1,8 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import type { Readable } from 'node:stream';
 import type { FilePurpose } from '../enums/file-purpose.enum.js';
+import type { StorageHealthStatus } from '../services/file-storage.service.js';
 import { FileService } from '../services/file.service.js';
 import { FileDownloadView } from '../types/file-download-view.type.js';
+
+export type { StorageHealthStatus };
 
 /** Public entry point of the file module; other modules must not use FileService directly. */
 @Injectable()
@@ -60,5 +63,10 @@ export class FileFacade {
     fileId: string,
   ): Promise<{ fileName: string; stream: Readable }> {
     return this.fileService.openReadStream(fileId);
+  }
+
+  /** Probes S3 bucket connectivity without listing objects. */
+  async checkStorageHealth(): Promise<StorageHealthStatus> {
+    return this.fileService.checkStorageHealth();
   }
 }

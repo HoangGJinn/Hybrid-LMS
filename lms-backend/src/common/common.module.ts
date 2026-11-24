@@ -1,12 +1,14 @@
 import { Module, ValidationPipe } from '@nestjs/common';
 import { APP_FILTER, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
 import { AuditContextInterceptor } from '../shared/audit/interceptors/audit-context.interceptor.js';
+import { HttpMetricsInterceptor } from '../shared/monitoring/interceptors/http-metrics.interceptor.js';
 import { AllExceptionsFilter } from './filters/all-exceptions.filter.js';
 import { ResponseInterceptor } from './interceptors/response.interceptor.js';
 
 @Module({
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
+    { provide: APP_INTERCEPTOR, useClass: HttpMetricsInterceptor },
     { provide: APP_INTERCEPTOR, useClass: AuditContextInterceptor },
     { provide: APP_INTERCEPTOR, useClass: ResponseInterceptor },
     {

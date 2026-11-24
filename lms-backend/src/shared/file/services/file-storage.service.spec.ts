@@ -143,4 +143,46 @@ describe('FileStorageService.createDownloadUrl', () => {
       mockSend.mockRestore();
     });
   });
+
+  describe('checkBucketHealth', () => {
+    it('returns reachable true on HeadBucket success', async () => {
+      const mockSend = vi
+        .spyOn(S3Client.prototype, 'send')
+        .mockResolvedValue({} as never);
+
+      const status = await service.checkBucketHealth();
+      expect(status).toMatchObject({
+        reachable: true,
+        bucket: 'lms-test-files',
+        region: 'ap-southeast-1',
+      });
+      mockSend.mockRestore();
+    });
+
+    it('treats 403 IAM restriction on HeadBucket as reachable bucket', async () => {
+      const mockSend = vi
+        .spyOn(S3Client.prototype, 'send')
+        .mockRejectedValue(
+          Object.assign(new Error('Forbidden'), {
+            $metadata: { httpStatusCode: 403 },
+          }),
+        );
+
+      const status = await service.checkBucketHealth();
+      expect(status.reachable).toBe(true);
+      expect(status.detail).toContain('IAM');
+      mockSend.mockRestore();
+    });
+
+    it('returns reachable false on network or missing bucket errors', async () => {
+      const mockSend = vi
+        .spyOn(S3Client.prototype, 'send')
+        .mockRejectedValue(new Error('NoSuchBucket'));
+
+      const status = await service.checkBucketHealth();
+      expect(status.reachable).toBe(false);
+      expect(status.detail).toContain('NoSuchBucket');
+      mockSend.mockRestore();
+    });
+  });
 });

@@ -1,4 +1,5 @@
 import {
+  Activity,
   BookOpen,
   GraduationCap,
   LayoutDashboard,
@@ -21,4 +22,5 @@ export const adminNav: NavItem[] = [
   { label: 'Students', to: '/students', icon: GraduationCap },
   { label: 'Import data', to: '/import', icon: Upload },
   { label: 'Audit Log', to: '/audit-logs', icon: ScrollText },
+  { label: 'Monitoring', to: '/monitoring', icon: Activity },
 ];

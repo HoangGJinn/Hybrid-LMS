@@ -17,6 +17,7 @@ import { RoadmapModule } from './modules/roadmap/roadmap.module.js';
 import { ZaloModule } from './modules/zalo/index.js';
 import { AuditModule } from './shared/audit/audit.module.js';
 import { FileModule } from './shared/file/file.module.js';
+import { MonitoringModule } from './shared/monitoring/monitoring.module.js';
 import { NotificationModule } from './shared/notification/notification.module.js';
 import { GradebookModule } from './modules/gradebook/gradebook.module.js';
 
@@ -52,6 +53,7 @@ import { validate } from './config/env.validation.js';
     ZaloModule,
     AuditModule,
     FileModule,
+    MonitoringModule,
     NotificationModule,
   ],
   controllers: [],

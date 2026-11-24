@@ -5,8 +5,11 @@ import {
   HttpException,
   HttpStatus,
   Logger,
+  Optional,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
+import { getAuditContext } from '../../shared/audit/context/audit-context.js';
+import { HttpMetricsStore } from '../../shared/monitoring/services/http-metrics.store.js';
 
 interface ExtractedExceptionDetails {
   status: number;
@@ -19,6 +22,10 @@ interface ExtractedExceptionDetails {
 export class AllExceptionsFilter implements ExceptionFilter {
   private readonly logger = new Logger(AllExceptionsFilter.name);
 
+  constructor(
+    @Optional() private readonly httpMetricsStore?: HttpMetricsStore,
+  ) {}
+
   public catch(exception: unknown, host: ArgumentsHost): void {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
@@ -27,6 +34,28 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const { status, message, field } = this.extractDetails(exception);
 
     this.logException(request.method, request.url, status, message, exception);
+    if (
+      status >= HttpStatus.INTERNAL_SERVER_ERROR &&
+      this.httpMetricsStore &&
+      !this.httpMetricsStore.shouldIgnorePath(request.originalUrl || request.url)
+    ) {
+      const safeMessage =
+        exception instanceof Error
+          ? exception.message || 'Internal server error'
+          : Array.isArray(message)
+            ? message.join('; ')
+            : message;
+      this.httpMetricsStore.recordServerError({
+        occurredAt: new Date().toISOString(),
+        method: request.method,
+        path: (request.originalUrl || request.url).split('?')[0] || '/',
+        statusCode: status,
+        message: safeMessage,
+        exceptionName:
+          exception instanceof Error ? exception.name : 'UnknownError',
+        requestId: getAuditContext()?.requestId ?? null,
+      });
+    }
 
     response.status(status).json({
       success: false,

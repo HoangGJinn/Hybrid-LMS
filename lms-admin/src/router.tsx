@@ -6,6 +6,7 @@ import { auditLogsRoute } from '@/features/audit/routes';
 import { loginRoute } from '@/features/auth/routes';
 import { coursesRoute, importDataRoute } from '@/features/courses/routes';
 import { dashboardRoute } from '@/features/dashboard/routes';
+import { monitoringRoute } from '@/features/monitoring/routes';
 import { lecturersRoute, studentsRoute } from '@/features/users/routes';
 import FullPageLoader from '@/shared/components/FullPageLoader';
 import RouteErrorPage from '@/shared/components/RouteErrorPage';
@@ -34,6 +35,7 @@ export const router = createBrowserRouter([
               lecturersRoute,
               studentsRoute,
               auditLogsRoute,
+              monitoringRoute,
               {
                 path: '*',
                 ...lazyPage(() => import('@/core/views/NotFoundPage')),
