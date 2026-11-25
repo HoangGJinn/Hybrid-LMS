@@ -4,7 +4,11 @@ import { lazyPage } from '@/core/router/lazyPage';
 import { ProtectedRoute } from '@/features/auth';
 import { auditLogsRoute } from '@/features/audit/routes';
 import { loginRoute } from '@/features/auth/routes';
-import { coursesRoute, importDataRoute } from '@/features/courses/routes';
+import {
+  coursesRoute,
+  importExportRoute,
+  legacyImportRoute,
+} from '@/features/courses/routes';
 import { dashboardRoute } from '@/features/dashboard/routes';
 import { monitoringRoute } from '@/features/monitoring/routes';
 import { lecturersRoute, studentsRoute } from '@/features/users/routes';
@@ -31,7 +35,8 @@ export const router = createBrowserRouter([
             children: [
               dashboardRoute,
               coursesRoute,
-              importDataRoute,
+              importExportRoute,
+              legacyImportRoute,
               lecturersRoute,
               studentsRoute,
               auditLogsRoute,

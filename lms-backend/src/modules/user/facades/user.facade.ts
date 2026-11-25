@@ -69,6 +69,11 @@ export class UserFacade {
     return this.userService.findLecturersByIds(ids);
   }
 
+  /** Every lecturer, including those who cannot be given a class (see `assignmentBlockedReason`). */
+  async findAllLecturers(): Promise<LecturerSummary[]> {
+    return this.userService.findAllLecturers();
+  }
+
   async findLecturersByCodes(codes: string[]): Promise<LecturerSummary[]> {
     return this.userService.findLecturersByCodes(codes);
   }

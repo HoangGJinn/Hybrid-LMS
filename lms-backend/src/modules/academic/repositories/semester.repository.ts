@@ -15,6 +15,25 @@ export class SemesterRepository {
     return this.repo.save(entity);
   }
 
+  /** The lower-cased codes from `codes` that already exist (compared ignoring case). */
+  async findExistingCodes(codes: string[]): Promise<Set<string>> {
+    if (codes.length === 0) return new Set();
+    const rows = await this.repo
+      .createQueryBuilder('s')
+      .select('s.semesterCode', 'semesterCode')
+      .where('LOWER(s.semesterCode) IN (:...codes)', {
+        codes: codes.map((code) => code.toLowerCase()),
+      })
+      .getRawMany<{ semesterCode: string }>();
+    return new Set(rows.map((row) => row.semesterCode.toLowerCase()));
+  }
+
+  /** Inserts all semesters in one statement, so either every one of them is created or none. */
+  async createMany(data: Partial<Semester>[]): Promise<void> {
+    if (data.length === 0) return;
+    await this.repo.insert(data);
+  }
+
   async findAll(): Promise<Semester[]> {
     return this.repo.find({ order: { startDate: 'DESC' } });
   }

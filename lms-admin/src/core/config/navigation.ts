@@ -1,10 +1,10 @@
 import {
   Activity,
+  ArrowLeftRight,
   BookOpen,
   GraduationCap,
   LayoutDashboard,
   ScrollText,
-  Upload,
   Users,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -20,7 +20,7 @@ export const adminNav: NavItem[] = [
   { label: 'Courses', to: '/courses', icon: BookOpen },
   { label: 'Lecturers', to: '/lecturers', icon: Users },
   { label: 'Students', to: '/students', icon: GraduationCap },
-  { label: 'Import data', to: '/import', icon: Upload },
+  { label: 'Import / Export', to: '/import-export', icon: ArrowLeftRight },
   { label: 'Audit Log', to: '/audit-logs', icon: ScrollText },
   { label: 'Monitoring', to: '/monitoring', icon: Activity },
 ];

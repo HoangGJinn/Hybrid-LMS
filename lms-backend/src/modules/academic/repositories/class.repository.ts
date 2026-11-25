@@ -12,6 +12,13 @@ import {
 /** Rows per INSERT, to stay far below the database's limit on bind parameters. */
 const ENROLL_CHUNK = 1000;
 
+/** Which classes an admin export covers. */
+export interface ClassExportFilter {
+  semesterId?: string;
+  /** true = running, false = ended, undefined = both. */
+  isActive?: boolean;
+}
+
 @Injectable()
 export class ClassRepository {
   constructor(
@@ -249,6 +256,59 @@ export class ClassRepository {
     qb.skip(skip).take(limit);
 
     return qb.getManyAndCount();
+  }
+
+  /** Classes an admin export covers: never the removed ones; `isActive` narrows to running / ended. */
+  private exportQuery(filter: ClassExportFilter) {
+    const qb = this.classRepo
+      .createQueryBuilder('c')
+      .where('c.deletedAt IS NULL');
+    if (filter.semesterId) {
+      qb.andWhere('c.semesterId = :semesterId', {
+        semesterId: filter.semesterId,
+      });
+    }
+    if (filter.isActive !== undefined) {
+      qb.andWhere('c.isActive = :isActive', { isActive: filter.isActive });
+    }
+    return qb;
+  }
+
+  async countForExport(filter: ClassExportFilter): Promise<number> {
+    return this.exportQuery(filter).getCount();
+  }
+
+  /** The classes of an export with subject, semester and lecturer, by class code. */
+  async findForExport(filter: ClassExportFilter, limit: number): Promise<Class[]> {
+    return this.exportQuery(filter)
+      .leftJoinAndSelect('c.subject', 'subject')
+      .leftJoinAndSelect('c.semester', 'semester')
+      .leftJoinAndSelect('c.lecturer', 'lecturer')
+      .leftJoinAndSelect('lecturer.user', 'lecturerUser')
+      .orderBy('c.classCode', 'ASC')
+      .take(limit)
+      .getMany();
+  }
+
+  /** Every enrolment of the given classes, with the student and their user. */
+  async findEnrollmentsByClassIds(classIds: string[]): Promise<ClassStudent[]> {
+    if (classIds.length === 0) return [];
+    const rows: ClassStudent[] = [];
+    // Chunked so the IN list stays far below the database's bind-parameter limit.
+    for (let start = 0; start < classIds.length; start += ENROLL_CHUNK) {
+      // eslint-disable-next-line no-await-in-loop
+      const chunk = await this.classStudentRepo
+        .createQueryBuilder('cs')
+        .innerJoinAndSelect('cs.student', 'student')
+        .innerJoinAndSelect('student.user', 'studentUser')
+        .where('cs.classId IN (:...ids)', {
+          ids: classIds.slice(start, start + ENROLL_CHUNK),
+        })
+        .orderBy('student.studentCode', 'ASC')
+        .getMany();
+      rows.push(...chunk);
+    }
+    return rows;
   }
 
   async countStudents(classId: string): Promise<number> {

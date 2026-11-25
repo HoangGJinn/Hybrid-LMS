@@ -10,6 +10,9 @@ import {
   Post,
 } from '@nestjs/common';
 import { SemesterService } from '../services/semester.service.js';
+import { SemesterImportService } from '../services/semester-import.service.js';
+import { ImportSemestersDto } from '../dto/import-semesters.dto.js';
+import { CatalogImportResult } from '../types/catalog-import.type.js';
 import { CreateSemesterDto } from '../dto/create-semester.dto.js';
 import { UpdateSemesterDto } from '../dto/update-semester.dto.js';
 import { SemesterView } from '../types/semester-view.type.js';
@@ -19,7 +22,10 @@ import { Role } from '../../../common/enums/role.enum.js';
 @Controller('semesters')
 @Auth(Role.ADMIN)
 export class SemesterController {
-  constructor(private readonly semesterService: SemesterService) {}
+  constructor(
+    private readonly semesterService: SemesterService,
+    private readonly importService: SemesterImportService,
+  ) {}
 
   @Get()
   async getAll(): Promise<SemesterView[]> {
@@ -31,6 +37,17 @@ export class SemesterController {
   async getById(@Param('id') id: string): Promise<SemesterView> {
     const semester = await this.semesterService.findById(id);
     return SemesterView.fromEntity(semester);
+  }
+
+  /**
+   * Bulk create from the rows of an Excel file. Dates are days in Vietnam time. With `dryRun` it only
+   * reports, per row, whether the semester would be created, skipped as a duplicate or rejected.
+   */
+  @Post('import')
+  async importSemesters(
+    @Body() dto: ImportSemestersDto,
+  ): Promise<CatalogImportResult> {
+    return this.importService.importSemesters(dto);
   }
 
   @Post()

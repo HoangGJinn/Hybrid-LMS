@@ -87,14 +87,14 @@ const DashboardPage = () => {
             Audit log
           </Link>
           <Link
-            to="/import"
+            to="/import-export"
             className={buttonClasses(
               'primary',
               'sm',
               'rounded-[5px] shadow-none',
             )}
           >
-            Import data
+            Import / Export
           </Link>
         </div>
       </header>

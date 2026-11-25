@@ -2,7 +2,6 @@ import { useRef, useState, type ChangeEvent } from "react";
 import { Download } from "lucide-react";
 import { toast } from "sonner";
 import { getErrorMessage } from "@/core/api/errors";
-import { PageHeader } from "@/shared/components/PageHeader";
 import { Button } from "@/shared/components/ui/Button";
 import { downloadBlob } from "@/shared/utils/download";
 import { ImportDataPreview } from "../components/ImportDataPreview";
@@ -110,10 +109,11 @@ const SampleTable = ({
 );
 
 /**
- * "Import data": pick several roster files (class + student list), see what each would do, then
- * create all the classes and add their students at once.
+ * "Classes & students" import: pick several roster files (class + student list), see what each
+ * would do, then create all the classes and add their students at once. A file produced by the
+ * class-roster export can be imported again as it is.
  */
-const ImportDataPage = () => {
+export const ClassDataImportPanel = () => {
   const [files, setFiles] = useState<SelectedRosterFile[]>([]);
   const [preview, setPreview] = useState<ClassDataImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -199,11 +199,6 @@ const ImportDataPage = () => {
 
   return (
     <>
-      <PageHeader
-        title="Import data"
-        subtitle="Create classes and add their students from several Excel files at once."
-      />
-
       <div className="max-w-4xl space-y-4">
         <section className="space-y-3 rounded-lg border bg-card p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -317,5 +312,3 @@ const ImportDataPage = () => {
     </>
   );
 };
-
-export default ImportDataPage;

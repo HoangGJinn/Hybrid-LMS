@@ -375,6 +375,14 @@ export class UserRepository {
     });
   }
 
+  /** Every lecturer (with their user), whatever their status, by lecturer code. */
+  async findAllLecturers(): Promise<Lecturer[]> {
+    return this.lecturerRepo.find({
+      relations: { user: true },
+      order: { lecturerCode: 'ASC' },
+    });
+  }
+
   /** Lecturers (with their user) by lecturer code. */
   async findLecturersByCodes(codes: string[]): Promise<Lecturer[]> {
     if (codes.length === 0) return [];

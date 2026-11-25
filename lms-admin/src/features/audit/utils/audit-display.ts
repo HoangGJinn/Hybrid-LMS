@@ -27,6 +27,7 @@ export const ACTION_META: Record<AuditAction, ActionMeta> = {
   CLASS_DEACTIVATED: { label: 'Course ended', category: 'ADMIN', variant: 'warning' },
   CLASS_REMOVED: { label: 'Course removed', category: 'ADMIN', variant: 'destructive' },
   CLASS_IMPORTED: { label: 'Courses imported', category: 'ADMIN', variant: 'success' },
+  CLASS_ROSTERS_EXPORTED: { label: 'Class rosters exported', category: 'ADMIN', variant: 'outline' },
 
   PARTICIPANT_ADDED: { label: 'Participant added', category: 'ADMIN', variant: 'success' },
   PARTICIPANT_REMOVED: { label: 'Participant removed', category: 'ADMIN', variant: 'destructive' },
@@ -37,10 +38,14 @@ export const ACTION_META: Record<AuditAction, ActionMeta> = {
   SEMESTER_CREATED: { label: 'Semester created', category: 'ADMIN', variant: 'success' },
   SEMESTER_UPDATED: { label: 'Semester updated', category: 'ADMIN', variant: 'outline' },
   SEMESTER_DELETED: { label: 'Semester deleted', category: 'ADMIN', variant: 'destructive' },
+  SEMESTER_IMPORTED: { label: 'Semesters imported', category: 'ADMIN', variant: 'success' },
 
   SUBJECT_CREATED: { label: 'Subject created', category: 'ADMIN', variant: 'success' },
   SUBJECT_UPDATED: { label: 'Subject updated', category: 'ADMIN', variant: 'outline' },
   SUBJECT_DELETED: { label: 'Subject deleted', category: 'ADMIN', variant: 'destructive' },
+  SUBJECT_IMPORTED: { label: 'Subjects imported', category: 'ADMIN', variant: 'success' },
+
+  REFERENCE_CODES_EXPORTED: { label: 'Reference codes exported', category: 'ADMIN', variant: 'outline' },
 
   LOGIN_SUCCEEDED: { label: 'Sign-in succeeded', category: 'SECURITY', variant: 'default' },
   LOGIN_FAILED: { label: 'Sign-in failed', category: 'SECURITY', variant: 'destructive' },
@@ -55,6 +60,7 @@ export const ENTITY_TYPE_LABELS: Record<AuditEntityType, string> = {
   PARTICIPANT: 'Participant',
   SEMESTER: 'Semester',
   SUBJECT: 'Subject',
+  REFERENCE_DATA: 'Reference data',
   AUTH: 'Auth',
 };
 

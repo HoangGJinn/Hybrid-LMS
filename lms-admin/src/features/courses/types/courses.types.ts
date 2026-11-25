@@ -207,3 +207,54 @@ export interface ClassDataImportResult {
   skippedStudents: number;
   failedStudents: number;
 }
+
+/** One data row of a subject file, as sent to POST /api/subjects/import. */
+export interface SubjectImportRowPayload {
+  /** Row number in the file (the header is row 1). */
+  line: number;
+  subjectCode?: string;
+  name?: string;
+  description?: string;
+}
+
+/** One data row of a semester file, as sent to POST /api/semesters/import. Dates are Vietnam-time days. */
+export interface SemesterImportRowPayload {
+  /** Row number in the file (the header is row 1). */
+  line: number;
+  semesterCode?: string;
+  name?: string;
+  /** `dd/MM/yyyy` or `yyyy-MM-dd`. */
+  startDate?: string;
+  /** `dd/MM/yyyy` or `yyyy-MM-dd`. */
+  endDate?: string;
+}
+
+export type CatalogImportRowStatus = 'created' | 'skipped' | 'error';
+
+export interface CatalogImportRowResult {
+  line: number;
+  /** `created` = will be created (preview) / was created (import); `skipped` = duplicate code. */
+  status: CatalogImportRowStatus;
+  code: string | null;
+  name: string | null;
+  message: string | null;
+}
+
+export interface CatalogImportResult {
+  /** true = preview only, nothing was written. */
+  dryRun: boolean;
+  total: number;
+  created: number;
+  skipped: number;
+  failed: number;
+  rows: CatalogImportRowResult[];
+}
+
+/** Which classes the roster export covers. */
+export type RosterExportStatus = 'active' | 'ended' | 'all';
+
+export interface RosterExportParams {
+  /** Leave out for every semester. */
+  semesterId?: string;
+  status: RosterExportStatus;
+}
