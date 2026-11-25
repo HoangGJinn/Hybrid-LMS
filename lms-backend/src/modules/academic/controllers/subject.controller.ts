@@ -10,6 +10,9 @@ import {
   Post,
 } from '@nestjs/common';
 import { SubjectService } from '../services/subject.service.js';
+import { SubjectImportService } from '../services/subject-import.service.js';
+import { ImportSubjectsDto } from '../dto/import-subjects.dto.js';
+import { CatalogImportResult } from '../types/catalog-import.type.js';
 import { CreateSubjectDto } from '../dto/create-subject.dto.js';
 import { UpdateSubjectDto } from '../dto/update-subject.dto.js';
 import { SubjectView } from '../types/subject-view.type.js';
@@ -19,7 +22,10 @@ import { Role } from '../../../common/enums/role.enum.js';
 @Controller('subjects')
 @Auth(Role.ADMIN)
 export class SubjectController {
-  constructor(private readonly subjectService: SubjectService) {}
+  constructor(
+    private readonly subjectService: SubjectService,
+    private readonly importService: SubjectImportService,
+  ) {}
 
   @Get()
   async getAll(): Promise<SubjectView[]> {
@@ -31,6 +37,17 @@ export class SubjectController {
   async getById(@Param('id') id: string): Promise<SubjectView> {
     const subject = await this.subjectService.findById(id);
     return SubjectView.fromEntity(subject);
+  }
+
+  /**
+   * Bulk create from the rows of an Excel file. With `dryRun` it only reports, per row, whether the
+   * subject would be created, skipped as a duplicate or rejected.
+   */
+  @Post('import')
+  async importSubjects(
+    @Body() dto: ImportSubjectsDto,
+  ): Promise<CatalogImportResult> {
+    return this.importService.importSubjects(dto);
   }
 
   @Post()

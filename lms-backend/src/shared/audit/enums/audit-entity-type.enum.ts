@@ -4,5 +4,6 @@ export enum AuditEntityType {
   PARTICIPANT = 'PARTICIPANT',
   SEMESTER = 'SEMESTER',
   SUBJECT = 'SUBJECT',
+  REFERENCE_DATA = 'REFERENCE_DATA',
   AUTH = 'AUTH',
 }

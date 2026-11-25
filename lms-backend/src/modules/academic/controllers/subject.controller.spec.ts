@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { SubjectController } from './subject.controller.js';
 import { SubjectService } from '../services/subject.service.js';
+import { SubjectImportService } from '../services/subject-import.service.js';
 import { Subject } from '../entities/subject.entity.js';
 
 describe('SubjectController', () => {
@@ -8,6 +9,8 @@ describe('SubjectController', () => {
   let mockService: Partial<
     Record<keyof SubjectService, ReturnType<typeof vi.fn>>
   >;
+
+  let mockImport: Record<'importSubjects', ReturnType<typeof vi.fn>>;
 
   const sampleSubject: Subject = {
     id: 'sub-uuid-1',
@@ -24,9 +27,21 @@ describe('SubjectController', () => {
       update: vi.fn(),
       delete: vi.fn(),
     };
+    mockImport = { importSubjects: vi.fn() };
     controller = new SubjectController(
       mockService as unknown as SubjectService,
+      mockImport as unknown as SubjectImportService,
     );
+  });
+
+  describe('importSubjects', () => {
+    it('hands the rows to the import service', async () => {
+      const dto = { rows: [{ line: 2, subjectCode: 'CS101', name: 'Intro' }], dryRun: true };
+      const summary = { dryRun: true, total: 1, created: 1, skipped: 0, failed: 0, rows: [] };
+      mockImport.importSubjects.mockResolvedValue(summary);
+      expect(await controller.importSubjects(dto)).toBe(summary);
+      expect(mockImport.importSubjects).toHaveBeenCalledWith(dto);
+    });
   });
 
   describe('getAll', () => {

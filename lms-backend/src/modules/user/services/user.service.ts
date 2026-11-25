@@ -221,6 +221,11 @@ export class UserService {
     return lecturers.map((l) => LecturerSummary.fromEntity(l));
   }
 
+  async findAllLecturers(): Promise<LecturerSummary[]> {
+    const lecturers = await this.userRepository.findAllLecturers();
+    return lecturers.map((l) => LecturerSummary.fromEntity(l));
+  }
+
   async findLecturersByCodes(codes: string[]): Promise<LecturerSummary[]> {
     const lecturers = await this.userRepository.findLecturersByCodes(codes);
     return lecturers.map((l) => LecturerSummary.fromEntity(l));

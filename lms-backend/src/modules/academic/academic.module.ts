@@ -13,6 +13,9 @@ import { ClassService } from './services/class.service.js';
 import { ClassImportService } from './services/class-import.service.js';
 import { ClassDataImportService } from './services/class-data-import.service.js';
 import { ClassExportService } from './services/class-export.service.js';
+import { AcademicExportService } from './services/academic-export.service.js';
+import { SubjectImportService } from './services/subject-import.service.js';
+import { SemesterImportService } from './services/semester-import.service.js';
 import { ParticipantService } from './services/participant.service.js';
 import { SubjectService } from './services/subject.service.js';
 import { SemesterService } from './services/semester.service.js';
@@ -22,6 +25,7 @@ import { ParticipantController } from './controllers/participant.controller.js';
 import { StudentDashboardController } from './controllers/student-dashboard.controller.js';
 import { SubjectController } from './controllers/subject.controller.js';
 import { SemesterController } from './controllers/semester.controller.js';
+import { AcademicExportController } from './controllers/academic-export.controller.js';
 import { AcademicFacade } from './facades/academic.facade.js';
 import { LecturerDashboardRepository } from './repositories/lecturer-dashboard.repository.js';
 import { LecturerDashboardService } from './services/lecturer-dashboard.service.js';
@@ -41,6 +45,7 @@ import { UserModule } from '../user/user.module.js';
     StudentDashboardController,
     SubjectController,
     SemesterController,
+    AcademicExportController,
   ],
   providers: [
     ClassRepository,
@@ -54,6 +59,9 @@ import { UserModule } from '../user/user.module.js';
     ClassImportService,
     ClassDataImportService,
     ClassExportService,
+    AcademicExportService,
+    SubjectImportService,
+    SemesterImportService,
     ParticipantService,
     SubjectService,
     SemesterService,
