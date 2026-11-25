@@ -26,6 +26,9 @@ export class LecturerSummary {
   }
 
   private static getAssignmentBlockedReason(lecturer: Lecturer): string | null {
+    if (lecturer.user.deletedAt) {
+      return 'The lecturer account has been permanently removed';
+    }
     if (!lecturer.user.isActive) {
       return 'The lecturer account is deactivated';
     }

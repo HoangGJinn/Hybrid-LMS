@@ -402,4 +402,34 @@ describe('AuthService', () => {
       expect(result.code).toBe('SV001');
     });
   });
+
+  describe('audit logging', () => {
+    it('records LOGIN_FAILED on wrong password and LOGIN_SUCCEEDED on valid login', async () => {
+      const mockAudit = { record: vi.fn().mockResolvedValue(undefined) };
+      const auditedService = new AuthService(
+        mockUserFacade as unknown as UserFacade,
+        mockTokenService as unknown as TokenService,
+        mockRefreshTokenService as unknown as RefreshTokenService,
+        mockGoogleAuthService as unknown as GoogleAuthService,
+        mockConfigService as unknown as ConfigService,
+        mockAudit as any,
+      );
+
+      mockUserFacade.findForPasswordAuth!.mockResolvedValue(null);
+      await expect(
+        auditedService.loginWithCredentials({
+          username: 'nobody',
+          password: '123',
+        }),
+      ).rejects.toThrow(UnauthorizedException);
+
+      expect(mockAudit.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          category: 'SECURITY',
+          action: 'LOGIN_FAILED',
+          result: 'FAILURE',
+        }),
+      );
+    });
+  });
 });

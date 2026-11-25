@@ -31,6 +31,9 @@ export class StudentSummary {
   }
 
   private static getEnrollmentBlockedReason(student: Student): string | null {
+    if (student.user.deletedAt) {
+      return 'The student account has been permanently removed';
+    }
     if (!student.user.isActive) {
       return 'The student account is deactivated';
     }

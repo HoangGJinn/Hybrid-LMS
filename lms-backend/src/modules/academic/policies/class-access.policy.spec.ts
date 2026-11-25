@@ -20,6 +20,11 @@ const openClass: ClassAccessSubject = {
   isActive: true,
 };
 const endedClass: ClassAccessSubject = { ...openClass, isActive: false };
+const removedClass: ClassAccessSubject = {
+  ...openClass,
+  isActive: false,
+  deletedAt: new Date(),
+};
 
 describe('ClassAccessPolicy', () => {
   let exists: ReturnType<typeof vi.fn>;
@@ -101,6 +106,12 @@ describe('ClassAccessPolicy', () => {
 
     it('refuses changes once the class has ended', () => {
       expect(() => policy.assertParticipantsEditable(endedClass)).toThrow(
+        ConflictException,
+      );
+    });
+
+    it('refuses changes when the class has been removed', () => {
+      expect(() => policy.assertParticipantsEditable(removedClass)).toThrow(
         ConflictException,
       );
     });

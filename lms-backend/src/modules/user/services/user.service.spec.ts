@@ -49,6 +49,7 @@ describe('UserService', () => {
       findProfile: vi.fn().mockResolvedValue(null),
       updateUserAndProfile: vi.fn(),
       setActive: vi.fn(),
+      softDelete: vi.fn(),
       findForPasswordAuth: vi.fn(),
     };
 
@@ -180,7 +181,10 @@ describe('UserService', () => {
 
       const result = await service.getProfileCode('user-uuid-1');
 
-      expect(mockUserRepo.findProfileCode).toHaveBeenCalledWith('user-uuid-1');
+      expect(mockUserRepo.findProfileCode).toHaveBeenCalledWith(
+        'user-uuid-1',
+        undefined,
+      );
       expect(result).toBe('SV2005001');
     });
   });
@@ -514,6 +518,7 @@ describe('UserService', () => {
       expect(mockUserRepo.findPage).toHaveBeenCalledWith({
         role: Role.LECTURER,
         isActive: undefined,
+        isDeleted: false,
         search: 'lect',
         page: 2,
         limit: 20,
@@ -767,6 +772,97 @@ describe('UserService', () => {
 
       await expect(service.activateUser('user-uuid-1')).rejects.toThrow(
         ConflictException,
+      );
+    });
+
+    it('refuses to restore a permanently removed user', async () => {
+      mockUserRepo.findById!.mockResolvedValue({
+        ...sampleUser,
+        isActive: false,
+        deletedAt: new Date(),
+      });
+
+      await expect(service.activateUser('user-uuid-1')).rejects.toThrow(
+        ConflictException,
+      );
+      expect(mockUserRepo.setActive).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('removeUser', () => {
+    it('permanently soft-deletes a user and records actorId', async () => {
+      const deletedAt = new Date();
+      mockUserRepo.findById!.mockResolvedValue(sampleUser);
+      mockUserRepo.softDelete!.mockResolvedValue({
+        ...sampleUser,
+        isActive: false,
+        deletedAt,
+        deletedBy: 'admin-1',
+      });
+
+      const view = await service.removeUser('user-uuid-1', 'admin-1');
+
+      expect(mockUserRepo.softDelete).toHaveBeenCalledWith(
+        'user-uuid-1',
+        'admin-1',
+      );
+      expect(view.isActive).toBe(false);
+      expect(view.deletedAt).toEqual(deletedAt);
+    });
+
+    it('rejects removing an already removed user', async () => {
+      mockUserRepo.findById!.mockResolvedValue({
+        ...sampleUser,
+        isActive: false,
+        deletedAt: new Date(),
+      });
+
+      await expect(
+        service.removeUser('user-uuid-1', 'admin-1'),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it('does not remove admin accounts', async () => {
+      mockUserRepo.findById!.mockResolvedValue({
+        ...sampleUser,
+        role: Role.ADMIN,
+      });
+
+      await expect(
+        service.removeUser('user-uuid-1', 'admin-1'),
+      ).rejects.toThrow(ForbiddenException);
+    });
+  });
+
+  describe('audit logging', () => {
+    it('records USER_UPDATED diff and USER_REMOVED snapshot when AuditFacade is provided', async () => {
+      const mockAudit = { record: vi.fn().mockResolvedValue(undefined) };
+      const auditedService = new UserService(
+        mockUserRepo as unknown as UserRepository,
+        mockAudit as any,
+      );
+
+      mockUserRepo.findById!.mockResolvedValue(sampleUser);
+      mockUserRepo.findProfile!.mockResolvedValue({
+        code: 'SV26000001',
+        status: 'STUDYING',
+      });
+      mockUserRepo.updateUserAndProfile!.mockResolvedValue({
+        ...sampleUser,
+        fullName: 'Nguyen Van B',
+      });
+
+      await auditedService.updateUser('user-uuid-1', {
+        fullName: 'Nguyen Van B',
+      });
+
+      expect(mockAudit.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'USER_UPDATED',
+          entityType: 'USER',
+          entityId: 'user-uuid-1',
+          changes: { fullName: { from: 'Nguyen Van A', to: 'Nguyen Van B' } },
+        }),
       );
     });
   });

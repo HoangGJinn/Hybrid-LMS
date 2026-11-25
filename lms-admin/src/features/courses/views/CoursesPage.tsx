@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { Archive, FileSpreadsheet, Pencil, Plus, Search } from 'lucide-react';
+import { Archive, FileSpreadsheet, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import { PageHeader } from '@/shared/components/PageHeader';
 import { AsyncView } from '@/shared/components/AsyncView';
 import { EmptyState } from '@/shared/components/EmptyState';
@@ -15,6 +15,7 @@ import { formatDate } from '@/shared/utils/date';
 import { CourseFormModal } from '../components/CourseFormModal';
 import { DeactivateConfirm } from '../components/DeactivateConfirm';
 import { ImportClassesModal } from '../components/ImportClassesModal';
+import { RemoveCourseConfirm } from '../components/RemoveCourseConfirm';
 import { useClasses } from '../hooks/useClasses';
 import { useSemesters } from '../hooks/useCourseLookups';
 import type { ClassStatusFilter, ClassView } from '../types/courses.types';
@@ -26,6 +27,7 @@ const STATUS_OPTIONS: { value: ClassStatusFilter; label: string }[] = [
   { value: 'active', label: 'Active' },
   { value: 'ended', label: 'Ended' },
   { value: 'all', label: 'All statuses' },
+  { value: 'removed', label: 'Removed' },
 ];
 
 const isStatusFilter = (value: string): value is ClassStatusFilter =>
@@ -42,6 +44,7 @@ const CoursesPage = () => {
     course: null,
   });
   const [deactivating, setDeactivating] = useState<ClassView | null>(null);
+  const [removing, setRemoving] = useState<ClassView | null>(null);
   const [importing, setImporting] = useState(false);
 
   const search = useDebouncedValue(searchInput, SEARCH_DEBOUNCE_MS);
@@ -109,47 +112,72 @@ const CoursesPage = () => {
     {
       key: 'status',
       header: 'Status',
-      render: (item) =>
-        item.isActive ? (
+      render: (item) => {
+        if (item.deletedAt) {
+          return (
+            <Badge
+              variant="destructive"
+              title={`Removed ${formatDate(item.deletedAt)}`}
+            >
+              Removed
+            </Badge>
+          );
+        }
+        return item.isActive ? (
           <Badge variant="success">Active</Badge>
         ) : (
           <Badge title={`Ended ${formatDate(item.endedAt)}`}>Ended</Badge>
-        ),
+        );
+      },
     },
     {
       key: 'actions',
       header: 'Actions',
       className: 'text-right',
-      render: (item) => (
-        <div className="flex justify-end gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label={`Edit ${item.classCode}`}
-            title="Edit"
-            onClick={(event) => {
-              event.stopPropagation();
-              openEdit(item);
-            }}
-          >
-            <Pencil className="h-4 w-4" />
-          </Button>
-          {item.isActive && (
+      render: (item) =>
+        item.deletedAt ? null : (
+          <div className="flex justify-end gap-1">
             <Button
               variant="ghost"
               size="icon"
-              aria-label={`Deactivate ${item.classCode}`}
-              title="Deactivate"
+              aria-label={`Edit ${item.classCode}`}
+              title="Edit"
               onClick={(event) => {
                 event.stopPropagation();
-                setDeactivating(item);
+                openEdit(item);
               }}
             >
-              <Archive className="h-4 w-4" />
+              <Pencil className="h-4 w-4" />
             </Button>
-          )}
-        </div>
-      ),
+            {item.isActive && (
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label={`Deactivate ${item.classCode}`}
+                title="Deactivate"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setDeactivating(item);
+                }}
+              >
+                <Archive className="h-4 w-4" />
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={`Remove ${item.classCode}`}
+              title="Remove permanently"
+              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+              onClick={(event) => {
+                event.stopPropagation();
+                setRemoving(item);
+              }}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+        ),
     },
   ];
 
@@ -259,6 +287,7 @@ const CoursesPage = () => {
 
       <CourseFormModal open={form.open} course={form.course} onClose={closeForm} />
       <DeactivateConfirm course={deactivating} onClose={() => setDeactivating(null)} />
+      <RemoveCourseConfirm course={removing} onClose={() => setRemoving(null)} />
       <ImportClassesModal open={importing} onClose={() => setImporting(false)} />
     </>
   );

@@ -22,6 +22,8 @@ export interface SavedSessionAnswer {
   readonly textAnswers: readonly string[];
 }
 
+export type RawSavedAnswer = string | SavedSessionAnswer | undefined;
+
 export interface GradeSummary {
   readonly correctCount: number;
   readonly totalQuestions: number;
@@ -99,7 +101,7 @@ export const splitBlankVariants = (rawContent: string): string[] =>
     .filter((part) => part.length > 0);
 
 export const extractSavedAnswerFields = (
-  raw: string | SavedSessionAnswer | undefined,
+  raw: RawSavedAnswer,
 ): SavedSessionAnswer => {
   if (raw === undefined) {
     return { selectedOptionId: null, selectedOptionIds: [], textAnswers: [] };
@@ -111,12 +113,12 @@ export const extractSavedAnswerFields = (
       textAnswers: [],
     };
   }
-  const selectedOptionIds =
-    raw.selectedOptionIds.length > 0
-      ? raw.selectedOptionIds
-      : raw.selectedOptionId
-        ? [raw.selectedOptionId]
-        : [];
+  let selectedOptionIds: readonly string[] = [];
+  if (raw.selectedOptionIds.length > 0) {
+    selectedOptionIds = raw.selectedOptionIds;
+  } else if (raw.selectedOptionId) {
+    selectedOptionIds = [raw.selectedOptionId];
+  }
   return {
     selectedOptionId: raw.selectedOptionId ?? selectedOptionIds[0] ?? null,
     selectedOptionIds,
@@ -125,7 +127,7 @@ export const extractSavedAnswerFields = (
 };
 
 const normalizeSavedAnswer = (
-  raw: string | SavedSessionAnswer | undefined,
+  raw: RawSavedAnswer,
 ): {
   readonly selectedOptionIds: readonly string[];
   readonly textAnswers: readonly string[];
@@ -236,28 +238,31 @@ export const buildExamReviewQuestions = (
   });
 };
 
+const isFillInTheBlankCorrect = (
+  blanks: readonly string[],
+  textAnswers: readonly string[],
+): boolean => {
+  if (blanks.length === 0 || textAnswers.length < blanks.length) {
+    return false;
+  }
+  return blanks.every((blank, i) => {
+    const studentNorm = normalizeBlankAnswer(textAnswers[i] ?? '');
+    if (studentNorm === '') return false;
+    return splitBlankVariants(blank).map(normalizeBlankAnswer).includes(studentNorm);
+  });
+};
+
 /** Checks whether a single question's answer is completely correct (all-or-nothing). */
 export const isQuestionAnswerCorrect = (
   question: GradableQuestion,
-  rawAnswer: string | SavedSessionAnswer | undefined,
+  rawAnswer: RawSavedAnswer,
 ): boolean => {
   const answer = normalizeSavedAnswer(rawAnswer);
   if (question.type === ExamQuestionType.FILL_IN_THE_BLANK) {
-    const blanks = question.blankAnswers ?? [];
-    if (blanks.length === 0 || answer.textAnswers.length < blanks.length) {
-      return false;
-    }
-    for (let i = 0; i < blanks.length; i += 1) {
-      const studentNorm = normalizeBlankAnswer(answer.textAnswers[i] ?? '');
-      if (studentNorm === '') {
-        return false;
-      }
-      const acceptable = splitBlankVariants(blanks[i]).map(normalizeBlankAnswer);
-      if (!acceptable.includes(studentNorm)) {
-        return false;
-      }
-    }
-    return true;
+    return isFillInTheBlankCorrect(
+      question.blankAnswers ?? [],
+      answer.textAnswers,
+    );
   }
 
   const expectedIds =

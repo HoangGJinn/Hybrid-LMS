@@ -52,8 +52,9 @@ export class ClassExportService {
     if (!lecturer) throw new NotFoundException('Lecturer not found');
 
     const rows = await this.getLecturerClasses(lecturerId);
+    const baseName = safeFileName(`Classes-taught-${lecturer.lecturerCode}`);
     return {
-      fileName: `${safeFileName(`Classes-taught-${lecturer.lecturerCode}`)}.xlsx`,
+      fileName: `${baseName}.xlsx`,
       buffer: await buildClassListWorkbook('LECTURER', rows),
     };
   }
@@ -64,8 +65,9 @@ export class ClassExportService {
     if (!student) throw new NotFoundException('Student not found');
 
     const rows = await this.getStudentClasses(studentId);
+    const baseName = safeFileName(`Classes-enrolled-${student.studentCode}`);
     return {
-      fileName: `${safeFileName(`Classes-enrolled-${student.studentCode}`)}.xlsx`,
+      fileName: `${baseName}.xlsx`,
       buffer: await buildClassListWorkbook('STUDENT', rows),
     };
   }

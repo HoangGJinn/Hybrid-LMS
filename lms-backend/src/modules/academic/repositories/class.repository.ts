@@ -28,6 +28,7 @@ export class ClassRepository {
 
   async findAll(filter?: {
     isActive?: boolean;
+    isDeleted?: boolean;
     semesterId?: string;
     subjectId?: string;
     search?: string;
@@ -41,6 +42,11 @@ export class ClassRepository {
       .orderBy('c.classCode', 'ASC');
     if (filter?.isActive !== undefined) {
       qb.andWhere('c.isActive = :isActive', { isActive: filter.isActive });
+    }
+    if (filter?.isDeleted === true) {
+      qb.andWhere('c.deletedAt IS NOT NULL');
+    } else if (filter?.isDeleted === false) {
+      qb.andWhere('c.deletedAt IS NULL');
     }
     if (filter?.semesterId) {
       qb.andWhere('c.semesterId = :semesterId', {
@@ -126,7 +132,7 @@ export class ClassRepository {
     });
     return enrollments
       .map((e) => e.class)
-      .filter((c): c is Class => Boolean(c?.isActive));
+      .filter((c): c is Class => Boolean(c?.isActive && !c?.deletedAt));
   }
 
   /**
@@ -194,6 +200,8 @@ export class ClassRepository {
       .leftJoinAndSelect('c.semester', 'semester')
       .leftJoinAndSelect('c.lecturer', 'lecturer')
       .leftJoinAndSelect('lecturer.user', 'lecturerUser');
+
+    qb.andWhere('c.deletedAt IS NULL');
 
     if (role === Role.STUDENT) {
       qb.innerJoin(

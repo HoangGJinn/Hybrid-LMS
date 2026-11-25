@@ -14,13 +14,15 @@ export interface SessionAnswerWrite {
   readonly textAnswers?: readonly string[] | null;
 }
 
+const resolveSelectedOptionIds = (row: ExamSessionAnswer): string[] => {
+  if (row.selectedOptionIds && row.selectedOptionIds.length > 0) {
+    return row.selectedOptionIds;
+  }
+  return row.selectedOptionId ? [row.selectedOptionId] : [];
+};
+
 const mapRowToSavedAnswer = (row: ExamSessionAnswer): SavedSessionAnswer => {
-  const selectedOptionIds =
-    row.selectedOptionIds && row.selectedOptionIds.length > 0
-      ? row.selectedOptionIds
-      : row.selectedOptionId
-        ? [row.selectedOptionId]
-        : [];
+  const selectedOptionIds = resolveSelectedOptionIds(row);
   const textAnswers = row.textAnswers ?? [];
   return {
     selectedOptionId: row.selectedOptionId ?? selectedOptionIds[0] ?? null,
@@ -167,22 +169,22 @@ export class ExamSessionRepository {
       const upserts = answers
         .filter((item) => !isClearedWrite(item))
         .map((item) => {
-          const hasOptionIds =
-            Array.isArray(item.optionIds) && item.optionIds.length > 0;
-          const selectedOptionIds = hasOptionIds
-            ? [...item.optionIds!]
-            : item.optionId
-              ? [item.optionId]
-              : null;
-          const hasTextAnswers =
-            Array.isArray(item.textAnswers) &&
-            item.textAnswers.some((text) => text.trim() !== '');
+          let selectedOptionIds: string[] | null = null;
+          if (item.optionIds && item.optionIds.length > 0) {
+            selectedOptionIds = [...item.optionIds];
+          } else if (item.optionId) {
+            selectedOptionIds = [item.optionId];
+          }
+          let textAnswers: string[] | null = null;
+          if (item.textAnswers?.some((text) => text.trim() !== '')) {
+            textAnswers = [...item.textAnswers];
+          }
           return {
             examSessionId: sessionId,
             questionId: item.questionId,
             selectedOptionId: item.optionId ?? selectedOptionIds?.[0] ?? null,
             selectedOptionIds,
-            textAnswers: hasTextAnswers ? [...item.textAnswers!] : null,
+            textAnswers,
             answeredAt,
           };
         });

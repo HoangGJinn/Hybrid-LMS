@@ -40,6 +40,7 @@ const STATUS_VARIANTS: Record<string, BadgeVariant> = {
 };
 
 export const getAccountState = (user: ManagedUser): AccountState => {
+  if (user.deletedAt) return 'removed';
   if (!user.isActive) return 'inactive';
   return user.hasLoggedIn ? 'active' : 'pending';
 };
@@ -58,6 +59,11 @@ export const ACCOUNT_STATE_BADGES: Record<
     label: 'Inactive',
     variant: 'default',
     hint: 'Deactivated: cannot sign in or use the API.',
+  },
+  removed: {
+    label: 'Removed',
+    variant: 'destructive',
+    hint: 'Permanently removed: cannot sign in or be restored.',
   },
 };
 
@@ -90,6 +96,22 @@ export const toHasLoggedIn = (filter: AccountFilter): boolean | undefined => {
   return undefined;
 };
 
+export const toIsDeleted = (filter: AccountFilter): boolean | undefined =>
+  filter === 'removed' ? true : undefined;
+
 /** A student code starts with SV and a lecturer code with GV; the same rule as the backend. */
 export const isCodeForRole = (code: string, role: ManagedRole): boolean =>
   code.startsWith(ROLE_CONFIG[role].codePrefix);
+
+export const ONLINE_WINDOW_MS = 5 * 60 * 1000;
+
+export const isUserOnline = (
+  lastSeenAt: string | null | undefined,
+  now: Date = new Date(),
+): boolean => {
+  if (!lastSeenAt) return false;
+  const seenMs = new Date(lastSeenAt).getTime();
+  if (Number.isNaN(seenMs)) return false;
+  const diff = now.getTime() - seenMs;
+  return diff >= 0 && diff <= ONLINE_WINDOW_MS;
+};

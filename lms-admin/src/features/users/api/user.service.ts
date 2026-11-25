@@ -1,5 +1,5 @@
 import { apiClient } from '@/core/api/client';
-import { get, patch, post } from '@/core/api/http';
+import { del, get, patch, post } from '@/core/api/http';
 import type { PaginatedResult } from '@/core/types/pagination.types';
 import type {
   CreateUserPayload,
@@ -28,6 +28,10 @@ export const userService = {
 
   activateUser: (id: string): Promise<ManagedUser> =>
     patch<ManagedUser>(`/api/users/${id}/activate`),
+
+  /** Permanent soft delete: the row stays in the DB, but can never be restored. */
+  removeUser: (id: string): Promise<ManagedUser> =>
+    del<ManagedUser>(`/api/users/${id}`),
 
   /** Lists every class a lecturer teaches or a student is enrolled in (ended ones included). */
   getUserClasses: (role: ManagedRole, userId: string): Promise<UserClassItem[]> => {

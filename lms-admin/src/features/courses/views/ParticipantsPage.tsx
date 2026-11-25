@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { useParams } from 'react-router';
+import { Link, useParams } from 'react-router';
 import { toast } from 'sonner';
-import { Download, Search, Upload, UserMinus, UserPlus } from 'lucide-react';
+import { Download, History, Search, Upload, UserMinus, UserPlus } from 'lucide-react';
 import { getErrorMessage } from '@/core/api/errors';
 import { AsyncView } from '@/shared/components/AsyncView';
 import { EmptyState } from '@/shared/components/EmptyState';
@@ -10,6 +10,7 @@ import { Pagination } from '@/shared/components/Pagination';
 import { Table, type Column } from '@/shared/components/Table';
 import { Badge } from '@/shared/components/ui/Badge';
 import { Button } from '@/shared/components/ui/Button';
+import { buttonClasses } from '@/shared/components/ui/button-classes';
 import { Input } from '@/shared/components/ui/Input';
 import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue';
 import { formatDate } from '@/shared/utils/date';
@@ -35,12 +36,14 @@ const ParticipantsContent = ({ course }: { course: ClassView }) => {
   const [addOpen, setAddOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [removing, setRemoving] = useState<ParticipantView | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [bulkRemoving, setBulkRemoving] = useState(false);
   const [exporting, setExporting] = useState(false);
 
   const search = useDebouncedValue(searchInput, SEARCH_DEBOUNCE_MS);
   const participants = useParticipants(course.id, search);
-  // Participants are frozen once the class has ended: the server refuses changes, so the UI hides them.
-  const canChange = course.isActive;
+  // Participants are frozen once the class has ended or been removed: the server refuses changes, so the UI hides them.
+  const canChange = course.isActive && !course.deletedAt;
   const isSearching = search.trim() !== '';
 
   const data = participants.data ?? [];
@@ -49,6 +52,31 @@ const ParticipantsContent = ({ course }: { course: ClassView }) => {
   const currentPage = Math.min(page, totalPages);
   const firstIndex = (currentPage - 1) * PAGE_SIZE;
   const pageRows = data.slice(firstIndex, firstIndex + PAGE_SIZE);
+
+  const selectedParticipants = data.filter((p) => selectedIds.has(p.studentId));
+  const allPageSelected =
+    pageRows.length > 0 && pageRows.every((row) => selectedIds.has(row.studentId));
+
+  const toggleSelectAllOnPage = () => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allPageSelected) {
+        for (const row of pageRows) next.delete(row.studentId);
+      } else {
+        for (const row of pageRows) next.add(row.studentId);
+      }
+      return next;
+    });
+  };
+
+  const toggleSelectOne = (studentId: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(studentId)) next.delete(studentId);
+      else next.add(studentId);
+      return next;
+    });
+  };
 
   /** Exports the whole class, not just the rows that match the search box. */
   const handleExport = async () => {
@@ -69,6 +97,32 @@ const ParticipantsContent = ({ course }: { course: ClassView }) => {
   };
 
   const columns: Column<ParticipantView>[] = [
+    ...(canChange
+      ? [
+          {
+            key: 'select',
+            header: (
+              <input
+                type="checkbox"
+                aria-label="Select all participants on this page"
+                className="h-4 w-4 cursor-pointer rounded border-border accent-primary"
+                checked={allPageSelected}
+                onChange={toggleSelectAllOnPage}
+              />
+            ),
+            className: 'w-10',
+            render: (item: ParticipantView) => (
+              <input
+                type="checkbox"
+                aria-label={`Select ${item.fullName}`}
+                className="h-4 w-4 cursor-pointer rounded border-border accent-primary"
+                checked={selectedIds.has(item.studentId)}
+                onChange={() => toggleSelectOne(item.studentId)}
+              />
+            ),
+          },
+        ]
+      : []),
     {
       key: 'index',
       header: '#',
@@ -137,12 +191,28 @@ const ParticipantsContent = ({ course }: { course: ClassView }) => {
         subtitle={`${course.classCode} — ${course.name}`}
         actions={
           <div className="flex flex-wrap gap-2">
+            <Link
+              to={`/audit-logs?entityType=PARTICIPANT&parentId=${course.id}&contextLabel=${encodeURIComponent(course.classCode)}`}
+              className={buttonClasses('outline', 'md')}
+            >
+              <History className="h-4 w-4" />
+              History
+            </Link>
             <Button variant="outline" onClick={() => void handleExport()} isLoading={exporting}>
               {!exporting && <Download className="h-4 w-4" />}
               Export
             </Button>
             {canChange && (
               <>
+                {selectedParticipants.length > 0 && (
+                  <Button
+                    variant="danger"
+                    onClick={() => setBulkRemoving(true)}
+                  >
+                    <UserMinus className="h-4 w-4" />
+                    Remove Selected ({selectedParticipants.length})
+                  </Button>
+                )}
                 <Button variant="outline" onClick={() => setImportOpen(true)}>
                   <Upload className="h-4 w-4" />
                   Import
@@ -162,8 +232,9 @@ const ParticipantsContent = ({ course }: { course: ClassView }) => {
           role="status"
           className="mb-4 rounded-md border bg-muted px-3 py-2 text-sm text-muted-foreground"
         >
-          This class has ended. Its participants can still be viewed and
-          exported, but no longer changed.
+          {course.deletedAt
+            ? 'This class has been removed. Its participants can still be viewed and exported, but no longer changed.'
+            : 'This class has ended. Its participants can still be viewed and exported, but no longer changed.'}
         </p>
       )}
 
@@ -249,8 +320,21 @@ const ParticipantsContent = ({ course }: { course: ClassView }) => {
       />
       <RemoveParticipantConfirm
         participant={removing}
+        participants={bulkRemoving ? selectedParticipants : undefined}
         course={course}
-        onClose={() => setRemoving(null)}
+        onClose={() => {
+          setRemoving(null);
+          setBulkRemoving(false);
+        }}
+        onRemoved={() => {
+          setSelectedIds((prev) => {
+            if (bulkRemoving) return new Set();
+            if (!removing) return prev;
+            const next = new Set(prev);
+            next.delete(removing.studentId);
+            return next;
+          });
+        }}
       />
     </>
   );

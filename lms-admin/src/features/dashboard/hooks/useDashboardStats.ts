@@ -1,26 +1,20 @@
-export type DashboardStatKey = 'classes' | 'students' | 'lecturers' | 'semester';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { dashboardService } from '../api/dashboard.service';
+import type { TrendDays } from '../types/dashboard.types';
 
-export interface DashboardStat {
-  key: DashboardStatKey;
-  label: string;
-  /** `null` until real data is wired in. */
-  value: string | number | null;
-}
+export const DASHBOARD_REFRESH_SECONDS = 30;
 
-const PLACEHOLDER_STATS: DashboardStat[] = [
-  { key: 'classes', label: 'Active classes', value: null },
-  { key: 'students', label: 'Students', value: null },
-  { key: 'lecturers', label: 'Lecturers', value: null },
-  { key: 'semester', label: 'Current semester', value: null },
-];
+export const dashboardKeys = {
+  all: ['dashboard'] as const,
+  overview: (days: TrendDays) =>
+    [...dashboardKeys.all, 'overview', days] as const,
+};
 
-/**
- * PLACEHOLDER. Returns empty stats so the dashboard layout can be built now.
- * When the backend ships `GET /api/admin/stats/overview`
- * (`{ totalClasses, totalStudents, totalLecturers, activeSemester }`), replace the body with a
- * `useQuery` and map the response onto `DashboardStat[]`; DashboardPage needs no change.
- */
-export const useDashboardStats = () => ({
-  isPlaceholder: true as const,
-  stats: PLACEHOLDER_STATS,
-});
+/** `days` is the trend window; the previous data stays visible while a new window loads. */
+export const useDashboardOverview = (days: TrendDays = 14) =>
+  useQuery({
+    queryKey: dashboardKeys.overview(days),
+    queryFn: () => dashboardService.getOverview(days),
+    refetchInterval: DASHBOARD_REFRESH_SECONDS * 1000,
+    placeholderData: keepPreviousData,
+  });

@@ -1,4 +1,4 @@
-import { get, patch, post } from '@/core/api/http';
+import { del, get, patch, post } from '@/core/api/http';
 import type {
   ClassFilters,
   ClassDataImportResult,
@@ -27,6 +27,12 @@ export const classService = {
       semesterId: semesterId || undefined,
       search: search.trim() || undefined,
     };
+    if (status === 'removed') {
+      return get<ClassView[]>('/api/classes', {
+        ...base,
+        isDeleted: true,
+      });
+    }
     if (status === 'all') {
       const [active, ended] = await Promise.all([
         get<ClassView[]>('/api/classes', { ...base, isActive: true }),
@@ -52,6 +58,10 @@ export const classService = {
   /** Classes are never deleted: this sets `isActive=false` and `endedAt=now`. */
   deactivateClass: (id: string): Promise<ClassView> =>
     patch<ClassView>(`/api/classes/${id}/deactivate`),
+
+  /** Permanent soft delete: sets `isActive=false`, `endedAt`, `deletedAt`, and `deletedBy`. */
+  removeClass: (id: string): Promise<ClassView> =>
+    del<ClassView>(`/api/classes/${id}`),
 
   /** `dryRun: true` only reports what the import would do. */
   importClasses: (

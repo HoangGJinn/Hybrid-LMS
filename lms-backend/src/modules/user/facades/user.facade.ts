@@ -27,8 +27,8 @@ export class UserFacade {
   }
 
   /** Student/lecturer code of a user, or null when the user has no such profile. */
-  async getProfileCode(userId: string): Promise<string | null> {
-    return this.userService.getProfileCode(userId);
+  async getProfileCode(userId: string, role?: Role): Promise<string | null> {
+    return this.userService.getProfileCode(userId, role);
   }
 
   async findByEmail(email: string): Promise<UserView | null> {

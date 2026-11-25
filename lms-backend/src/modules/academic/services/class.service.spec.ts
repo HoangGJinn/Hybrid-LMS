@@ -237,6 +237,18 @@ describe('ClassService', () => {
       expect(result[0].classCode).toBe('CS101.Q11');
       expect(result[0].progress).toBe(0);
     });
+
+    it('queries removed classes without filtering by isActive when isDeleted is true', async () => {
+      mockClassRepo.findAll!.mockResolvedValue([]);
+      mockClassRepo.countStudentsBatch!.mockResolvedValue(new Map());
+
+      await service.findAll({ isActive: true, isDeleted: true });
+
+      expect(mockClassRepo.findAll).toHaveBeenCalledWith({
+        isActive: undefined,
+        isDeleted: true,
+      });
+    });
   });
 
   describe('findById', () => {
@@ -331,6 +343,47 @@ describe('ClassService', () => {
       });
 
       await expect(service.deactivate('cls-uuid-1')).rejects.toThrow(
+        ConflictException,
+      );
+    });
+  });
+
+  describe('remove', () => {
+    it('permanently soft-deletes a class and sets endedAt, deletedAt, and deletedBy', async () => {
+      const deletedAt = new Date();
+      mockClassRepo
+        .findById!.mockResolvedValueOnce(sampleClass)
+        .mockResolvedValueOnce({
+          ...sampleClass,
+          isActive: false,
+          endedAt: deletedAt,
+          deletedAt,
+          deletedBy: 'admin-1',
+        });
+      mockClassRepo.update!.mockResolvedValue(undefined);
+      mockClassRepo.countStudents!.mockResolvedValue(10);
+
+      const result = await service.remove('cls-uuid-1', 'admin-1');
+
+      expect(mockClassRepo.update).toHaveBeenCalledWith('cls-uuid-1', {
+        isActive: false,
+        endedAt: expect.any(Date),
+        deletedAt: expect.any(Date),
+        deletedBy: 'admin-1',
+      });
+      expect(result.isActive).toBe(false);
+      expect(result.deletedAt).toEqual(deletedAt);
+      expect(result.studentCount).toBe(10);
+    });
+
+    it('throws ConflictException if class is already removed', async () => {
+      mockClassRepo.findById!.mockResolvedValue({
+        ...sampleClass,
+        isActive: false,
+        deletedAt: new Date(),
+      });
+
+      await expect(service.remove('cls-uuid-1', 'admin-1')).rejects.toThrow(
         ConflictException,
       );
     });
@@ -548,6 +601,43 @@ describe('ClassService', () => {
       expect(await service.countStudents('cls-1')).toBe(10);
       const batchRes = await service.countStudentsBatch(['cls-1']);
       expect(batchRes.get('cls-1')).toBe(10);
+    });
+  });
+
+  describe('audit logging', () => {
+    it('records CLASS_REMOVED when AuditFacade is provided', async () => {
+      const mockAudit = { record: vi.fn().mockResolvedValue(undefined) };
+      const auditedService = new ClassService(
+        mockClassRepo as unknown as ClassRepository,
+        mockSubjectService as unknown as SubjectService,
+        mockSemesterService as unknown as SemesterService,
+        mockUserFacade as unknown as UserFacade,
+        mockClassStudentRepo as unknown as ClassStudentRepository,
+        mockAccessPolicy as unknown as ClassAccessPolicy,
+        mockAudit as any,
+      );
+      const deletedAt = new Date();
+      mockClassRepo
+        .findById!.mockResolvedValueOnce(sampleClass)
+        .mockResolvedValueOnce({
+          ...sampleClass,
+          isActive: false,
+          endedAt: deletedAt,
+          deletedAt,
+        });
+      mockClassRepo.update!.mockResolvedValue(undefined);
+      mockClassRepo.countStudents!.mockResolvedValue(12);
+
+      await auditedService.remove('cls-uuid-1', 'admin-1');
+
+      expect(mockAudit.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'CLASS_REMOVED',
+          entityType: 'CLASS',
+          entityId: 'cls-uuid-1',
+          metadata: expect.objectContaining({ studentCount: 12 }),
+        }),
+      );
     });
   });
 });

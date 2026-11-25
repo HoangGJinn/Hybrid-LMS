@@ -16,7 +16,8 @@ describe('FileFacade', () => {
     | 'assertOwnedReadyFiles'
     | 'getDownloadLinks'
     | 'deleteFiles'
-    | 'openReadStream',
+    | 'openReadStream'
+    | 'checkStorageHealth',
     Mock
   >;
 
@@ -32,6 +33,12 @@ describe('FileFacade', () => {
       openReadStream: vi
         .fn()
         .mockResolvedValue({ fileName: 'a.pdf', stream: Readable.from(['x']) }),
+      checkStorageHealth: vi.fn().mockResolvedValue({
+        reachable: true,
+        latencyMs: 12,
+        bucket: 'b',
+        region: 'ap-southeast-1',
+      }),
     };
 
     facade = new FileFacade(fileService as unknown as FileService);

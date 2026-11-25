@@ -2,8 +2,16 @@ import {
   ForbiddenException,
   Injectable,
   Logger,
+  Optional,
   UnauthorizedException,
 } from '@nestjs/common';
+import {
+  AuditAction,
+  AuditCategory,
+  AuditEntityType,
+  AuditFacade,
+  AuditResult,
+} from '../../../shared/audit/index.js';
 import { ConfigService } from '@nestjs/config';
 import bcrypt from 'bcryptjs';
 import { UserFacade } from '../../user/facades/user.facade.js';
@@ -28,6 +36,7 @@ export class AuthService {
     private readonly refreshTokenService: RefreshTokenService,
     private readonly googleAuthService: GoogleAuthService,
     private readonly configService: ConfigService,
+    @Optional() private readonly auditFacade?: AuditFacade,
   ) {}
 
   /** Lifetime of the refresh cookie in milliseconds. */
@@ -40,18 +49,50 @@ export class AuthService {
     allowedRoles?: readonly Role[],
   ): Promise<AuthSession> {
     this.logger.log(`Attempting Google login...`);
-    const googleUser = await this.googleAuthService.verifyToken(idToken);
+    let googleUser: GoogleUserProfile;
+    try {
+      googleUser = await this.googleAuthService.verifyToken(idToken);
+    } catch (error) {
+      await this.auditFacade?.record({
+        category: AuditCategory.SECURITY,
+        action: AuditAction.LOGIN_FAILED,
+        result: AuditResult.FAILURE,
+        entityType: AuditEntityType.AUTH,
+        summary: 'Google login failed during token verification',
+        metadata: {
+          method: 'GOOGLE',
+          portal: this.portalOf(allowedRoles),
+          reason: error instanceof Error ? error.message : 'Invalid Google token',
+        },
+      });
+      throw error;
+    }
     const user = await this.findOrCreateGoogleUser(googleUser);
     if (!user.isActive) {
       // Checked before any token is issued; refresh() and JwtStrategy apply the same rule later on.
       this.logger.warn(`Login refused, account is disabled: ${user.email}`);
+      await this.recordAuthEvent(
+        AuditAction.LOGIN_BLOCKED,
+        AuditResult.FAILURE,
+        user,
+        'Blocked Google login on disabled account',
+        { method: 'GOOGLE', portal: this.portalOf(allowedRoles), reason: 'Account is disabled' },
+      );
       throw new UnauthorizedException('Account is disabled');
     }
-    this.assertAllowedRole(user, allowedRoles);
-    return this.startSession(
+    await this.assertAllowedRole(user, allowedRoles, 'GOOGLE');
+    const session = await this.startSession(
       user,
       await this.refreshTokenService.issue(user.id),
     );
+    await this.recordAuthEvent(
+      AuditAction.LOGIN_SUCCEEDED,
+      AuditResult.SUCCESS,
+      user,
+      `Signed in via Google (${this.portalOf(allowedRoles)} portal)`,
+      { method: 'GOOGLE', portal: this.portalOf(allowedRoles) },
+    );
+    return session;
   }
 
   async loginWithCredentials(
@@ -59,11 +100,21 @@ export class AuthService {
     allowedRoles?: readonly Role[],
   ): Promise<AuthSession> {
     this.logger.log(`Attempting password login for: ${dto.username}`);
+    const portal = this.portalOf(allowedRoles);
     const account = await this.userFacade.findForPasswordAuth(dto.username);
     if (!account?.passwordHash) {
       this.logger.warn(
         `Login failed: user not found or has no password set: ${dto.username}`,
       );
+      await this.auditFacade?.record({
+        category: AuditCategory.SECURITY,
+        action: AuditAction.LOGIN_FAILED,
+        result: AuditResult.FAILURE,
+        entityType: AuditEntityType.AUTH,
+        entityLabel: dto.username,
+        summary: `Failed password login for "${dto.username}"`,
+        metadata: { method: 'PASSWORD', portal, identifier: dto.username, reason: 'User not found or no password set' },
+      });
       throw new UnauthorizedException('Invalid username or password');
     }
     const isPasswordValid = await bcrypt.compare(
@@ -72,19 +123,44 @@ export class AuthService {
     );
     if (!isPasswordValid) {
       this.logger.warn(`Login failed: incorrect password for: ${dto.username}`);
+      await this.auditFacade?.record({
+        category: AuditCategory.SECURITY,
+        action: AuditAction.LOGIN_FAILED,
+        result: AuditResult.FAILURE,
+        entityType: AuditEntityType.AUTH,
+        entityId: account.user.id,
+        entityLabel: account.user.email,
+        summary: `Failed password login for ${account.user.email}`,
+        metadata: { method: 'PASSWORD', portal, identifier: dto.username, reason: 'Incorrect password' },
+      });
       throw new UnauthorizedException('Invalid username or password');
     }
     if (!account.user.isActive) {
       this.logger.warn(
         `Login refused, account is disabled: ${account.user.email}`,
       );
+      await this.recordAuthEvent(
+        AuditAction.LOGIN_BLOCKED,
+        AuditResult.FAILURE,
+        account.user,
+        'Blocked password login on disabled account',
+        { method: 'PASSWORD', portal, reason: 'Account is disabled' },
+      );
       throw new UnauthorizedException('Account is disabled');
     }
-    this.assertAllowedRole(account.user, allowedRoles);
-    return this.startSession(
+    await this.assertAllowedRole(account.user, allowedRoles, 'PASSWORD');
+    const session = await this.startSession(
       account.user,
       await this.refreshTokenService.issue(account.user.id),
     );
+    await this.recordAuthEvent(
+      AuditAction.LOGIN_SUCCEEDED,
+      AuditResult.SUCCESS,
+      account.user,
+      `Signed in with password (${portal} portal)`,
+      { method: 'PASSWORD', portal },
+    );
+    return session;
   }
 
   /** Swaps a valid refresh token for a new access token and a rotated refresh token. */
@@ -194,10 +270,11 @@ export class AuthService {
     };
   }
 
-  private assertAllowedRole(
+  private async assertAllowedRole(
     user: UserView,
     allowedRoles?: readonly Role[],
-  ): void {
+    method: 'GOOGLE' | 'PASSWORD' = 'GOOGLE',
+  ): Promise<void> {
     if (!allowedRoles || allowedRoles.includes(user.role)) return;
     this.logger.warn(
       `Login refused, role ${user.role} is not allowed on this portal: ${user.email}`,
@@ -205,10 +282,50 @@ export class AuthService {
     const message = allowedRoles.includes(Role.ADMIN)
       ? 'This account does not have administrator access.'
       : 'Administrator accounts must sign in through the administration portal.';
+    await this.recordAuthEvent(
+      AuditAction.LOGIN_BLOCKED,
+      AuditResult.FAILURE,
+      user,
+      `Blocked login: role ${user.role} is not allowed on ${this.portalOf(allowedRoles)} portal`,
+      { method, portal: this.portalOf(allowedRoles), reason: message },
+    );
     throw new ForbiddenException(message);
   }
 
+  private portalOf(allowedRoles?: readonly Role[]): 'ADMIN' | 'LEARNING' | 'ANY' {
+    if (!allowedRoles) return 'ANY';
+    return allowedRoles.includes(Role.ADMIN) ? 'ADMIN' : 'LEARNING';
+  }
+
+  private async recordAuthEvent(
+    action: AuditAction,
+    result: AuditResult,
+    user: UserView,
+    summary: string,
+    metadata: Record<string, unknown>,
+  ): Promise<void> {
+    await this.auditFacade?.record({
+      category: AuditCategory.SECURITY,
+      action,
+      result,
+      entityType: AuditEntityType.AUTH,
+      entityId: user.id,
+      entityLabel: user.email,
+      summary,
+      actor: {
+        id: user.id,
+        email: user.email,
+        fullName: user.fullName,
+        role: user.role,
+      },
+      metadata,
+    });
+  }
+
   private async toSessionUser(user: UserView): Promise<SessionUser> {
-    return { ...user, code: await this.userFacade.getProfileCode(user.id) };
+    return {
+      ...user,
+      code: await this.userFacade.getProfileCode(user.id, user.role),
+    };
   }
 }

@@ -59,6 +59,12 @@ export class AssignmentExportService {
     const submissionByStudent = new Map(
       submissions.map((submission) => [submission.submittedBy, submission]),
     );
+    const resolveStatus = (
+      submission: AssignmentSubmission | undefined,
+    ): AssignmentExportRow['status'] => {
+      if (!submission) return 'NOT_SUBMITTED';
+      return submission.score === null ? 'SUBMITTED' : 'GRADED';
+    };
     const toRow = (
       student: { studentCode: string; fullName: string; email: string },
       submission: AssignmentSubmission | undefined,
@@ -66,11 +72,7 @@ export class AssignmentExportService {
       studentCode: student.studentCode,
       fullName: student.fullName,
       email: student.email,
-      status: !submission
-        ? 'NOT_SUBMITTED'
-        : submission.score === null
-          ? 'SUBMITTED'
-          : 'GRADED',
+      status: resolveStatus(submission),
       submittedAt: submission?.submittedAt ?? null,
       isLate: submission ? submission.submittedAt > assignment.endAt : false,
       fileCount: submission
@@ -101,8 +103,11 @@ export class AssignmentExportService {
       );
 
     const buffer = await buildAssignmentWorkbook([...enrolledRows, ...formerRows]);
+    const fileBaseName = safeFileName(
+      `Ket-qua-${classView.classCode}-${assignment.title}`,
+    );
     return {
-      fileName: `${safeFileName(`Ket-qua-${classView.classCode}-${assignment.title}`)}.xlsx`,
+      fileName: `${fileBaseName}.xlsx`,
       buffer,
     };
   }

@@ -8,6 +8,7 @@ export interface ClassView {
   name: string;
   isActive: boolean;
   endedAt: string | null;
+  deletedAt?: string | null;
   subjectId: string;
   subjectCode: string;
   subjectName: string;
@@ -54,7 +55,7 @@ export interface CreateClassPayload {
 export type UpdateClassPayload = Partial<CreateClassPayload>;
 
 /** The API only returns active classes by default; `all` is assembled from two requests. */
-export type ClassStatusFilter = 'active' | 'ended' | 'all';
+export type ClassStatusFilter = 'active' | 'ended' | 'all' | 'removed';
 
 export interface ClassFilters {
   status: ClassStatusFilter;
@@ -86,6 +87,10 @@ export interface ParticipantCandidate {
   email: string;
   /** true = already a participant: shown but not selectable. */
   alreadyInClass: boolean;
+}
+
+export interface BulkRemoveParticipantsResult {
+  removed: number;
 }
 
 /** One data row of an import file, as sent to POST /api/classes/:id/participants/import. */

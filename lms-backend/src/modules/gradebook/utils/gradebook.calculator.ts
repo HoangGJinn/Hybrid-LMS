@@ -24,7 +24,10 @@ export function buildRows(
   const byStudent = new Map<string, Map<string, number | null>>();
   for (const s of scores) {
     let m = byStudent.get(s.studentId);
-    if (!m) byStudent.set(s.studentId, (m = new Map()));
+    if (!m) {
+      m = new Map();
+      byStudent.set(s.studentId, m);
+    }
     m.set(s.columnId, s.score);
   }
   const processCols = columns.filter((c) => c.kind === 'assignment');

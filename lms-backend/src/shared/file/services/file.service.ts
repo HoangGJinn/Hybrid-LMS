@@ -15,7 +15,7 @@ import { FileRepository } from '../repositories/file.repository.js';
 import { FileConfirmView } from '../types/file-confirm-view.type.js';
 import { FileDownloadView } from '../types/file-download-view.type.js';
 import { UploadRequestView } from '../types/upload-request-view.type.js';
-import { FileStorageService } from './file-storage.service.js';
+import { FileStorageService, type StorageHealthStatus } from './file-storage.service.js';
 import type { Readable } from 'node:stream';
 
 /** Business rules for uploading and reading stored files. */
@@ -199,6 +199,11 @@ export class FileService {
       contentType: file.fileType,
     });
     return FileDownloadView.fromEntity(file, downloadUrl);
+  }
+
+  /** Probes S3 bucket connectivity via FileStorageService. */
+  checkStorageHealth(): Promise<StorageHealthStatus> {
+    return this.fileStorageService.checkBucketHealth();
   }
 
   /** A file of someone else looks exactly like a missing file, so ids cannot be probed. */

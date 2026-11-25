@@ -1,11 +1,14 @@
 import { useState } from 'react';
+import { Link } from 'react-router';
 import {
   Archive,
   FileSpreadsheet,
+  History,
   Pencil,
   Plus,
   RotateCcw,
   Search,
+  Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { AsyncView } from '@/shared/components/AsyncView';
@@ -18,7 +21,7 @@ import { Button } from '@/shared/components/ui/Button';
 import { Input } from '@/shared/components/ui/Input';
 import { Select } from '@/shared/components/ui/Select';
 import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue';
-import { formatDate } from '@/shared/utils/date';
+import { formatDate, formatRelativeTime } from '@/shared/utils/date';
 import { initials } from '@/shared/utils/initials';
 import { useExportUserClasses } from '../hooks/useExportUserClasses';
 import { useUsers } from '../hooks/useUsers';
@@ -33,8 +36,10 @@ import {
   getAccountState,
   getStatusLabel,
   getStatusVariant,
+  isUserOnline,
   toHasLoggedIn,
   toIsActive,
+  toIsDeleted,
 } from '../utils/user-display';
 import { UserClassesModal } from './UserClassesModal';
 import { UserFormModal } from './UserFormModal';
@@ -48,6 +53,7 @@ const ACCOUNT_OPTIONS: { value: AccountFilter; label: string }[] = [
   { value: 'active', label: 'Active' },
   { value: 'pending', label: 'Pending' },
   { value: 'inactive', label: 'Inactive' },
+  { value: 'removed', label: 'Removed' },
 ];
 
 const isAccountFilter = (value: string): value is AccountFilter =>
@@ -72,6 +78,7 @@ export const UserManagement = ({ role }: { role: ManagedRole }) => {
   const users = useUsers({
     role,
     isActive: toIsActive(accountFilter),
+    isDeleted: toIsDeleted(accountFilter),
     hasLoggedIn: toHasLoggedIn(accountFilter),
     search: search || undefined,
     page,
@@ -104,38 +111,55 @@ export const UserManagement = ({ role }: { role: ManagedRole }) => {
       key: 'name',
       header: 'Name',
       className: 'min-w-56',
-      render: (item) => (
-        <button
-          type="button"
-          title={`${config.viewClassesLabel}: ${item.fullName}`}
-          onClick={() => setViewingClassesUser(item)}
-          className="group flex w-full min-w-0 items-center gap-3 border-0 bg-transparent p-0 text-left"
-        >
-          {item.avatarUrl ? (
-            <img
-              src={item.avatarUrl}
-              alt=""
-              referrerPolicy="no-referrer"
-              className="h-9 w-9 shrink-0 rounded-full object-cover"
-            />
-          ) : (
-            <div
-              aria-hidden="true"
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground"
-            >
-              {initials(item.fullName)}
+      render: (item) => {
+        const online = isUserOnline(item.lastSeenAt);
+        return (
+          <button
+            type="button"
+            title={`${config.viewClassesLabel}: ${item.fullName}`}
+            onClick={() => setViewingClassesUser(item)}
+            className="group flex w-full min-w-0 items-center gap-3 border-0 bg-transparent p-0 text-left"
+          >
+            <div className="relative shrink-0">
+              {item.avatarUrl ? (
+                <img
+                  src={item.avatarUrl}
+                  alt=""
+                  referrerPolicy="no-referrer"
+                  className="h-9 w-9 rounded-full object-cover"
+                />
+              ) : (
+                <div
+                  aria-hidden="true"
+                  className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground"
+                >
+                  {initials(item.fullName)}
+                </div>
+              )}
+              {online && (
+                <span
+                  title="Online now"
+                  aria-label="Online now"
+                  className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-card bg-success"
+                />
+              )}
             </div>
-          )}
-          <div className="min-w-0">
-            <p className="m-0 truncate font-medium text-foreground group-hover:text-brand group-hover:underline">
-              {item.fullName}
-            </p>
-            <p className="m-0 truncate text-xs text-muted-foreground">
-              {item.email}
-            </p>
-          </div>
-        </button>
-      ),
+            <div className="min-w-0">
+              <p className="m-0 truncate font-medium text-foreground group-hover:text-brand group-hover:underline">
+                {item.fullName}
+              </p>
+              <p className="m-0 truncate text-xs text-muted-foreground">
+                {item.email}
+                {item.lastSeenAt ? (
+                  <span className="ml-1.5 text-[11px]">
+                    · {online ? 'Online' : `Active ${formatRelativeTime(item.lastSeenAt)}`}
+                  </span>
+                ) : null}
+              </p>
+            </div>
+          </button>
+        );
+      },
     },
     {
       key: 'code',
@@ -189,35 +213,57 @@ export const UserManagement = ({ role }: { role: ManagedRole }) => {
           >
             <FileSpreadsheet className="h-4 w-4" />
           </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label={`Edit ${item.fullName}`}
-            title="Edit"
-            onClick={() => openEdit(item)}
+          <Link
+            to={`/audit-logs?entityType=USER&entityId=${item.id}&contextLabel=${encodeURIComponent(item.code ? `${item.code} (${item.fullName})` : item.fullName)}`}
+            aria-label={`View history of ${item.fullName}`}
+            title="View history"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           >
-            <Pencil className="h-4 w-4" />
-          </Button>
-          {item.isActive ? (
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label={`Deactivate ${item.fullName}`}
-              title="Deactivate"
-              onClick={() => setStatusTarget({ user: item, action: 'deactivate' })}
-            >
-              <Archive className="h-4 w-4" />
-            </Button>
-          ) : (
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label={`Activate ${item.fullName}`}
-              title="Activate"
-              onClick={() => setStatusTarget({ user: item, action: 'activate' })}
-            >
-              <RotateCcw className="h-4 w-4" />
-            </Button>
+            <History className="h-4 w-4" />
+          </Link>
+          {!item.deletedAt && (
+            <>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label={`Edit ${item.fullName}`}
+                title="Edit"
+                onClick={() => openEdit(item)}
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
+              {item.isActive ? (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={`Deactivate ${item.fullName}`}
+                  title="Deactivate"
+                  onClick={() => setStatusTarget({ user: item, action: 'deactivate' })}
+                >
+                  <Archive className="h-4 w-4" />
+                </Button>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={`Activate ${item.fullName}`}
+                  title="Activate"
+                  onClick={() => setStatusTarget({ user: item, action: 'activate' })}
+                >
+                  <RotateCcw className="h-4 w-4" />
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label={`Remove ${item.fullName}`}
+                title="Remove permanently"
+                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                onClick={() => setStatusTarget({ user: item, action: 'remove' })}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </>
           )}
         </div>
       ),

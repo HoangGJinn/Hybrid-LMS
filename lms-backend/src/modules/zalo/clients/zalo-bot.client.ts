@@ -56,7 +56,8 @@ export class ZaloBotClient {
     try {
       const data = await this.call('getUpdates', { timeout: timeoutSec }, (timeoutSec + 10) * 1000);
       const result = data?.result;
-      return Array.isArray(result) ? result : result ? [result] : [];
+      if (Array.isArray(result)) return result;
+      return result ? [result] : [];
     } catch (e) {
       if (e instanceof ZaloBotApiError && e.errorCode === TIMEOUT_ERROR_CODE) return [];
       throw e;

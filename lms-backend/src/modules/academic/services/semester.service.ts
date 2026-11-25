@@ -3,7 +3,15 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
+import {
+  AuditAction,
+  AuditCategory,
+  AuditEntityType,
+  AuditFacade,
+  diffFields,
+} from '../../../shared/audit/index.js';
 import { SemesterRepository } from '../repositories/semester.repository.js';
 import { CreateSemesterDto } from '../dto/create-semester.dto.js';
 import { UpdateSemesterDto } from '../dto/update-semester.dto.js';
@@ -11,7 +19,10 @@ import { Semester } from '../entities/semester.entity.js';
 
 @Injectable()
 export class SemesterService {
-  constructor(private readonly semesterRepo: SemesterRepository) {}
+  constructor(
+    private readonly semesterRepo: SemesterRepository,
+    @Optional() private readonly auditFacade?: AuditFacade,
+  ) {}
 
   async create(dto: CreateSemesterDto): Promise<Semester> {
     const existing = await this.semesterRepo.findByCode(dto.semesterCode);
@@ -23,12 +34,26 @@ export class SemesterService {
     const end = new Date(dto.endDate);
     if (start >= end)
       throw new BadRequestException('startDate must be before endDate');
-    return this.semesterRepo.create({
+    const created = await this.semesterRepo.create({
       semesterCode: dto.semesterCode,
       name: dto.name,
       startDate: start,
       endDate: end,
     });
+    await this.auditFacade?.record({
+      category: AuditCategory.ADMIN,
+      action: AuditAction.SEMESTER_CREATED,
+      entityType: AuditEntityType.SEMESTER,
+      entityId: created.id,
+      entityLabel: `${created.semesterCode} — ${created.name}`,
+      summary: `Created semester ${created.semesterCode} — ${created.name}`,
+      metadata: {
+        semesterCode: created.semesterCode,
+        startDate: created.startDate,
+        endDate: created.endDate,
+      },
+    });
+    return created;
   }
 
   async createSemester(dto: CreateSemesterDto): Promise<Semester> {
@@ -68,11 +93,52 @@ export class SemesterService {
       startDate: dto.startDate ? start : undefined,
       endDate: dto.endDate ? end : undefined,
     });
-    return this.findById(id);
+    const updated = await this.findById(id);
+    if (this.auditFacade) {
+      const changes = diffFields(
+        {
+          semesterCode: semester.semesterCode,
+          name: semester.name,
+          startDate: semester.startDate,
+          endDate: semester.endDate,
+        },
+        {
+          semesterCode: updated.semesterCode,
+          name: updated.name,
+          startDate: updated.startDate,
+          endDate: updated.endDate,
+        },
+        ['semesterCode', 'name', 'startDate', 'endDate'],
+      );
+      if (changes) {
+        await this.auditFacade.record({
+          category: AuditCategory.ADMIN,
+          action: AuditAction.SEMESTER_UPDATED,
+          entityType: AuditEntityType.SEMESTER,
+          entityId: updated.id,
+          entityLabel: `${updated.semesterCode} — ${updated.name}`,
+          summary: `Updated semester ${updated.semesterCode} — ${updated.name}`,
+          changes,
+        });
+      }
+    }
+    return updated;
   }
 
   async delete(id: string): Promise<void> {
-    await this.findById(id);
+    const semester = await this.findById(id);
     await this.semesterRepo.delete(id);
+    await this.auditFacade?.record({
+      category: AuditCategory.ADMIN,
+      action: AuditAction.SEMESTER_DELETED,
+      entityType: AuditEntityType.SEMESTER,
+      entityId: semester.id,
+      entityLabel: `${semester.semesterCode} — ${semester.name}`,
+      summary: `Deleted semester ${semester.semesterCode} — ${semester.name}`,
+      metadata: {
+        semesterCode: semester.semesterCode,
+        name: semester.name,
+      },
+    });
   }
 }

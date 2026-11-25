@@ -1,4 +1,10 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import { ConflictException, Injectable, Optional } from '@nestjs/common';
+import {
+  AuditAction,
+  AuditCategory,
+  AuditEntityType,
+  AuditFacade,
+} from '../../../shared/audit/index.js';
 import { isUniqueViolation } from '../../../common/utils/pg-error.util.js';
 import { emptyToNull } from '../../../common/utils/string.util.js';
 import { LecturerSummary } from '../../user/types/lecturer-summary.type.js';
@@ -78,6 +84,7 @@ export class ClassImportService {
     private readonly subjectRepo: SubjectRepository,
     private readonly semesterRepo: SemesterRepository,
     private readonly userFacade: UserFacade,
+    @Optional() private readonly auditFacade?: AuditFacade,
   ) {}
 
   async importClasses(dto: ImportClassesDto): Promise<ClassImportResult> {
@@ -95,7 +102,7 @@ export class ClassImportService {
 
     const count = (status: ClassImportRowStatus): number =>
       results.filter((result) => result.status === status).length;
-    return {
+    const summary = {
       dryRun,
       total: results.length,
       created: count('created'),
@@ -103,6 +110,23 @@ export class ClassImportService {
       failed: count('error'),
       rows: results,
     };
+    if (!dryRun && toCreate.length > 0) {
+      await this.auditFacade?.record({
+        category: AuditCategory.ADMIN,
+        action: AuditAction.CLASS_IMPORTED,
+        entityType: AuditEntityType.CLASS,
+        entityLabel: `${toCreate.length} courses imported`,
+        summary: `Imported ${summary.created} course(s) (${summary.skipped} skipped, ${summary.failed} failed)`,
+        metadata: {
+          total: summary.total,
+          created: summary.created,
+          skipped: summary.skipped,
+          failed: summary.failed,
+          classCodes: toCreate.map((item) => item.classCode),
+        },
+      });
+    }
+    return summary;
   }
 
   /**

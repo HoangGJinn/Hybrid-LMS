@@ -17,10 +17,16 @@ import { ParticipantService } from './services/participant.service.js';
 import { SubjectService } from './services/subject.service.js';
 import { SemesterService } from './services/semester.service.js';
 import { ClassController } from './controllers/class.controller.js';
+import { LecturerDashboardController } from './controllers/lecturer-dashboard.controller.js';
 import { ParticipantController } from './controllers/participant.controller.js';
+import { StudentDashboardController } from './controllers/student-dashboard.controller.js';
 import { SubjectController } from './controllers/subject.controller.js';
 import { SemesterController } from './controllers/semester.controller.js';
 import { AcademicFacade } from './facades/academic.facade.js';
+import { LecturerDashboardRepository } from './repositories/lecturer-dashboard.repository.js';
+import { LecturerDashboardService } from './services/lecturer-dashboard.service.js';
+import { StudentDashboardRepository } from './repositories/student-dashboard.repository.js';
+import { StudentDashboardService } from './services/student-dashboard.service.js';
 import { UserModule } from '../user/user.module.js';
 
 @Module({
@@ -30,7 +36,9 @@ import { UserModule } from '../user/user.module.js';
   ],
   controllers: [
     ClassController,
+    LecturerDashboardController,
     ParticipantController,
+    StudentDashboardController,
     SubjectController,
     SemesterController,
   ],
@@ -39,6 +47,8 @@ import { UserModule } from '../user/user.module.js';
     ClassStudentRepository,
     SubjectRepository,
     SemesterRepository,
+    LecturerDashboardRepository,
+    StudentDashboardRepository,
     ClassAccessPolicy,
     ClassService,
     ClassImportService,
@@ -47,6 +57,8 @@ import { UserModule } from '../user/user.module.js';
     ParticipantService,
     SubjectService,
     SemesterService,
+    LecturerDashboardService,
+    StudentDashboardService,
     AcademicFacade,
   ],
   exports: [AcademicFacade],

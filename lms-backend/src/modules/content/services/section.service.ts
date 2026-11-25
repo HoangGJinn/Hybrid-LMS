@@ -318,7 +318,7 @@ export class SectionService {
   ): Promise<void> {
     try {
       const section = await this.sectionRepository.findSection(classId, sectionId)
-      if (section === null || !section.isVisible) return
+      if (!section?.isVisible) return
       const items = await this.sectionRepository.findItemsBySectionIds([sectionId])
       const visibleItems = items.filter((item) => item.isVisible)
       const schedules = await this.findSchedules(visibleItems)
