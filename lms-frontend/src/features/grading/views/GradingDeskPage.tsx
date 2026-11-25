@@ -1,11 +1,10 @@
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router';
-import { Columns2 } from 'lucide-react';
+import { Columns2, PanelLeftOpen } from 'lucide-react';
 import { useLecturerClasses } from '@features/courses';
 import { AsyncView } from '@shared/components/AsyncView';
 import { EmptyState } from '@shared/components/EmptyState';
 import { PageHeader } from '@shared/components/PageHeader';
-import { StatusBadge } from '@shared/components/ui/badge';
 import { Button } from '@shared/components/ui/button';
 import { toAsyncState } from '@shared/utils/async-state';
 import { cn } from '@shared/utils/cn';
@@ -16,10 +15,13 @@ import {
   type GradingTabFilter,
   type GradingTypeFilter,
 } from '../components/GradingDeskFilterBar';
+import { GradingDeskQueueList } from '../components/GradingDeskQueueList';
 import { GradingDeskSpeedGraderDialog } from '../components/GradingDeskSpeedGraderDialog';
 import { useGradingQueue } from '../hooks/useGradingQueue';
 import {
   filterAndSortGradingQueue,
+  gradingProgressByGroup,
+  groupGradingQueue,
   parseGradingSort,
   parseGradingTab,
   parseGradingType,
@@ -32,6 +34,7 @@ const GradingDeskPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectedQueueId, setSelectedQueueId] = useState<string | null>(null);
   const [speedGraderOpen, setSpeedGraderOpen] = useState(false);
+  const [listOpen, setListOpen] = useState(true);
 
   const tab = parseGradingTab(searchParams.get('tab'));
   const typeFilter = parseGradingType(searchParams.get('type'));
@@ -112,7 +115,7 @@ const GradingDeskPage = () => {
   );
   const sectionGradedCount = sectionItems.length - sectionPendingCount;
 
-  const activeList = useMemo(
+  const filteredList = useMemo(
     () =>
       filterAndSortGradingQueue(allItems, {
         tab,
@@ -123,6 +126,11 @@ const GradingDeskPage = () => {
       }),
     [allItems, tab, typeFilter, classFilter, searchQuery, sortOrder],
   );
+
+  const groups = useMemo(() => groupGradingQueue(filteredList), [filteredList]);
+  // Navigation (prev/next, SpeedGrader) follows the grouped order shown on screen.
+  const activeList = useMemo(() => groups.flatMap((g) => g.items), [groups]);
+  const progress = useMemo(() => gradingProgressByGroup(allItems), [allItems]);
 
   const activeSelected =
     activeList.find((s) => s.queueId === selectedQueueId) ?? activeList[0];
@@ -195,18 +203,31 @@ const GradingDeskPage = () => {
                   hasActiveFilters
                     ? 'No matching submissions'
                     : tab === 'PENDING'
-                      ? 'Nothing to grade'
+                      ? 'All caught up'
                       : 'No graded submissions'
                 }
                 description={
                   hasActiveFilters
                     ? 'Try adjusting or clearing your filters to see other submissions.'
-                    : undefined
+                    : tab === 'PENDING' && sectionGradedCount > 0
+                      ? 'Every submission in this section has been graded. Check the "Graded" tab to review or update grades.'
+                      : undefined
                 }
                 action={
                   hasActiveFilters ? (
                     <Button variant="outline" size="sm" onClick={clearFilters}>
                       Clear filters
+                    </Button>
+                  ) : tab === 'PENDING' && sectionGradedCount > 0 ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        updateParams({ tab: 'GRADED' });
+                        setSelectedQueueId(null);
+                      }}
+                    >
+                      View graded
                     </Button>
                   ) : undefined
                 }
@@ -220,57 +241,39 @@ const GradingDeskPage = () => {
           );
 
           return (
-            <div className="grid gap-6 lg:grid-cols-[1fr_1.2fr]">
-              <ul className="m-0 list-none space-y-2 p-0">
-                {activeList.map((s) => (
-                  <li key={s.queueId}>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedQueueId(s.queueId)}
-                      className={cn(
-                        'flex w-full items-center gap-3 rounded-lg border bg-card p-3 text-left transition-colors hover:bg-accent/40',
-                        selected?.queueId === s.queueId && 'border-primary',
-                      )}
-                    >
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <span
-                            className={cn(
-                              'rounded px-1.5 py-0.5 text-[10px] font-semibold',
-                              s.kind === 'exam'
-                                ? 'bg-violet-500/15 text-violet-700 dark:text-violet-300'
-                                : 'bg-sky-500/15 text-sky-700 dark:text-sky-300',
-                            )}
-                          >
-                            {s.kind === 'exam' ? 'Exam' : 'Assignment'}
-                          </span>
-                          <p className="m-0 truncate font-medium">
-                            {s.studentName}
-                            {s.studentCode ? (
-                              <span className="ml-1 text-xs font-normal text-muted-foreground">
-                                ({s.studentCode})
-                              </span>
-                            ) : null}
-                          </p>
-                        </div>
-                        <p className="m-0 mt-0.5 truncate text-xs text-muted-foreground">
-                          {s.title}
-                          {s.className ? ` · ${s.className}` : ''}
-                        </p>
-                      </div>
-                      {s.score !== null ? (
-                        <span className="shrink-0 text-sm font-semibold">
-                          {s.score}
-                        </span>
-                      ) : (
-                        <StatusBadge status="SUBMITTED" />
-                      )}
-                    </button>
-                  </li>
-                ))}
-              </ul>
+            <div
+              className={cn(
+                'grid items-start gap-4 lg:gap-6',
+                listOpen
+                  ? 'lg:grid-cols-[minmax(0,4fr)_minmax(0,6fr)]'
+                  : 'lg:grid-cols-[auto_minmax(0,1fr)]',
+              )}
+            >
+              {listOpen ? (
+                <GradingDeskQueueList
+                  groups={groups}
+                  totalCount={activeList.length}
+                  progress={progress}
+                  selectedQueueId={selected.queueId}
+                  onSelect={setSelectedQueueId}
+                  onCollapse={() => setListOpen(false)}
+                />
+              ) : (
+                <button
+                  type="button"
+                  aria-label="Expand list"
+                  title="Show list"
+                  onClick={() => setListOpen(true)}
+                  className="flex items-center gap-2 rounded-xl border bg-card px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground lg:flex-col lg:px-2 lg:py-3"
+                >
+                  <PanelLeftOpen className="h-4 w-4" />
+                  <span className="rounded-full bg-muted px-2 py-0.5 text-xs">
+                    {activeList.length}
+                  </span>
+                </button>
+              )}
 
-              {selected && (
+              <div className="min-w-0 lg:sticky lg:top-4">
                 <GradingDeskDetailCard
                   key={selected.queueId}
                   item={selected}
@@ -290,7 +293,7 @@ const GradingDeskPage = () => {
                   }
                   onOpenSpeedGrader={() => setSpeedGraderOpen(true)}
                 />
-              )}
+              </div>
             </div>
           );
         }}
