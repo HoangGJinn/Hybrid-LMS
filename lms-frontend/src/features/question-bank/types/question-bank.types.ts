@@ -18,6 +18,8 @@ export interface BankQuestionOption {
 export interface BankQuestionKc {
   kcId: string;
   name: string;
+  /** Confirmed XES3G5M KCs this KC is mapped to. */
+  xesKcs: string[];
 }
 
 /** A question in the bank, as returned by GET /api/questions. */
@@ -32,6 +34,8 @@ export interface BankQuestion {
   reviewStatus: QuestionReviewStatus;
   reviewedBy: string | null;
   isActive: boolean;
+  /** Mapped XES3G5M question id; null until the KC mapping is confirmed. */
+  xesQuestionId: number | null;
   createdAt: string;
   options: BankQuestionOption[];
   knowledgeComponents: BankQuestionKc[];

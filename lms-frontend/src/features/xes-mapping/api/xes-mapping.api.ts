@@ -1,28 +1,42 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { get, patch, post } from '@core/api/http';
 
-export interface KcSuggestion {
-  kcId: string;
-  kcName: string;
+export interface XesRoute {
   xesRoute: string;
   xesKc: string;
-  score: number;
-  status: 'SUGGESTED' | 'CONFIRMED';
+  path: string;
   questionCount: number;
+}
+
+export interface KcMapping {
+  kcId: string;
+  kcName: string;
+  bankQuestionCount: number;
+  routes: XesRoute[];
+}
+
+export interface BackfillResult {
+  mapped: number;
+  skipped: number;
+  unmappedKcs: string[];
 }
 
 const keys = {
   list: (subjectId: string) => ['xes-mapping', subjectId] as const,
+  search: (q: string) => ['xes-routes', q] as const,
 };
 
 const service = {
-  list: (subjectId: string): Promise<KcSuggestion[]> =>
+  list: (subjectId: string): Promise<KcMapping[]> =>
     get('/api/xes-mappings', { subjectId }),
-  suggest: (subjectId: string): Promise<KcSuggestion[]> =>
-    post('/api/xes-mappings/suggest', { subjectId }),
-  confirm: (kcId: string, routes: string[]): Promise<{ ok: boolean }> =>
+  search: (q: string): Promise<XesRoute[]> =>
+    get('/api/xes-mappings/routes', { q }),
+  save: (
+    kcId: string,
+    routes: string[],
+  ): Promise<{ ok: boolean; backfill: BackfillResult | null }> =>
     patch(`/api/xes-mappings/kcs/${kcId}/confirm`, { routes }),
-  backfill: (subjectId: string): Promise<{ mapped: number; skipped: number }> =>
+  backfill: (subjectId: string): Promise<BackfillResult> =>
     post('/api/xes-mappings/backfill', { subjectId }),
 };
 
@@ -35,22 +49,26 @@ export const useXesMappings = (subjectId: string) =>
     enabled: isUuid(subjectId),
   });
 
-export const useSuggestXes = (subjectId: string) => {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: () => service.suggest(subjectId),
-    onSuccess: (rows) => qc.setQueryData(keys.list(subjectId), rows),
+export const useSearchXesRoutes = (q: string) =>
+  useQuery({
+    queryKey: keys.search(q),
+    queryFn: () => service.search(q),
+    staleTime: 5 * 60 * 1000,
   });
-};
 
-export const useConfirmXes = (subjectId: string) => {
+export const useSaveXesRoutes = (subjectId: string) => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (v: { kcId: string; routes: string[] }) =>
-      service.confirm(v.kcId, v.routes),
+      service.save(v.kcId, v.routes),
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.list(subjectId) }),
   });
 };
 
-export const useBackfillXes = (subjectId: string) =>
-  useMutation({ mutationFn: () => service.backfill(subjectId) });
+export const useBackfillXes = (subjectId: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => service.backfill(subjectId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.list(subjectId) }),
+  });
+};

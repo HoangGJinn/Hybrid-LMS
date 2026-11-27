@@ -12,6 +12,8 @@ export interface QuestionOptionView {
 export interface QuestionKcView {
   kcId: string;
   name: string;
+  /** Leaf names of the confirmed XES3G5M KCs this KC is mapped to (empty when not confirmed yet). */
+  xesKcs: string[];
 }
 
 export interface QuestionView {
@@ -25,6 +27,8 @@ export interface QuestionView {
   reviewStatus: QuestionReviewStatus;
   reviewedBy: string | null;
   isActive: boolean;
+  /** Id of the mapped XES3G5M question; null until the KC mapping is confirmed. */
+  xesQuestionId: number | null;
   createdAt: Date;
   options: QuestionOptionView[];
   knowledgeComponents: QuestionKcView[];

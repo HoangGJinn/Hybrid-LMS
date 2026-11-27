@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
-import { ArrayMaxSize, ArrayMinSize, IsArray, IsString, IsUUID } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsString, IsUUID } from 'class-validator';
 import { Auth } from '../../../common/decorators/auth.decorator.js';
 import { Role } from '../../../common/enums/role.enum.js';
 import { XesMappingService } from '../services/xes-mapping.service.js';
@@ -9,10 +9,9 @@ class SubjectDto {
   subjectId: string;
 }
 
-class ConfirmDto {
-  /** XES KC routes ("A----B----C") that match this KC. */
+class SetRoutesDto {
+  /** XES KC routes ("A----B----C") matching this KC. An empty array clears the mapping. */
   @IsArray()
-  @ArrayMinSize(1)
   @ArrayMaxSize(5)
   @IsString({ each: true })
   routes: string[];
@@ -22,25 +21,25 @@ class ConfirmDto {
 export class XesMappingController {
   constructor(private readonly service: XesMappingService) {}
 
-  /** Computes the closest XES KCs for every KC of the subject (replaces earlier SUGGESTED rows). */
-  @Post('suggest')
+  /** Searches the XES3G5M KC list by words (empty query = the largest KCs). */
+  @Get('routes')
   @Auth(Role.LECTURER)
-  suggest(@Body() dto: SubjectDto) {
-    return this.service.suggestForSubject(dto.subjectId);
+  searchRoutes(@Query('q') q = '') {
+    return this.service.searchRoutes(q);
   }
 
+  /** Every KC of the subject with its chosen XES routes. */
   @Get()
   @Auth(Role.LECTURER)
   list(@Query('subjectId', ParseUUIDPipe) subjectId: string) {
     return this.service.listForSubject(subjectId);
   }
 
-  /** Body: { routes: string[] }. After this, new questions of the KC map to those XES KCs. */
+  /** Body: { routes: string[] }. Saves the mapping, then maps the subject's existing questions of the KC. */
   @Patch('kcs/:kcId/confirm')
   @Auth(Role.LECTURER)
-  async confirm(@Param('kcId', ParseUUIDPipe) kcId: string, @Body() dto: ConfirmDto) {
-    await this.service.confirm(kcId, dto.routes);
-    return { ok: true };
+  async setRoutes(@Param('kcId', ParseUUIDPipe) kcId: string, @Body() dto: SetRoutesDto) {
+    return { ok: true, backfill: await this.service.setRoutes(kcId, dto.routes) };
   }
 
   /** Maps the subject's existing questions that still have no xes_question_id. */

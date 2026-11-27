@@ -22,6 +22,8 @@ import { QuestionImportService } from './services/question-import.service.js';
 import { QuestionManagementService } from './services/question-management.service.js';
 import { QuizService } from './services/quiz.service.js';
 import { RuleBasedQuestionSelector } from './services/rule-based-question-selector.service.js';
+import { EnasGatewayClient } from './services/enas-gateway.client.js';
+import { EnasQuestionSelector } from './services/enas-question-selector.service.js';
 import { QUESTION_IMPORT_FILE_PORT } from './types/question-import-file.port.js';
 import { QUESTION_SELECTOR } from './types/question-selector.type.js';
 import { XesKcMapping } from './entities/xes-kc-mapping.entity.js';
@@ -54,8 +56,16 @@ import { XesMappingService } from './services/xes-mapping.service.js';
     QuestionManagementService,
     QuizService,
     XesMappingService,
-    // Swap this for a model-backed selector (ENAS-KT) later; nothing else in the quiz flow changes.
-    { provide: QUESTION_SELECTOR, useClass: RuleBasedQuestionSelector },
+    RuleBasedQuestionSelector,
+    EnasGatewayClient,
+    EnasQuestionSelector,
+    // QUESTION_SELECTOR=enas picks questions with the ENAS-KT model (falls back to the rule-based one on failure).
+    {
+      provide: QUESTION_SELECTOR,
+      inject: [RuleBasedQuestionSelector, EnasQuestionSelector],
+      useFactory: (rule: RuleBasedQuestionSelector, enas: EnasQuestionSelector) =>
+        process.env.QUESTION_SELECTOR === 'enas' ? enas : rule,
+    },
     // QUESTION_IMPORT_USE_LOCAL_FILES=true reads ./dev-uploads instead of S3 (never in production).
     {
       provide: QUESTION_IMPORT_FILE_PORT,

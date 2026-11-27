@@ -6,6 +6,7 @@ import { QuestionOption } from '../entities/question-option.entity.js';
 import { Question } from '../entities/question.entity.js';
 import { QuestionReviewStatus } from '../enums/question-review-status.enum.js';
 import type { Paged, QuestionView } from '../types/question-view.type.js';
+import { XesMappingService } from './xes-mapping.service.js';
 
 export interface ListQuestionsFilter {
   subjectId: string;
@@ -27,6 +28,7 @@ export class QuestionManagementService {
     private readonly options: Repository<QuestionOption>,
     @InjectRepository(QuestionKnowledgeComponent)
     private readonly links: Repository<QuestionKnowledgeComponent>,
+    private readonly xesMapping: XesMappingService,
   ) {}
 
   async list(filter: ListQuestionsFilter): Promise<Paged<QuestionView>> {
@@ -85,6 +87,9 @@ export class QuestionManagementService {
       this.links.find({ where: { questionId: In(ids) }, relations: { knowledgeComponent: true } }),
     ]);
 
+    const xesRoutes = await this.xesMapping.confirmedRoutes([...new Set(links.map((l) => l.kcId))]);
+    const leaf = (route: string): string => route.split('----').pop() ?? route;
+
     return questions.map((q) => ({
       id: q.id,
       subjectId: q.subjectId,
@@ -96,6 +101,7 @@ export class QuestionManagementService {
       reviewStatus: q.reviewStatus,
       reviewedBy: q.reviewedBy,
       isActive: q.isActive,
+      xesQuestionId: q.xesQuestionId,
       createdAt: q.createdAt,
       options: options
         .filter((o) => o.questionId === q.id)
@@ -107,7 +113,11 @@ export class QuestionManagementService {
         })),
       knowledgeComponents: links
         .filter((l) => l.questionId === q.id)
-        .map((l) => ({ kcId: l.kcId, name: l.knowledgeComponent.name })),
+        .map((l) => ({
+          kcId: l.kcId,
+          name: l.knowledgeComponent.name,
+          xesKcs: (xesRoutes.get(l.kcId) ?? []).map(leaf),
+        })),
     }));
   }
 }

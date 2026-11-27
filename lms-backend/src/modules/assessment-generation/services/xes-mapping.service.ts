@@ -1,56 +1,63 @@
-import { BadRequestException, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DataSource, In, Repository } from 'typeorm';
 import type { Question } from '../entities/question.entity.js';
 import { XesKcMapping } from '../entities/xes-kc-mapping.entity.js';
 
 /**
- * Maps bank KCs and questions onto XES3G5M, in two steps:
- *   1. KC -> XES KC route (embedding of the names, suggested then CONFIRMED by a lecturer)
- *   2. question -> a XES question of a confirmed route (embedding of the question text)
- * Env: XES_QUESTIONS_FILE (default ./data/xes3g5m/questions.json), XES_DATA_DIR, GEMINI_API_KEY.
+ * Maps bank KCs and questions onto XES3G5M, fully manual (no embedding / external API):
+ *   1. KC -> XES KC route(s): the lecturer searches the XES KC list and picks the matching routes.
+ *   2. question -> a XES question of those routes: the least used XES question id is taken, so ids spread out.
+ * Env: XES_QUESTIONS_FILE (default ./data/xes3g5m/questions.json), XES_DATA_DIR.
+ * A XES KC is identified by its route (first entry of kc_routes in questions.json, e.g. "A----B----C").
  */
 
 const DIR = process.env.XES_DATA_DIR ?? './data/xes3g5m';
 const QUESTIONS_FILE = process.env.XES_QUESTIONS_FILE ?? join(DIR, 'questions.json');
-const ROUTE_CACHE_FILE = join(DIR, 'xes-kc-embeddings.json');
+const SEARCH_LIMIT = 30;
 
-const EMBED_MODEL = 'gemini-embedding-001';
-const EMBED_DIM = 256;
-const EMBED_BATCH = 100;
-const MAX_TEXT = 1000;
-const SUGGESTIONS_PER_KC = 3;
-const TOP_K = 3; // among the K most similar questions of the KC, take the least used XES id
-
-export interface KcSuggestionView {
-  kcId: string;
-  kcName: string;
+export interface XesRouteView {
   xesRoute: string;
-  xesKc: string; // leaf name of the route
-  score: number;
-  status: string;
+  /** Leaf name of the route. */
+  xesKc: string;
+  /** Readable path, e.g. "A › B › C". */
+  path: string;
   questionCount: number;
 }
 
-const leafOf = (route: string): string => route.split('----').pop() ?? route;
-const labelOf = (route: string): string => route.split('----').slice(-2).join(' - ');
-const clip = (s: string): string => s.replace(/\s+/g, ' ').trim().slice(0, MAX_TEXT);
+export interface KcMappingView {
+  kcId: string;
+  kcName: string;
+  /** Number of bank questions linked to this KC. */
+  bankQuestionCount: number;
+  /** Confirmed XES routes (empty = not mapped yet). */
+  routes: XesRouteView[];
+}
 
-const normalise = (v: number[]): number[] => {
-  const n = Math.sqrt(v.reduce((s, x) => s + x * x, 0)) || 1;
-  return v.map((x) => x / n);
-};
-const dot = (a: number[], b: number[]): number => a.reduce((s, x, i) => s + x * b[i], 0);
+export interface BackfillResult {
+  mapped: number;
+  skipped: number;
+  /** Names of the KCs that caused skips because they have no XES route yet. */
+  unmappedKcs: string[];
+}
+
+const leafOf = (route: string): string => route.split('----').pop() ?? route;
+const pathOf = (route: string): string => route.split('----').join(' › ');
+const fold = (s: string): string =>
+  s
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .toLowerCase();
 
 @Injectable()
 export class XesMappingService implements OnModuleInit {
   private readonly logger = new Logger(XesMappingService.name);
-  /** route -> qids, same grouping as the demo (first kc_route of each question that has content). */
+  /** route -> qids (first kc_route of each XES question that has content). */
   private groups = new Map<string, number[]>();
-  private content = new Map<number, string>();
-  private cache = new Map<string, number[]>(); // text -> embedding (XES texts only)
+  /** route -> folded text used by the search box. */
+  private searchText = new Map<string, string>();
 
   constructor(
     @InjectRepository(XesKcMapping) private readonly maps: Repository<XesKcMapping>,
@@ -70,133 +77,141 @@ export class XesMappingService implements OnModuleInit {
       const qid = Number(k);
       const route = v.kc_routes?.[0];
       if (qid < 1 || !v.content || !route) continue;
-      this.content.set(qid, clip(v.content));
       this.groups.set(route, [...(this.groups.get(route) ?? []), qid].sort((a, b) => a - b));
     }
-    this.logger.log(`XES loaded: ${this.content.size} questions in ${this.groups.size} KC routes`);
+    for (const route of this.groups.keys()) this.searchText.set(route, fold(pathOf(route)));
+    this.logger.log(`XES loaded: ${this.groups.size} KC routes`);
   }
 
   get enabled(): boolean {
     return this.groups.size > 0;
   }
 
-  // -- step 1: KC mapping ------------------------------------------------------------------------
+  // -- step 1: KC mapping (manual) ---------------------------------------------------------------
 
-  /** Suggests the closest XES KCs for each KC of the subject. Never overwrites CONFIRMED rows. */
-  async suggestForSubject(subjectId: string): Promise<KcSuggestionView[]> {
+  /** Searches XES KC routes by words (all words must appear). Empty query = the routes with most questions. */
+  searchRoutes(query: string): XesRouteView[] {
     this.assertEnabled();
-    const kcs: { id: string; name: string }[] = await this.dataSource.query(
-      `SELECT id, name FROM knowledge_components WHERE subject_id = $1`,
-      [subjectId],
-    );
-    if (kcs.length === 0) return [];
-
-    const routes = [...this.groups.keys()];
-    const routeVecs = await this.routeVectors(routes);
-    const kcVecs = await this.embed(kcs.map((k) => k.name));
-
-    const confirmed = new Set(
-      (await this.maps.find({ where: { kcId: In(kcs.map((k) => k.id)), status: 'CONFIRMED' } })).map(
-        (m) => m.kcId,
-      ),
-    );
-    const rows: XesKcMapping[] = [];
-    kcs.forEach((kc, i) => {
-      if (confirmed.has(kc.id)) return;
-      routes
-        .map((r, j) => ({ r, score: dot(kcVecs[i], routeVecs[j]) }))
-        .sort((a, b) => b.score - a.score)
-        .slice(0, SUGGESTIONS_PER_KC)
-        .forEach((s) =>
-          rows.push(this.maps.create({ kcId: kc.id, xesRoute: s.r, score: s.score, status: 'SUGGESTED' })),
-        );
-    });
-    await this.dataSource.transaction(async (m) => {
-      const ids = kcs.filter((k) => !confirmed.has(k.id)).map((k) => k.id);
-      if (ids.length) await m.delete(XesKcMapping, { kcId: In(ids), status: 'SUGGESTED' });
-      await m.save(XesKcMapping, rows);
-    });
-    return this.listForSubject(subjectId);
+    const tokens = fold(query).split(/\s+/).filter(Boolean);
+    const out: XesRouteView[] = [];
+    for (const [route, text] of this.searchText) {
+      if (tokens.every((t) => text.includes(t))) out.push(this.routeView(route));
+    }
+    return out.sort((a, b) => b.questionCount - a.questionCount).slice(0, SEARCH_LIMIT);
   }
 
-  async listForSubject(subjectId: string): Promise<KcSuggestionView[]> {
-    const rows: { kc_id: string; name: string; xes_route: string; score: number; status: string }[] =
-      await this.dataSource.query(
-        `SELECT m.kc_id, kc.name, m.xes_route, m.score, m.status
-           FROM kc_xes_mappings m JOIN knowledge_components kc ON kc.id = m.kc_id
-          WHERE kc.subject_id = $1 ORDER BY kc.name, m.score DESC`,
-        [subjectId],
-      );
-    return rows.map((r) => ({
-      kcId: r.kc_id,
-      kcName: r.name,
-      xesRoute: r.xes_route,
-      xesKc: leafOf(r.xes_route),
-      score: r.score,
-      status: r.status,
-      questionCount: this.groups.get(r.xes_route)?.length ?? 0,
+  /** Every KC of the subject with the XES routes the lecturer has chosen for it. */
+  async listForSubject(subjectId: string): Promise<KcMappingView[]> {
+    const kcs: { id: string; name: string; n: number }[] = await this.dataSource.query(
+      `SELECT kc.id, kc.name, COUNT(DISTINCT l.question_id)::int AS n
+         FROM knowledge_components kc
+         LEFT JOIN question_knowledge_components l ON l.kc_id = kc.id
+        WHERE kc.subject_id = $1
+        GROUP BY kc.id, kc.name
+        ORDER BY kc.name`,
+      [subjectId],
+    );
+    const routesOf = await this.confirmedRoutes(kcs.map((k) => k.id));
+    return kcs.map((k) => ({
+      kcId: k.id,
+      kcName: k.name,
+      bankQuestionCount: k.n,
+      routes: (routesOf.get(k.id) ?? []).map((r) => this.routeView(r)),
     }));
   }
 
-  /** The lecturer picks the XES KC route(s) that really match this KC. */
-  async confirm(kcId: string, routes: string[]): Promise<void> {
+  /**
+   * Replaces the XES routes of a KC (an empty list clears the mapping), then maps the subject's
+   * questions that were saved before. A failed backfill never undoes the saved mapping.
+   */
+  async setRoutes(kcId: string, routes: string[]): Promise<BackfillResult | null> {
     this.assertEnabled();
-    const bad = routes.filter((r) => !this.groups.has(r));
-    if (routes.length === 0 || bad.length > 0) {
-      throw new BadRequestException('Route XES không hợp lệ.');
-    }
+    const unique = [...new Set(routes)];
+    if (unique.some((r) => !this.groups.has(r))) throw new BadRequestException('Route XES không hợp lệ.');
+
+    const [kc]: { subject_id: string }[] = await this.dataSource.query(
+      `SELECT subject_id FROM knowledge_components WHERE id = $1`,
+      [kcId],
+    );
+    if (!kc) throw new NotFoundException('Không tìm thấy KC.');
+
     await this.dataSource.transaction(async (m) => {
-      const existing = await m.find(XesKcMapping, { where: { kcId } });
-      const score = new Map(existing.map((e) => [e.xesRoute, e.score]));
       await m.delete(XesKcMapping, { kcId });
+      if (unique.length === 0) return;
       await m.save(
         XesKcMapping,
-        routes.map((r) => m.create(XesKcMapping, { kcId, xesRoute: r, score: score.get(r) ?? 0, status: 'CONFIRMED' })),
+        unique.map((r) => m.create(XesKcMapping, { kcId, xesRoute: r, score: 0, status: 'CONFIRMED' })),
       );
     });
+
+    if (unique.length === 0) return null;
+    try {
+      return await this.backfill(kc.subject_id);
+    } catch (err) {
+      this.logger.warn(`Backfill after save skipped: ${err instanceof Error ? err.message : String(err)}`);
+      return null;
+    }
+  }
+
+  /** Confirmed XES KC routes of the given KCs, keyed by kcId. */
+  async confirmedRoutes(kcIds: string[]): Promise<Map<string, string[]>> {
+    const out = new Map<string, string[]>();
+    if (kcIds.length === 0) return out;
+    const rows = await this.maps.find({ where: { kcId: In(kcIds), status: 'CONFIRMED' } });
+    for (const r of rows) out.set(r.kcId, [...(out.get(r.kcId) ?? []), r.xesRoute]);
+    return out;
   }
 
   // -- step 2: question mapping ------------------------------------------------------------------
 
-  /** Sets xesQuestionId on each question (left null when its KCs have no confirmed mapping). */
+  /** Sets xesQuestionId on each question (left null when its KCs have no XES route). */
   async assign(items: { question: Question; kcIds: string[] }[]): Promise<void> {
     if (!this.enabled || items.length === 0) return;
     try {
-      const ids = await this.pick(items.map((i) => ({ text: i.question.questionText, kcIds: i.kcIds })));
+      const ids = await this.pick(items.map((i) => i.kcIds));
       items.forEach((it, i) => (it.question.xesQuestionId = ids[i]));
     } catch (err) {
       this.logger.warn(`XES mapping skipped: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
-  /** Maps questions that were saved before their KCs were confirmed. */
-  async backfill(subjectId: string): Promise<{ mapped: number; skipped: number }> {
+  /** Maps questions that were saved before their KCs had a XES route. */
+  async backfill(subjectId: string): Promise<BackfillResult> {
     this.assertEnabled();
-    const rows: { id: string; question_text: string; kc_ids: string[] }[] = await this.dataSource.query(
-      `SELECT q.id, q.question_text, array_agg(l.kc_id) AS kc_ids
+    const rows: { id: string; kc_ids: string[] }[] = await this.dataSource.query(
+      `SELECT q.id, array_agg(l.kc_id) AS kc_ids
          FROM questions q JOIN question_knowledge_components l ON l.question_id = q.id
         WHERE q.subject_id = $1 AND q.xes_question_id IS NULL
-        GROUP BY q.id, q.question_text`,
+        GROUP BY q.id`,
       [subjectId],
     );
-    const ids = await this.pick(rows.map((r) => ({ text: r.question_text, kcIds: r.kc_ids })));
+    const ids = await this.pick(rows.map((r) => r.kc_ids));
     let mapped = 0;
+    const skippedKcIds = new Set<string>();
     for (let i = 0; i < rows.length; i++) {
-      if (ids[i] === null) continue;
+      if (ids[i] === null) {
+        rows[i].kc_ids.forEach((k) => skippedKcIds.add(k));
+        continue;
+      }
       await this.dataSource.query(`UPDATE questions SET xes_question_id = $1 WHERE id = $2`, [ids[i], rows[i].id]);
       mapped++;
     }
-    return { mapped, skipped: rows.length - mapped };
+
+    let unmappedKcs: string[] = [];
+    if (skippedKcIds.size > 0) {
+      const routesOf = await this.confirmedRoutes([...skippedKcIds]);
+      const names: { name: string }[] = await this.dataSource.query(
+        `SELECT name FROM knowledge_components WHERE id = ANY($1) ORDER BY name`,
+        [[...skippedKcIds].filter((k) => !routesOf.has(k))],
+      );
+      unmappedKcs = names.map((n) => n.name);
+    }
+    return { mapped, skipped: rows.length - mapped, unmappedKcs };
   }
 
-  private async pick(items: { text: string; kcIds: string[] }[]): Promise<(number | null)[]> {
-    const kcIds = [...new Set(items.flatMap((i) => i.kcIds))];
-    const confirmed = kcIds.length
-      ? await this.maps.find({ where: { kcId: In(kcIds), status: 'CONFIRMED' } })
-      : [];
-    const routesOf = new Map<string, string[]>();
-    for (const m of confirmed) routesOf.set(m.kcId, [...(routesOf.get(m.kcId) ?? []), m.xesRoute]);
-
+  /** For each question (given as its KC ids): the least used XES question among its KCs' routes, or null. */
+  private async pick(kcIdsPerItem: string[][]): Promise<(number | null)[]> {
+    const routesOf = await this.confirmedRoutes([...new Set(kcIdsPerItem.flat())]);
     const used = new Map<number, number>(
       (
         await this.dataSource.query(
@@ -206,93 +221,22 @@ export class XesMappingService implements OnModuleInit {
       ).map((r: { id: number; n: number }) => [r.id, r.n]),
     );
 
-    // candidates per item = XES questions of every confirmed route of every KC of the question
-    const cands = items.map((it) => [
-      ...new Set(it.kcIds.flatMap((k) => (routesOf.get(k) ?? []).flatMap((r) => this.groups.get(r) ?? []))),
-    ]);
-
-    // embed only what is needed: the texts of questions with more than one candidate, and those candidates
-    const needVec = items.map((_, i) => cands[i].length > 1);
-    let qVecs: number[][] = [];
-    try {
-      const texts = items.filter((_, i) => needVec[i]).map((it) => clip(it.text));
-      qVecs = texts.length ? await this.embed(texts, false) : [];
-      await this.embed([...new Set(cands.flatMap((c, i) => (needVec[i] ? c : [])))].map((q) => this.content.get(q)!));
-    } catch (err) {
-      this.logger.warn(`Embedding failed, picking the least used id instead: ${String(err)}`);
-      qVecs = [];
-    }
-
-    let v = 0;
-    return items.map((_, i) => {
-      const list = cands[i];
-      if (list.length === 0) return null;
-      const queryVec = needVec[i] ? qVecs[v++] : undefined;
-      const ranked = list
-        .map((id) => {
-          const cv = this.cache.get(this.content.get(id)!);
-          return { id, score: queryVec && cv ? dot(queryVec, cv) : 0 };
-        })
-        .sort((a, b) => b.score - a.score)
-        .slice(0, queryVec ? TOP_K : list.length);
-      const best = ranked.reduce((b, c) => ((used.get(c.id) ?? 0) < (used.get(b.id) ?? 0) ? c : b));
-      used.set(best.id, (used.get(best.id) ?? 0) + 1);
-      return best.id;
+    return kcIdsPerItem.map((kcIds) => {
+      const cands = [...new Set(kcIds.flatMap((k) => (routesOf.get(k) ?? []).flatMap((r) => this.groups.get(r) ?? [])))];
+      if (cands.length === 0) return null;
+      const best = cands.reduce((b, c) => ((used.get(c) ?? 0) < (used.get(b) ?? 0) ? c : b));
+      used.set(best, (used.get(best) ?? 0) + 1);
+      return best;
     });
   }
 
-  // -- embeddings --------------------------------------------------------------------------------
-
-  /** Route embeddings are the same on every run, so they are cached on disk. */
-  private async routeVectors(routes: string[]): Promise<number[][]> {
-    const disk: Record<string, number[]> = existsSync(ROUTE_CACHE_FILE)
-      ? JSON.parse(readFileSync(ROUTE_CACHE_FILE, 'utf8'))
-      : {};
-    const missing = routes.filter((r) => !disk[r]);
-    if (missing.length) {
-      const vecs = await this.embed(missing.map(labelOf), false);
-      missing.forEach((r, i) => (disk[r] = vecs[i]));
-      writeFileSync(ROUTE_CACHE_FILE, JSON.stringify(disk));
-    }
-    return routes.map((r) => disk[r]);
-  }
-
-  /** Texts are cached by default (XES content is reused); pass cache=false for one-off texts. */
-  private async embed(texts: string[], cache = true): Promise<number[][]> {
-    const local = new Map<string, number[]>();
-    const lookup = (t: string) => this.cache.get(t) ?? local.get(t);
-    const need = [...new Set(texts)].filter((t) => !lookup(t));
-
-    for (let i = 0; i < need.length; i += EMBED_BATCH) {
-      const slice = need.slice(i, i + EMBED_BATCH);
-      const vecs = await this.callGemini(slice);
-      slice.forEach((t, j) => (cache ? this.cache : local).set(t, vecs[j]));
-    }
-    return texts.map((t) => lookup(t)!);
-  }
-
-  private async callGemini(texts: string[]): Promise<number[][]> {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) throw new Error('GEMINI_API_KEY missing');
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${EMBED_MODEL}:batchEmbedContents`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-        body: JSON.stringify({
-          requests: texts.map((text) => ({
-            model: `models/${EMBED_MODEL}`,
-            content: { parts: [{ text }] },
-            taskType: 'SEMANTIC_SIMILARITY',
-            outputDimensionality: EMBED_DIM,
-          })),
-        }),
-        signal: AbortSignal.timeout(60_000),
-      },
-    );
-    if (!res.ok) throw new Error(`embedding HTTP ${res.status}`);
-    const json = (await res.json()) as { embeddings: { values: number[] }[] };
-    return json.embeddings.map((e) => normalise(e.values));
+  private routeView(route: string): XesRouteView {
+    return {
+      xesRoute: route,
+      xesKc: leafOf(route),
+      path: pathOf(route),
+      questionCount: this.groups.get(route)?.length ?? 0,
+    };
   }
 
   private assertEnabled(): void {

@@ -30,6 +30,7 @@ import {
   type ParsedQuestionRow,
 } from '../utils/question-excel-parser.js';
 import { normalizeKey } from '../utils/text-normalize.js';
+import { XesMappingService } from './xes-mapping.service.js';
 import type { ImportBatchView } from '../types/import-batch-view.type.js';
 import { QuestionType } from '../enums/question-type.enum.js';
 
@@ -58,6 +59,7 @@ export class QuestionImportService implements OnApplicationBootstrap {
     @Inject(QUESTION_IMPORT_FILE_PORT)
     private readonly files: QuestionImportFilePort,
     private readonly dataSource: DataSource,
+    private readonly xesMapping: XesMappingService,
   ) {}
 
   /**
@@ -214,6 +216,10 @@ export class QuestionImportService implements OnApplicationBootstrap {
         failedRows,
         errorReport: errors,
       });
+
+      // Map each new question to a XES3G5M question through its confirmed KC mappings.
+      // Never blocks the import: questions stay unmapped (null) and can be backfilled later.
+      await this.xesMapping.assign(drafts.map((d) => ({ question: d.question, kcIds: d.kcIds })));
 
       // All-or-nothing: the questions and the batch result commit (or roll back) together,
       // so a failure never leaves a FAILED batch whose questions are already in the bank.

@@ -104,6 +104,17 @@ export const QuestionCard = ({
           {!q.isActive && (
             <Pill className="border text-muted-foreground">Inactive</Pill>
           )}
+          <Pill
+            className={
+              q.xesQuestionId !== null
+                ? 'bg-emerald-100 text-emerald-900'
+                : 'border text-muted-foreground'
+            }
+          >
+            {q.xesQuestionId !== null
+              ? `XES #${q.xesQuestionId}`
+              : 'XES chưa ánh xạ'}
+          </Pill>
         </span>
         <span className="font-medium">{q.questionText}</span>
         <span className="flex flex-wrap gap-1.5">
