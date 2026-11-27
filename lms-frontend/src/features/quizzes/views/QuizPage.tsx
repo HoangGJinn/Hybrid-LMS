@@ -7,6 +7,7 @@ import { Button } from '@shared/components/ui/button';
 import { toAsyncState } from '@shared/utils/async-state';
 import { cn } from '@shared/utils/cn';
 import { FillBlankInput } from '../components/FillBlankInput';
+import { QuestionFitBadge } from '../components/QuestionFitBadge';
 import { QuizResultView } from '../components/QuizResultView';
 import { useAnswerQuestion } from '../hooks/useAnswerQuestion';
 import { useQuiz } from '../hooks/useQuiz';
@@ -135,6 +136,7 @@ const QuizRunner = ({ quiz, courseId }: { quiz: Quiz; courseId: string }) => {
               <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium capitalize">
                 {question.difficulty.toLowerCase()}
               </span>
+              <QuestionFitBadge fit={question.fit} />
               {isFill && (
                 <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium">
                   Fill in the blank
@@ -281,6 +283,12 @@ const QuizRunner = ({ quiz, courseId }: { quiz: Quiz; courseId: string }) => {
           </section>
 
           <section className="space-y-3 rounded-lg border bg-card p-5">
+            {quiz.adaptive && (
+              <p className="m-0 text-xs text-muted-foreground">
+                These questions were picked to match your level. The tag on each
+                one shows how hard it should feel for you.
+              </p>
+            )}
             <p className="m-0 text-xs text-muted-foreground">
               You see the answer after each question. Progress is saved if you leave.
             </p>

@@ -62,7 +62,13 @@ export const PracticePanel = ({
               Topics in this document
             </div>
             {info.data.kcs.map((kc) => (
-              <MasteryBar key={kc.kcId} label={kc.name} value={kc.mastery} />
+              <MasteryBar
+                key={kc.kcId}
+                label={kc.name}
+                value={kc.mastery}
+                level={kc.level}
+                confidence={kc.confidence}
+              />
             ))}
           </div>
           <Link

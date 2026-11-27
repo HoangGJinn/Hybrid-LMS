@@ -1,6 +1,10 @@
 import type { QuestionDifficulty } from '../enums/question-difficulty.enum.js';
 import { QuestionType } from '../enums/question-type.enum.js';
 import type { QuizInstanceStatus } from '../enums/quiz-instance-status.enum.js';
+import type { MasteryConfidence, MasteryLevel, QuestionFit } from '../utils/mastery.js';
+
+/** Where a mastery number comes from: the ENAS-KT model, or the share of recent correct answers. */
+export type MasterySource = 'enas' | 'history';
 
 export interface QuizOptionView {
   id: string;
@@ -24,6 +28,8 @@ export interface QuizQuestionView {
   type: QuestionType;
   difficulty: QuestionDifficulty;
   knowledgeComponents: { kcId: string; name: string }[];
+  /** How well the question fits the student according to the model; null when it was not picked by the model. */
+  fit: QuestionFit | null;
   options: QuizOptionView[];
   answer: QuizAnswerFeedback | null;
 }
@@ -37,6 +43,8 @@ export interface QuizView {
   answeredCount: number;
   score: number | null; // 0..100
   correctCount: number | null;
+  /** True when the questions were picked by the ENAS-KT model. */
+  adaptive: boolean;
   createdAt: Date;
   submittedAt: Date | null;
   questions: QuizQuestionView[];
@@ -62,6 +70,7 @@ export interface KcBreakdownView {
   /** 0..1, null when the student had no answers on this KC. */
   masteryBefore: number | null;
   masteryAfter: number | null;
+  source: MasterySource;
 }
 
 export interface QuizResultView {
@@ -76,6 +85,10 @@ export interface KcMasteryView {
   correct: number;
   /** 0..1, null when never answered. */
   mastery: number | null;
+  level: MasteryLevel;
+  /** How far the estimate can be trusted, from the number of answers. */
+  confidence: MasteryConfidence;
+  source: MasterySource;
 }
 
 /** What the practice panel of a document needs: the subject, the document's title and its topics with progress. */

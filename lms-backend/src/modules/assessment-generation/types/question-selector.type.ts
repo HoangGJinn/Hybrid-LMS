@@ -12,6 +12,8 @@ export interface SelectQuestionsInput {
 export interface SelectedQuestion {
   questionId: string;
   kcId: string;
+  /** P(correct) the ENAS-KT model predicted for this student when choosing; absent for rule-based picks. */
+  pCorrect?: number;
 }
 
 /**

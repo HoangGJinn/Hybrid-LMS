@@ -24,6 +24,7 @@ import { QuizService } from './services/quiz.service.js';
 import { RuleBasedQuestionSelector } from './services/rule-based-question-selector.service.js';
 import { EnasGatewayClient } from './services/enas-gateway.client.js';
 import { EnasQuestionSelector } from './services/enas-question-selector.service.js';
+import { EnasMasteryService } from './services/enas-mastery.service.js';
 import { QUESTION_IMPORT_FILE_PORT } from './types/question-import-file.port.js';
 import { QUESTION_SELECTOR } from './types/question-selector.type.js';
 import { XesKcMapping } from './entities/xes-kc-mapping.entity.js';
@@ -58,6 +59,7 @@ import { XesMappingService } from './services/xes-mapping.service.js';
     XesMappingService,
     RuleBasedQuestionSelector,
     EnasGatewayClient,
+    EnasMasteryService,
     EnasQuestionSelector,
     // QUESTION_SELECTOR=enas picks questions with the ENAS-KT model (falls back to the rule-based one on failure).
     {

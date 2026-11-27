@@ -1,10 +1,13 @@
 import { Link } from 'react-router';
+import { TrendingDown, TrendingUp } from 'lucide-react';
 import { AsyncView } from '@shared/components/AsyncView';
 import { EmptyState } from '@shared/components/EmptyState';
 import { toAsyncState } from '@shared/utils/async-state';
 import { useQuizResult } from '../hooks/useQuizResult';
 import type { QuizResult } from '../types/quizzes.types';
 import { MasteryBar } from './MasteryBar';
+import { FIT_HINT, FIT_LABEL, FIT_ORDER, FIT_TONE } from './mastery-display';
+import { cn } from '@shared/utils/cn';
 
 const RING_RADIUS = 60;
 const RING_LENGTH = 2 * Math.PI * RING_RADIUS;
@@ -46,6 +49,12 @@ const ResultBody = ({
   const pct = Math.round(quiz.score ?? 0);
   const duration = formatDuration(quiz.createdAt, quiz.submittedAt);
   const missed = quiz.questions.filter((q) => q.answer?.isCorrect !== true);
+  // How the student did on warm-up, good-fit and challenge questions (only for model-picked quizzes).
+  const byFit = FIT_ORDER.map((fit) => {
+    const qs = quiz.questions.filter((q) => q.fit === fit);
+    return { fit, total: qs.length, correct: qs.filter((q) => q.answer?.isCorrect === true).length };
+  }).filter((g) => g.total > 0);
+  const modelBased = kcBreakdown.some((k) => k.source === 'enas');
   // const optionText = (q: (typeof quiz.questions)[number], id: string | null) =>
   //   q.options.find((o) => o.id === id)?.text ?? 'No answer';
 
@@ -115,17 +124,57 @@ const ResultBody = ({
             return (
               <div key={kc.kcId}>
                 <MasteryBar label={kc.name} value={kc.masteryAfter} />
-                <div className="mt-1 text-xs text-muted-foreground">
-                  {kc.correct} of {kc.total} correct
-                  {before !== null && after !== null && before !== after
-                    ? ` · ${before}% → ${after}%`
-                    : before === null && after !== null
-                      ? ' · first attempt'
-                      : ''}
+                <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <span>
+                    {kc.correct} of {kc.total} correct
+                    {before === null && after !== null ? ' · first attempt' : ''}
+                  </span>
+                  {before !== null && after !== null && before !== after && (
+                    <span
+                      className={cn(
+                        'flex items-center gap-1 font-semibold',
+                        after > before ? 'text-success' : 'text-destructive',
+                      )}
+                    >
+                      · {after > before ? <TrendingUp className="h-3.5 w-3.5" /> : <TrendingDown className="h-3.5 w-3.5" />}
+                      {before}% → {after}%
+                    </span>
+                  )}
                 </div>
               </div>
             );
           })}
+          {modelBased && (
+            <p className="m-0 text-xs text-muted-foreground">
+              Topic levels are predicted by a learning model from all your answers, so they can move even when
+              you answer a topic correctly.
+            </p>
+          )}
+        </section>
+      )}
+
+      {quiz.adaptive && byFit.length > 0 && (
+        <section className="space-y-4 rounded-lg border bg-card p-6">
+          <div>
+            <h2 className="m-0 text-lg font-bold">How the questions matched you</h2>
+            <p className="mb-0 mt-1 text-sm text-muted-foreground">
+              Each question was picked for your level. Here is how you did on each kind.
+            </p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            {byFit.map((g) => (
+              <div key={g.fit} className="rounded-lg border p-4">
+                <span className={cn('rounded-full px-3 py-1 text-xs font-semibold', FIT_TONE[g.fit])}>
+                  {FIT_LABEL[g.fit]}
+                </span>
+                <div className="mt-3 text-2xl font-bold">
+                  {g.correct}
+                  <span className="text-base font-semibold text-muted-foreground">/{g.total}</span>
+                </div>
+                <div className="mt-1 text-xs text-muted-foreground">{FIT_HINT[g.fit]}</div>
+              </div>
+            ))}
+          </div>
         </section>
       )}
 

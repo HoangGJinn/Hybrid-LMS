@@ -44,3 +44,32 @@ export const computeMasteryByKc = (
   }
   return result;
 };
+
+export type MasteryLevel = 'NEW' | 'WEAK' | 'UNSURE' | 'GOOD' | 'MASTERED';
+export type MasteryConfidence = 'LOW' | 'MEDIUM' | 'HIGH';
+/** How a question fits the student: EASY is a warm-up, CHALLENGE is a stretch. */
+export type QuestionFit = 'EASY' | 'FIT' | 'CHALLENGE';
+
+/** Mastery (0..1) as a label. A KC the student never answered is NEW whatever the model says. */
+export const masteryLevel = (mastery: number | null, attempted: number): MasteryLevel => {
+  if (mastery === null || attempted === 0) return 'NEW';
+  if (mastery >= 0.8) return 'MASTERED';
+  if (mastery >= 0.6) return 'GOOD';
+  if (mastery >= 0.4) return 'UNSURE';
+  return 'WEAK';
+};
+
+/** The more answers a KC has, the more the estimate can be trusted. */
+export const masteryConfidence = (attempted: number): MasteryConfidence => {
+  if (attempted < 3) return 'LOW';
+  if (attempted < 6) return 'MEDIUM';
+  return 'HIGH';
+};
+
+/** Predicted P(correct) of one question for this student as a label; null when no prediction was made. */
+export const questionFit = (pCorrect: number | null): QuestionFit | null => {
+  if (pCorrect === null) return null;
+  if (pCorrect >= 0.75) return 'EASY';
+  if (pCorrect < 0.45) return 'CHALLENGE';
+  return 'FIT';
+};

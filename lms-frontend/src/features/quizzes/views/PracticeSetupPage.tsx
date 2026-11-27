@@ -7,6 +7,7 @@ import { toAsyncState } from '@shared/utils/async-state';
 import { cn } from '@shared/utils/cn';
 import { useCreateQuiz } from '../hooks/useCreateQuiz';
 import { usePracticeInfo } from '../hooks/usePracticeInfo';
+import { MasteryBar } from '../components/MasteryBar';
 import type { PracticeInfo, QuizFocus, QuizSize } from '../types/quizzes.types';
 
 const SIZES: QuizSize[] = [5, 10, 15];
@@ -55,6 +56,12 @@ const SetupForm = ({
   const [size, setSize] = useState<QuizSize>(10);
   const [focus, setFocus] = useState<QuizFocus>('WEAK');
   const noTopics = info.kcs.length === 0;
+  // The topics that get extra questions with the "weaker topics" focus, weakest first.
+  const weakest = info.kcs
+    .filter((k) => k.level === 'WEAK' || k.level === 'UNSURE')
+    .sort((a, b) => (a.mastery ?? 0) - (b.mastery ?? 0))
+    .slice(0, 3);
+  const modelBased = info.kcs.some((k) => k.source === 'enas');
 
   const start = () =>
     createQuiz.mutate(
@@ -135,6 +142,13 @@ const SetupForm = ({
                 <span>
                   <span className="block text-sm font-semibold">{o.title}</span>
                   <span className="mt-1 block text-sm text-muted-foreground">{o.text}</span>
+                  {o.value === 'WEAK' && focus === 'WEAK' && !noTopics && (
+                    <span className="mt-2 block text-sm text-brand">
+                      {weakest.length > 0
+                        ? `Extra questions on: ${weakest.map((k) => k.name).join(', ')}.`
+                        : 'You are doing well on every topic here, so the mix will stay fairly even.'}
+                    </span>
+                  )}
                 </span>
               </label>
             ))}
@@ -149,12 +163,23 @@ const SetupForm = ({
               from the whole subject.
             </p>
           ) : (
-            <div className="flex flex-wrap gap-2">
+            <div className="space-y-4">
               {info.kcs.map((kc) => (
-                <span key={kc.kcId} className="rounded-full bg-muted px-3 py-1 text-xs font-medium">
-                  {kc.name}
-                </span>
+                <MasteryBar
+                  key={kc.kcId}
+                  label={kc.name}
+                  value={kc.mastery}
+                  level={kc.level}
+                  confidence={kc.confidence}
+                />
               ))}
+              {modelBased && (
+                <p className="m-0 text-xs text-muted-foreground">
+                  Levels are predicted by a learning model from your past answers.
+                  Questions are picked that you have a fair chance, not a sure
+                  thing, of getting right.
+                </p>
+              )}
             </div>
           )}
         </div>

@@ -31,7 +31,15 @@ import type {
   QuizSummaryView,
   QuizView,
 } from '../types/quiz-view.type.js';
-import { computeMasteryByKc, type AnswerSample } from '../utils/mastery.js';
+import {
+  computeMasteryByKc,
+  masteryConfidence,
+  masteryLevel,
+  questionFit,
+  type AnswerSample,
+  type KcMastery,
+} from '../utils/mastery.js';
+import { EnasMasteryService } from './enas-mastery.service.js';
 import { shuffled } from '../utils/random.js';
 import { QuestionType } from '../enums/question-type.enum.js';
 import { isAcceptedAnswer } from '../utils/answer-normalizer.js';
@@ -60,6 +68,7 @@ export class QuizService {
     private readonly subjects: Repository<Subject>,
     @Inject(QUESTION_SELECTOR)
     private readonly selector: QuestionSelector,
+    private readonly enas: EnasMasteryService,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -137,6 +146,7 @@ export class QuizService {
             orderIndex: i + 1,
             // Option order is fixed now, so reloading the page never reshuffles the answers.
             optionOrder: shuffled(optionIdsByQuestion.get(p.questionId) ?? []),
+            pCorrectPredicted: p.pCorrect ?? null,
           }),
         ),
       );
@@ -318,18 +328,7 @@ export class QuizService {
     const target = subjectKcs.filter((k) => !wanted || wanted.has(k.id));
     if (target.length === 0) return [];
 
-    const history = await this.history(studentId, target.map((k) => k.id));
-    const mastery = computeMasteryByKc(history.map((h) => h.sample));
-    return target.map((k) => {
-      const m = mastery.get(k.id);
-      return {
-        kcId: k.id,
-        name: k.name,
-        attempted: m?.attempted ?? 0,
-        correct: m?.correct ?? 0,
-        mastery: m ? m.mastery : null,
-      };
-    });
+    return this.masteryViews(studentId, target);
   }
 
   /**
@@ -366,24 +365,45 @@ export class QuizService {
       [documentId],
     );
 
-    const history = kcRows.length
-      ? await this.history(studentId, kcRows.map((k) => k.id))
-      : [];
-    const mastery = computeMasteryByKc(history.map((h) => h.sample));
     return {
       subjectId: found[0].subject_id,
       documentTitle: found[0].title,
-      kcs: kcRows.map((k) => {
-        const m = mastery.get(k.id);
-        return {
-          kcId: k.id,
-          name: k.name,
-          attempted: m?.attempted ?? 0,
-          correct: m?.correct ?? 0,
-          mastery: m ? m.mastery : null,
-        };
-      }),
+      kcs: await this.masteryViews(studentId, kcRows),
     };
+  }
+
+  /**
+   * Mastery of the given KCs. Uses the ENAS-KT prediction when the model answers, otherwise the share of
+   * correct recent answers. A KC the student never answered has no mastery: the model's number for it
+   * would only reflect how hard its questions are.
+   */
+  private async masteryViews(
+    studentId: string,
+    kcs: { id: string; name: string }[],
+  ): Promise<KcMasteryView[]> {
+    if (kcs.length === 0) return [];
+    const ids = kcs.map((k) => k.id);
+    const [history, predicted] = await Promise.all([
+      this.history(studentId, ids),
+      this.enas.kcMastery(studentId, ids),
+    ]);
+    const byKc = computeMasteryByKc(history.map((h) => h.sample));
+    return kcs.map((k) => {
+      const m = byKc.get(k.id);
+      const attempted = m?.attempted ?? 0;
+      const p = predicted?.get(k.id);
+      const mastery = attempted === 0 ? null : (p ?? m?.mastery ?? null);
+      return {
+        kcId: k.id,
+        name: k.name,
+        attempted,
+        correct: m?.correct ?? 0,
+        mastery: mastery === null ? null : round2(mastery),
+        level: masteryLevel(mastery, attempted),
+        confidence: masteryConfidence(attempted),
+        source: p === undefined ? 'history' : 'enas',
+      };
+    });
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -510,6 +530,8 @@ export class QuizService {
         knowledgeComponents: links
           .filter((l) => l.questionId === qq.questionId)
           .map((l) => ({ kcId: l.kcId, name: l.knowledgeComponent.name })),
+        // numeric columns come back from Postgres as strings
+        fit: questionFit(qq.pCorrectPredicted === null ? null : Number(qq.pCorrectPredicted)),
         options: isFillBlank ? [] : ordered.map((o) => ({ id: o.id, text: o.optionText })),
         answer,
       };
@@ -524,6 +546,7 @@ export class QuizService {
       answeredCount: answers.length,
       score: quiz.score === null ? null : Number(quiz.score),
       correctCount: quiz.correctCount,
+      adaptive: qqs.some((q) => q.pCorrectPredicted !== null),
       createdAt: quiz.createdAt,
       submittedAt: quiz.submittedAt,
       questions: views,
@@ -544,21 +567,38 @@ export class QuizService {
       groups.set(kc.kcId, g);
     }
 
-    const history = groups.size ? await this.history(studentId, [...groups.keys()]) : [];
+    const kcIds = [...groups.keys()];
+    const history = groups.size ? await this.history(studentId, kcIds) : [];
     const thisQuiz = new Set(view.questions.map((q) => q.id));
     const after = computeMasteryByKc(history.map((h) => h.sample));
     const before = computeMasteryByKc(
       history.filter((h) => !thisQuiz.has(h.quizInstanceQuestionId)).map((h) => h.sample),
     );
+    // The model's view of the same KCs without and with this quiz's answers.
+    const [enasBefore, enasAfter] = await Promise.all([
+      this.enas.kcMastery(studentId, kcIds, { excludeQuizId: quiz.id }),
+      this.enas.kcMastery(studentId, kcIds),
+    ]);
 
-    const kcBreakdown: KcBreakdownView[] = [...groups].map(([kcId, g]) => ({
-      kcId,
-      name: g.name,
-      correct: g.correct,
-      total: g.total,
-      masteryBefore: before.get(kcId)?.mastery ?? null,
-      masteryAfter: after.get(kcId)?.mastery ?? null,
-    }));
+    const kcBreakdown: KcBreakdownView[] = [...groups].map(([kcId, g]) => {
+      const b = before.get(kcId);
+      const a = after.get(kcId);
+      const pBefore = enasBefore?.get(kcId);
+      const pAfter = enasAfter?.get(kcId);
+      const useModel = pBefore !== undefined && pAfter !== undefined;
+      const pick = (m: KcMastery | undefined, p: number | undefined): number | null =>
+        m === undefined ? null : round2(useModel ? p! : m.mastery);
+      return {
+        kcId,
+        name: g.name,
+        correct: g.correct,
+        total: g.total,
+        // No answers on the KC before this quiz: there is nothing to compare with.
+        masteryBefore: pick(b, pBefore),
+        masteryAfter: pick(a, pAfter),
+        source: useModel ? 'enas' : 'history',
+      };
+    });
     return { quiz: view, kcBreakdown };
   }
 }

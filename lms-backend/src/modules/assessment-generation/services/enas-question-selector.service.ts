@@ -10,11 +10,10 @@ import type {
   SelectQuestionsInput,
 } from '../types/question-selector.type.js';
 import { randomIndex, randomUnit } from '../utils/random.js';
-import { EnasGatewayClient, type EnasHistoryStep } from './enas-gateway.client.js';
+import { EnasGatewayClient } from './enas-gateway.client.js';
+import { EnasMasteryService } from './enas-mastery.service.js';
 import { RuleBasedQuestionSelector } from './rule-based-question-selector.service.js';
 
-/** The model reads at most 100 steps; one is taken by the candidate itself. */
-const HISTORY_MAX = 99;
 /** Questions the student is expected to get right about 60% of the time are the most useful to practise. */
 const TARGET_P = 0.6;
 /** A question the model has no prediction for is treated as this far from the target. */
@@ -49,6 +48,7 @@ export class EnasQuestionSelector implements QuestionSelector {
     @InjectRepository(QuizInstanceAnswer)
     private readonly answers: Repository<QuizInstanceAnswer>,
     private readonly gateway: EnasGatewayClient,
+    private readonly enasMastery: EnasMasteryService,
     private readonly fallback: RuleBasedQuestionSelector,
   ) {}
 
@@ -83,7 +83,7 @@ export class EnasQuestionSelector implements QuestionSelector {
     const candidates = [...new Set(rows.flatMap((r) => (r.xesQuestionId === null ? [] : [r.xesQuestionId])))];
     if (candidates.length === 0) return null; // no question is mapped to XES yet
 
-    const p = await this.gateway.predict(await this.history(studentId), candidates);
+    const p = await this.gateway.predict(await this.enasMastery.history(studentId), candidates);
     if (p.size === 0) return null;
 
     const allIds = [...new Set(rows.map((r) => r.questionId))];
@@ -108,26 +108,6 @@ export class EnasQuestionSelector implements QuestionSelector {
     }
 
     return this.pick(pools, weights, pOf, count);
-  }
-
-  /** The student's last answers on questions mapped to XES, oldest first. */
-  private async history(studentId: string): Promise<EnasHistoryStep[]> {
-    const rows = await this.answers
-      .createQueryBuilder('a')
-      .innerJoin('a.question', 'q')
-      .select('q.xesQuestionId', 'xesQuestionId')
-      .addSelect('a.isCorrect', 'isCorrect')
-      .addSelect('a.answeredAt', 'answeredAt')
-      .where('a.studentId = :studentId', { studentId })
-      .andWhere('q.xesQuestionId IS NOT NULL')
-      .orderBy('a.answeredAt', 'DESC')
-      .limit(HISTORY_MAX)
-      .getRawMany<{ xesQuestionId: number; isCorrect: boolean; answeredAt: Date }>();
-    return rows.reverse().map((r) => ({
-      qid: r.xesQuestionId,
-      correct: r.isCorrect,
-      timestamp: new Date(r.answeredAt).getTime(),
-    }));
   }
 
   private async recentlyCorrect(studentId: string, questionIds: string[]): Promise<Set<string>> {
@@ -174,7 +154,12 @@ export class EnasQuestionSelector implements QuestionSelector {
       const [row] = list.splice(randomIndex(Math.min(TOP_CHOICES, list.length)), 1);
       if (used.has(row.questionId)) continue; // already chosen through another KC
       used.add(row.questionId);
-      chosen.push({ questionId: row.questionId, kcId });
+      const v = pOf(row);
+      chosen.push({
+        questionId: row.questionId,
+        kcId,
+        ...(v === undefined ? {} : { pCorrect: Math.round(v * 1000) / 1000 }),
+      });
     }
     return chosen;
   }
