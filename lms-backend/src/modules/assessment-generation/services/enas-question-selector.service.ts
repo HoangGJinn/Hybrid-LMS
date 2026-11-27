@@ -83,7 +83,12 @@ export class EnasQuestionSelector implements QuestionSelector {
     const candidates = [...new Set(rows.flatMap((r) => (r.xesQuestionId === null ? [] : [r.xesQuestionId])))];
     if (candidates.length === 0) return null; // no question is mapped to XES yet
 
-    const p = await this.gateway.predict(await this.enasMastery.history(studentId), candidates);
+    const p = await this.gateway.predict(
+      await this.enasMastery.history(studentId),
+      candidates,
+      undefined,
+      { purpose: 'select', student: studentId },
+    );
     if (p.size === 0) return null;
 
     const allIds = [...new Set(rows.map((r) => r.questionId))];

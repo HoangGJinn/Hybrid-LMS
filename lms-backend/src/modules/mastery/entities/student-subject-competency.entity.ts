@@ -4,11 +4,15 @@ import {
   Column,
   ManyToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { Student } from '../../user/entities/student.entity.js';
 import { Subject } from '../../academic/entities/subject.entity.js';
 
 @Entity('student_subject_competency')
+@Index('uq_student_subject_competency_student_subject', ['studentId', 'subjectId'], {
+  unique: true,
+})
 export class StudentSubjectCompetency {
   @PrimaryGeneratedColumn('uuid')
   readonly id: string;
@@ -27,6 +31,7 @@ export class StudentSubjectCompetency {
   @JoinColumn({ name: 'subject_id' })
   subject: Subject;
 
+  /** 0..100: 100 × trung bình p_mastery (ENAS) của các KC sinh viên đã làm trong môn. */
   @Column({ name: 'ability_score', type: 'numeric', precision: 5, scale: 2 })
   abilityScore: number;
 

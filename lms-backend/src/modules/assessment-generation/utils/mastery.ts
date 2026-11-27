@@ -50,12 +50,15 @@ export type MasteryConfidence = 'LOW' | 'MEDIUM' | 'HIGH';
 /** How a question fits the student: EASY is a warm-up, CHALLENGE is a stretch. */
 export type QuestionFit = 'EASY' | 'FIT' | 'CHALLENGE';
 
+/** Mốc nhãn hiển thị của mastery (0..1). Chỉ là nhãn của LMS: model ENAS không có ngưỡng cắt, nó trả xác suất. */
+export const LEVEL_THRESHOLDS = { unsure: 0.4, good: 0.6, mastered: 0.8 } as const;
+
 /** Mastery (0..1) as a label. A KC the student never answered is NEW whatever the model says. */
 export const masteryLevel = (mastery: number | null, attempted: number): MasteryLevel => {
   if (mastery === null || attempted === 0) return 'NEW';
-  if (mastery >= 0.8) return 'MASTERED';
-  if (mastery >= 0.6) return 'GOOD';
-  if (mastery >= 0.4) return 'UNSURE';
+  if (mastery >= LEVEL_THRESHOLDS.mastered) return 'MASTERED';
+  if (mastery >= LEVEL_THRESHOLDS.good) return 'GOOD';
+  if (mastery >= LEVEL_THRESHOLDS.unsure) return 'UNSURE';
   return 'WEAK';
 };
 

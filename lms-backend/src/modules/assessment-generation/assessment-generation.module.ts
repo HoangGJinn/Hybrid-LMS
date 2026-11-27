@@ -30,6 +30,13 @@ import { QUESTION_SELECTOR } from './types/question-selector.type.js';
 import { XesKcMapping } from './entities/xes-kc-mapping.entity.js';
 import { XesMappingController } from './controllers/xes-mapping.controller.js';
 import { XesMappingService } from './services/xes-mapping.service.js';
+import { MasteryController } from './controllers/mastery.controller.js';
+import { MasteryTrackingService } from './services/mastery-tracking.service.js';
+import { StudentCompetencyHistory } from '../mastery/entities/student-competency-history.entity.js';
+import { StudentKcMasteryHistory } from '../mastery/entities/student-kc-mastery-history.entity.js';
+import { StudentKcMastery } from '../mastery/entities/student-kc-mastery.entity.js';
+import { StudentKcReviewSchedule } from '../mastery/entities/student-kc-review-schedule.entity.js';
+import { StudentSubjectCompetency } from '../mastery/entities/student-subject-competency.entity.js';
 @Module({
   imports: [
     // FileModule exports FileFacade: the import adapter reads the uploaded Excel through it.
@@ -49,9 +56,14 @@ import { XesMappingService } from './services/xes-mapping.service.js';
       // Owned by other modules; registered here so the services can inject their repositories.
       Subject,
       KnowledgeComponent,
+      StudentKcMastery,
+      StudentKcMasteryHistory,
+      StudentKcReviewSchedule,
+      StudentSubjectCompetency,
+      StudentCompetencyHistory,
     ]),
   ],
-  controllers: [QuestionImportController, QuestionManagementController, QuizController, XesMappingController],
+  controllers: [QuestionImportController, QuestionManagementController, QuizController, XesMappingController, MasteryController],
   providers: [
     QuestionImportService,
     QuestionManagementService,
@@ -60,6 +72,7 @@ import { XesMappingService } from './services/xes-mapping.service.js';
     RuleBasedQuestionSelector,
     EnasGatewayClient,
     EnasMasteryService,
+    MasteryTrackingService,
     EnasQuestionSelector,
     // QUESTION_SELECTOR=enas picks questions with the ENAS-KT model (falls back to the rule-based one on failure).
     {

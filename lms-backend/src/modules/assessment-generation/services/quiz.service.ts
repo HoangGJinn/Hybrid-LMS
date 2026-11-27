@@ -40,6 +40,7 @@ import {
   type KcMastery,
 } from '../utils/mastery.js';
 import { EnasMasteryService } from './enas-mastery.service.js';
+import { MasteryTrackingService } from './mastery-tracking.service.js';
 import { shuffled } from '../utils/random.js';
 import { QuestionType } from '../enums/question-type.enum.js';
 import { isAcceptedAnswer } from '../utils/answer-normalizer.js';
@@ -69,6 +70,7 @@ export class QuizService {
     @Inject(QUESTION_SELECTOR)
     private readonly selector: QuestionSelector,
     private readonly enas: EnasMasteryService,
+    private readonly tracking: MasteryTrackingService,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -304,6 +306,8 @@ export class QuizService {
       quiz.status = QuizInstanceStatus.SUBMITTED;
       quiz.submittedAt = new Date();
       await this.quizzes.save(quiz);
+      // Stores the mastery of the KCs of this quiz (best effort: a failure here never fails the submit).
+      await this.tracking.recordQuiz(quiz);
     }
     return this.result(quiz, studentId);
   }
@@ -553,6 +557,45 @@ export class QuizService {
     };
   }
 
+  /** Before/after mastery of the quiz's KCs recomputed from the answer history (legacy quizzes). */
+  private async liveBreakdown(
+    quiz: QuizInstance,
+    studentId: string,
+    kcIds: string[],
+    view: QuizView,
+  ): Promise<Map<string, Pick<KcBreakdownView, 'masteryBefore' | 'masteryAfter' | 'source'>>> {
+    const history = kcIds.length ? await this.history(studentId, kcIds) : [];
+    const thisQuiz = new Set(view.questions.map((q) => q.id));
+    const after = computeMasteryByKc(history.map((h) => h.sample));
+    const before = computeMasteryByKc(
+      history.filter((h) => !thisQuiz.has(h.quizInstanceQuestionId)).map((h) => h.sample),
+    );
+    // The model's view of the same KCs without and with this quiz's answers.
+    const [enasBefore, enasAfter] = await Promise.all([
+      this.enas.kcMastery(studentId, kcIds, { excludeQuizId: quiz.id, purpose: 'quiz_before' }),
+      this.enas.kcMastery(studentId, kcIds, { purpose: 'quiz_after' }),
+    ]);
+
+    return new Map(
+      kcIds.map((kcId) => {
+        const pBefore = enasBefore?.get(kcId);
+        const pAfter = enasAfter?.get(kcId);
+        const useModel = pBefore !== undefined && pAfter !== undefined;
+        const pick = (m: KcMastery | undefined, p: number | undefined): number | null =>
+          m === undefined ? null : round2(useModel ? p! : m.mastery);
+        return [
+          kcId,
+          {
+            // No answers on the KC before this quiz: there is nothing to compare with.
+            masteryBefore: pick(before.get(kcId), pBefore),
+            masteryAfter: pick(after.get(kcId), pAfter),
+            source: useModel ? ('enas' as const) : ('history' as const),
+          },
+        ];
+      }),
+    );
+  }
+
   private async result(quiz: QuizInstance, studentId: string): Promise<QuizResultView> {
     const view = await this.buildView(quiz);
 
@@ -568,35 +611,35 @@ export class QuizService {
     }
 
     const kcIds = [...groups.keys()];
-    const history = groups.size ? await this.history(studentId, kcIds) : [];
-    const thisQuiz = new Set(view.questions.map((q) => q.id));
-    const after = computeMasteryByKc(history.map((h) => h.sample));
-    const before = computeMasteryByKc(
-      history.filter((h) => !thisQuiz.has(h.quizInstanceQuestionId)).map((h) => h.sample),
-    );
-    // The model's view of the same KCs without and with this quiz's answers.
-    const [enasBefore, enasAfter] = await Promise.all([
-      this.enas.kcMastery(studentId, kcIds, { excludeQuizId: quiz.id }),
-      this.enas.kcMastery(studentId, kcIds),
-    ]);
+    // Mastery stored when the quiz was submitted: the same chain of values the Knowledge Mastery tab shows.
+    const snapshots = await this.tracking.quizKcSnapshots(quiz.id);
+    const needLive = kcIds.some((id) => !snapshots.has(id));
+
+    // Quizzes submitted before mastery was stored fall back to recomputing before/after on the fly.
+    const live = needLive ? await this.liveBreakdown(quiz, studentId, kcIds, view) : null;
 
     const kcBreakdown: KcBreakdownView[] = [...groups].map(([kcId, g]) => {
-      const b = before.get(kcId);
-      const a = after.get(kcId);
-      const pBefore = enasBefore?.get(kcId);
-      const pAfter = enasAfter?.get(kcId);
-      const useModel = pBefore !== undefined && pAfter !== undefined;
-      const pick = (m: KcMastery | undefined, p: number | undefined): number | null =>
-        m === undefined ? null : round2(useModel ? p! : m.mastery);
+      const snap = snapshots.get(kcId);
+      if (snap) {
+        return {
+          kcId,
+          name: g.name,
+          correct: g.correct,
+          total: g.total,
+          masteryBefore: snap.pBefore === null ? null : round2(Number(snap.pBefore)),
+          masteryAfter: round2(Number(snap.pAfter)),
+          source: snap.source,
+        };
+      }
+      const l = live!.get(kcId);
       return {
         kcId,
         name: g.name,
         correct: g.correct,
         total: g.total,
-        // No answers on the KC before this quiz: there is nothing to compare with.
-        masteryBefore: pick(b, pBefore),
-        masteryAfter: pick(a, pAfter),
-        source: useModel ? 'enas' : 'history',
+        masteryBefore: l?.masteryBefore ?? null,
+        masteryAfter: l?.masteryAfter ?? null,
+        source: l?.source ?? 'history',
       };
     });
     return { quiz: view, kcBreakdown };
