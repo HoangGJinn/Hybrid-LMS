@@ -100,4 +100,9 @@ export class Question {
 
   @Column({ name: 'question_type', type: 'enum', enum: QuestionType, enumName: 'question_type_enum', default: QuestionType.MULTIPLE_CHOICE })
   questionType: QuestionType;
+
+  /** Id câu hỏi tương ứng trong XES3G5M (nhiều câu có thể trùng id). Null nếu KC chưa được xác nhận ánh xạ. */
+  @Index('idx_questions_xes_question_id')
+  @Column({ name: 'xes_question_id', type: 'int', nullable: true })
+  xesQuestionId: number | null;
 }

@@ -24,7 +24,9 @@ import { QuizService } from './services/quiz.service.js';
 import { RuleBasedQuestionSelector } from './services/rule-based-question-selector.service.js';
 import { QUESTION_IMPORT_FILE_PORT } from './types/question-import-file.port.js';
 import { QUESTION_SELECTOR } from './types/question-selector.type.js';
-
+import { XesKcMapping } from './entities/xes-kc-mapping.entity.js';
+import { XesMappingController } from './controllers/xes-mapping.controller.js';
+import { XesMappingService } from './services/xes-mapping.service.js';
 @Module({
   imports: [
     // FileModule exports FileFacade: the import adapter reads the uploaded Excel through it.
@@ -36,6 +38,7 @@ import { QUESTION_SELECTOR } from './types/question-selector.type.js';
       Question,
       QuestionOption,
       QuestionKnowledgeComponent,
+      XesKcMapping,
       QuizInstance,
       QuizInstanceQuestion,
       QuizInstanceAnswer,
@@ -45,11 +48,12 @@ import { QUESTION_SELECTOR } from './types/question-selector.type.js';
       KnowledgeComponent,
     ]),
   ],
-  controllers: [QuestionImportController, QuestionManagementController, QuizController],
+  controllers: [QuestionImportController, QuestionManagementController, QuizController, XesMappingController],
   providers: [
     QuestionImportService,
     QuestionManagementService,
     QuizService,
+    XesMappingService,
     // Swap this for a model-backed selector (ENAS-KT) later; nothing else in the quiz flow changes.
     { provide: QUESTION_SELECTOR, useClass: RuleBasedQuestionSelector },
     // QUESTION_IMPORT_USE_LOCAL_FILES=true reads ./dev-uploads instead of S3 (never in production).
