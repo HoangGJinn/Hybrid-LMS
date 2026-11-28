@@ -9,12 +9,13 @@ import type { AuthenticatedUser } from '../../../common/types/authenticated-user
 import { UPLOAD_RULES } from '../constants/upload-rules.constant.js';
 import type { RequestUploadDto } from '../dto/request-upload.dto.js';
 import type { FileAttachment } from '../entities/file-attachment.entity.js';
+import type { FilePurpose } from '../enums/file-purpose.enum.js';
 import { FileStatus } from '../enums/file-status.enum.js';
 import { FileRepository } from '../repositories/file.repository.js';
 import { FileConfirmView } from '../types/file-confirm-view.type.js';
 import { FileDownloadView } from '../types/file-download-view.type.js';
 import { UploadRequestView } from '../types/upload-request-view.type.js';
-import { FileStorageService } from './file-storage.service.js';
+import { FileStorageService, type StorageHealthStatus } from './file-storage.service.js';
 import type { Readable } from 'node:stream';
 
 /** Business rules for uploading and reading stored files. */
@@ -106,6 +107,25 @@ export class FileService {
     }
   }
 
+  /**
+   * Like assertOwnedReadyFile, and the file must also have been uploaded for the given purpose, so a
+   * submission or a course document cannot be passed off as an exam's question file.
+   * The purpose is read from the S3 key prefix, which the backend itself chose at upload time.
+   */
+  async assertOwnedReadyFileOfPurpose(
+    fileId: string,
+    ownerId: string,
+    purpose: FilePurpose,
+  ): Promise<void> {
+    const file = await this.findOwnedFile(fileId, ownerId);
+    if (file.status !== FileStatus.READY) {
+      throw new BadRequestException('The file upload has not been confirmed');
+    }
+    if (!file.storageKey.startsWith(`${UPLOAD_RULES[purpose].keyPrefix}/`)) {
+      throw new BadRequestException('This file cannot be used here');
+    }
+  }
+
     /** Like assertOwnedReadyFile, for many files at once; every id must pass. */
   async assertOwnedReadyFiles(fileIds: string[], ownerId: string): Promise<void> {
     const files = await this.fileRepository.findByIds(fileIds);
@@ -179,6 +199,11 @@ export class FileService {
       contentType: file.fileType,
     });
     return FileDownloadView.fromEntity(file, downloadUrl);
+  }
+
+  /** Probes S3 bucket connectivity via FileStorageService. */
+  checkStorageHealth(): Promise<StorageHealthStatus> {
+    return this.fileStorageService.checkBucketHealth();
   }
 
   /** A file of someone else looks exactly like a missing file, so ids cannot be probed. */

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { SemesterController } from './semester.controller.js';
 import { SemesterService } from '../services/semester.service.js';
+import { SemesterImportService } from '../services/semester-import.service.js';
 import { Semester } from '../entities/semester.entity.js';
 
 describe('SemesterController', () => {
@@ -8,6 +9,8 @@ describe('SemesterController', () => {
   let mockService: Partial<
     Record<keyof SemesterService, ReturnType<typeof vi.fn>>
   >;
+
+  let mockImport: Record<'importSemesters', ReturnType<typeof vi.fn>>;
 
   const sampleSemester: Semester = {
     id: 'sem-uuid-1',
@@ -25,9 +28,21 @@ describe('SemesterController', () => {
       update: vi.fn(),
       delete: vi.fn(),
     };
+    mockImport = { importSemesters: vi.fn() };
     controller = new SemesterController(
       mockService as unknown as SemesterService,
+      mockImport as unknown as SemesterImportService,
     );
+  });
+
+  describe('importSemesters', () => {
+    it('hands the rows to the import service', async () => {
+      const dto = { rows: [{ line: 2, semesterCode: 'HK1' }], dryRun: true };
+      const summary = { dryRun: true, total: 1, created: 0, skipped: 0, failed: 1, rows: [] };
+      mockImport.importSemesters.mockResolvedValue(summary);
+      expect(await controller.importSemesters(dto)).toBe(summary);
+      expect(mockImport.importSemesters).toHaveBeenCalledWith(dto);
+    });
   });
 
   describe('getAll', () => {

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
-import { Pencil } from 'lucide-react';
+import { CalendarDays, Clock, Lock, Pencil } from 'lucide-react';
 import { Link, useLocation, useParams } from 'react-router';
 import { toast } from 'sonner';
 import { AsyncView } from '@shared/components/AsyncView';
@@ -22,6 +22,22 @@ import { useAssignmentDetail } from '../hooks/useAssignmentDetail';
 import { useSubmitAssignment } from '../hooks/useSubmitAssignment';
 import { useUpdateAssignment } from '../hooks/useUpdateAssignment';
 import type { AssignmentDetail } from '../types/assignments.types';
+
+const MINUTE = 60_000;
+
+/** `6 days 23 hours 57 mins`; zero parts are left out. */
+const formatDuration = (ms: number): string => {
+  const totalMinutes = Math.floor(ms / MINUTE);
+  const days = Math.floor(totalMinutes / 1440);
+  const hours = Math.floor((totalMinutes % 1440) / 60);
+  const minutes = totalMinutes % 60;
+  const parts = [
+    days > 0 && `${days} ${days === 1 ? 'day' : 'days'}`,
+    hours > 0 && `${hours} ${hours === 1 ? 'hour' : 'hours'}`,
+    minutes > 0 && `${minutes} ${minutes === 1 ? 'min' : 'mins'}`,
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join(' ') : 'less than a minute';
+};
 
 /** An assignment of a class. Students see their submission status and can submit; lecturers see the brief. */
 const AssignmentDetailPage = () => {
@@ -45,7 +61,17 @@ const AssignmentDetailPage = () => {
       }
     >
       {(assignment) => (
-        <div className="mx-auto max-w-4xl">
+        <div className="mx-auto max-w-5xl">
+          {assignment.className && (
+            <Link
+              to={courseHome}
+              className="mb-2 inline-block text-sm font-semibold text-primary no-underline hover:underline"
+            >
+              {assignment.classCode
+                ? `${assignment.classCode} · ${assignment.className}`
+                : assignment.className}
+            </Link>
+          )}
           <PageHeader
             title={assignment.title}
             actions={
@@ -103,20 +129,45 @@ const AssignmentDetailPage = () => {
   );
 };
 
-/** Opening and due times, the brief, how to submit and the files the lecturer attached. */
+const ScheduleTile = ({
+  icon,
+  label,
+  value,
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string;
+}) => (
+  <div className="flex flex-1 basis-60 items-center gap-3 rounded-xl border bg-muted/40 px-4 py-3">
+    <span className="text-muted-foreground">{icon}</span>
+    <div>
+      <p className="m-0 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+        {label}
+      </p>
+      <p className="m-0 font-semibold">{value}</p>
+    </div>
+  </div>
+);
+
+/** Opening and due times first, then the brief, how to submit and the files the lecturer attached. */
 const BriefBox = ({ assignment }: { assignment: AssignmentDetail }) => (
-  <div className="mb-6 rounded-lg bg-muted/50 p-5 text-sm">
-    <p className="m-0">
-      <strong>Opened:</strong> {formatDateTime(assignment.openAt)}
-    </p>
-    <p className="m-0 mt-1">
-      <strong>Due:</strong> {formatDateTime(assignment.endAt)}
-    </p>
-    <hr className="my-4 border-border" />
-    <p className="m-0 whitespace-pre-line text-muted-foreground">
+  <div className="mb-6 space-y-5 rounded-2xl border bg-card p-5 text-sm">
+    <div className="flex flex-wrap gap-3">
+      <ScheduleTile
+        icon={<CalendarDays className="h-5 w-5" />}
+        label="Opened"
+        value={formatDateTime(assignment.openAt)}
+      />
+      <ScheduleTile
+        icon={<Clock className="h-5 w-5" />}
+        label="Due"
+        value={formatDateTime(assignment.endAt)}
+      />
+    </div>
+    <p className="m-0 whitespace-pre-line text-base leading-relaxed">
       {assignment.instruction}
     </p>
-    <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
+    <div className="flex flex-wrap items-center gap-2 text-xs">
       {assignment.submissionType === 'TEXT' ? (
         <Chip>Write your answer online</Chip>
       ) : (
@@ -133,32 +184,52 @@ const BriefBox = ({ assignment }: { assignment: AssignmentDetail }) => (
       )}
     </div>
     {assignment.submissionNote && (
-      <p className="mt-3 rounded-md border-l-4 border-primary bg-card p-3">
+      <p className="m-0 rounded-md border-l-4 border-primary bg-muted/40 p-3">
         <strong>Note:</strong> {assignment.submissionNote}
       </p>
     )}
-    {assignment.files.length > 0 && (
-      <FileList files={assignment.files} className="mt-4" />
-    )}
+    {assignment.files.length > 0 && <FileList files={assignment.files} />}
   </div>
 );
 
+type Tone = 'ok' | 'bad' | undefined;
+
 const StatusRow = ({
   label,
+  tone,
   children,
 }: {
   label: string;
+  tone?: Tone;
   children: ReactNode;
 }) => (
-  <tr className="border-b last:border-b-0 odd:bg-muted/40">
-    <th scope="row" className="w-1/4 p-3 text-left font-semibold align-top">
+  <div
+    className={cn(
+      'grid border-b last:border-b-0 sm:grid-cols-[14rem_1fr]',
+      tone === 'ok' && 'bg-green-50',
+      tone === 'bad' && 'bg-red-50',
+    )}
+  >
+    <dt
+      className={cn(
+        'p-4 font-semibold',
+        tone === 'ok' ? 'bg-green-100' : tone === 'bad' ? 'bg-red-100' : 'bg-muted/50',
+      )}
+    >
       {label}
-    </th>
-    <td className="p-3 align-top">{children}</td>
-  </tr>
+    </dt>
+    <dd className="m-0 min-w-0 p-4">{children}</dd>
+  </div>
 );
 
-/** UC-12 status table plus the submit / edit form (UC-16, UC-17). */
+const LockedNote = ({ children }: { children: ReactNode }) => (
+  <p className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
+    <Lock className="h-4 w-4 shrink-0" />
+    {children}
+  </p>
+);
+
+/** UC-12 status list plus the submit / edit form (UC-16, UC-17). */
 const StudentSubmission = ({
   classId,
   assignment,
@@ -176,22 +247,43 @@ const StudentSubmission = ({
   // A graded submission is locked on the backend too.
   const isGraded = submission?.score != null;
 
+  // How far ahead of (or behind) the deadline the student handed in.
+  const margin = submission
+    ? +new Date(assignment.endAt) - +new Date(submission.submittedAt)
+    : null;
+
   return (
     <section>
       <h2 className="mb-3 text-xl font-medium">Submission status</h2>
-      <table className="w-full border-collapse border text-sm">
-        <tbody>
-          <StatusRow label="Submission status">
-            {submission
-              ? 'Submitted for grading'
-              : 'No submissions have been made yet'}
-          </StatusRow>
-          <StatusRow label="Grading status">
-            {submission?.score != null
-              ? `Graded: ${submission.score} / 10`
-              : 'Not graded'}
-          </StatusRow>
-          <StatusRow label="Time remaining">
+      <dl className="m-0 overflow-hidden rounded-2xl border bg-card text-sm">
+        <StatusRow label="Submission status" tone={submission ? 'ok' : undefined}>
+          {submission
+            ? 'Submitted for grading'
+            : 'No submissions have been made yet'}
+        </StatusRow>
+        <StatusRow label="Grading status" tone={isGraded ? 'ok' : undefined}>
+          {isGraded ? (
+            <span className="flex items-baseline gap-3">
+              <strong className="text-xl text-green-700">
+                {submission.score} / 10
+              </strong>
+              <span className="text-muted-foreground">Graded</span>
+            </span>
+          ) : (
+            'Not graded yet'
+          )}
+        </StatusRow>
+        <StatusRow
+          label="Time remaining"
+          tone={margin === null ? undefined : margin >= 0 ? 'ok' : 'bad'}
+        >
+          {margin !== null ? (
+            margin >= 0 ? (
+              `Submitted ${formatDuration(margin)} early`
+            ) : (
+              `Submitted ${formatDuration(-margin)} late`
+            )
+          ) : (
             <span
               className={cn(
                 cd.expired && 'text-destructive',
@@ -202,49 +294,55 @@ const StudentSubmission = ({
                 ? 'The deadline has passed'
                 : `${cd.days}d ${pad(cd.hours)}:${pad(cd.minutes)}:${pad(cd.seconds)}`}
             </span>
-          </StatusRow>
-          <StatusRow label="Last modified">
-            {submission ? formatDateTime(submission.submittedAt) : '-'}
-          </StatusRow>
-          <StatusRow
-            label={
-              assignment.submissionType === 'TEXT'
-                ? 'Online answer'
-                : 'File submissions'
-            }
-          >
-            {submission?.answerText ? (
-              <pre className="m-0 max-h-64 overflow-auto whitespace-pre-wrap font-mono text-sm">
-                {submission.answerText}
-              </pre>
-            ) : submission && submission.files.length > 0 ? (
-              <FileList files={submission.files} />
-            ) : (
-              '-'
+          )}
+        </StatusRow>
+        <StatusRow label="Last modified">
+          {submission ? formatDateTime(submission.submittedAt) : '-'}
+        </StatusRow>
+        <StatusRow
+          label={
+            assignment.submissionType === 'TEXT'
+              ? 'Online answer'
+              : 'File submissions'
+          }
+        >
+          {submission?.answerText ? (
+            <pre className="m-0 max-h-64 overflow-auto whitespace-pre-wrap font-mono text-sm">
+              {submission.answerText}
+            </pre>
+          ) : submission && submission.files.length > 0 ? (
+            <FileList files={submission.files} />
+          ) : (
+            '-'
+          )}
+        </StatusRow>
+        {isGraded && (
+          <StatusRow label="Feedback">
+            {submission.comment || (
+              <span className="text-muted-foreground">
+                No feedback from your lecturer
+              </span>
             )}
           </StatusRow>
-          {submission?.comment && (
-            <StatusRow label="Feedback">{submission.comment}</StatusRow>
-          )}
-        </tbody>
-      </table>
+        )}
+      </dl>
 
       {!isOpenNow && !submission && (
-        <p className="mt-3 text-sm text-muted-foreground">
+        <LockedNote>
           {cd.expired
             ? 'The deadline has passed, so submissions are closed.'
             : 'This assignment is not open for submissions yet.'}
-        </p>
+        </LockedNote>
       )}
       {!isOpenNow && submission && cd.expired && (
-        <p className="mt-3 text-sm text-muted-foreground">
+        <LockedNote>
           The deadline has passed, so your submission can no longer be edited.
-        </p>
+        </LockedNote>
       )}
       {isOpenNow && isGraded && (
-        <p className="mt-3 text-sm text-muted-foreground">
+        <LockedNote>
           Your submission has been graded, so it can no longer be edited.
-        </p>
+        </LockedNote>
       )}
       {isOpenNow && !isGraded && !isEditing && (
         <Button className="mt-4" onClick={() => setIsEditing(true)}>

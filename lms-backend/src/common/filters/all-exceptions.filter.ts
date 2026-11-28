@@ -5,8 +5,11 @@ import {
   HttpException,
   HttpStatus,
   Logger,
+  Optional,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
+import { getAuditContext } from '../../shared/audit/context/audit-context.js';
+import { HttpMetricsStore } from '../../shared/monitoring/services/http-metrics.store.js';
 
 interface ExtractedExceptionDetails {
   status: number;
@@ -14,10 +17,25 @@ interface ExtractedExceptionDetails {
   field?: string;
 }
 
+/** Picks a short, stack-free message for the monitoring error feed. */
+const resolveSafeMessage = (
+  exception: unknown,
+  message: string | string[],
+): string => {
+  if (exception instanceof Error) {
+    return exception.message || 'Internal server error';
+  }
+  return Array.isArray(message) ? message.join('; ') : message;
+};
+
 /** Global HTTP exception filter — catches all errors and returns a consistent JSON response. */
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
   private readonly logger = new Logger(AllExceptionsFilter.name);
+
+  constructor(
+    @Optional() private readonly httpMetricsStore?: HttpMetricsStore,
+  ) {}
 
   public catch(exception: unknown, host: ArgumentsHost): void {
     const ctx = host.switchToHttp();
@@ -27,6 +45,23 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const { status, message, field } = this.extractDetails(exception);
 
     this.logException(request.method, request.url, status, message, exception);
+    if (
+      status >= HttpStatus.INTERNAL_SERVER_ERROR &&
+      this.httpMetricsStore &&
+      !this.httpMetricsStore.shouldIgnorePath(request.originalUrl || request.url)
+    ) {
+      const safeMessage = resolveSafeMessage(exception, message);
+      this.httpMetricsStore.recordServerError({
+        occurredAt: new Date().toISOString(),
+        method: request.method,
+        path: (request.originalUrl || request.url).split('?')[0] || '/',
+        statusCode: status,
+        message: safeMessage,
+        exceptionName:
+          exception instanceof Error ? exception.name : 'UnknownError',
+        requestId: getAuditContext()?.requestId ?? null,
+      });
+    }
 
     response.status(status).json({
       success: false,

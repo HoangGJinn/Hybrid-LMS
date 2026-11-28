@@ -36,11 +36,11 @@ export class MyAssignmentsController {
   @Get('lecturer/submissions')
   @Auth(Role.LECTURER)
   async lecturerQueue(
-    @Query('classIds') classIds = '',
     @CurrentUser() user: AuthenticatedUser,
+    @Query('classIds') classIds?: string,
   ): Promise<QueueItem[]> {
     return this.reviewService.lecturerQueue(
-      classIds.split(',').filter((id) => isUUID(id)),
+      (classIds ?? '').split(',').filter((id) => isUUID(id)),
       user,
     );
   }

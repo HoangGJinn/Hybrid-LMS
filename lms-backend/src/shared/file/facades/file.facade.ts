@@ -1,7 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import type { Readable } from 'node:stream';
+import type { FilePurpose } from '../enums/file-purpose.enum.js';
+import type { StorageHealthStatus } from '../services/file-storage.service.js';
 import { FileService } from '../services/file.service.js';
 import { FileDownloadView } from '../types/file-download-view.type.js';
+
+export type { StorageHealthStatus };
 
 /** Public entry point of the file module; other modules must not use FileService directly. */
 @Injectable()
@@ -16,6 +20,19 @@ export class FileFacade {
   /** Throws unless the file belongs to the owner and its upload was confirmed (READY). */
   async assertOwnedReadyFile(fileId: string, ownerId: string): Promise<void> {
     return this.fileService.assertOwnedReadyFile(fileId, ownerId);
+  }
+
+  /** Like assertOwnedReadyFile, and the file must have been uploaded for the given purpose. */
+  async assertOwnedReadyFileOfPurpose(
+    fileId: string,
+    ownerId: string,
+    purpose: FilePurpose,
+  ): Promise<void> {
+    return this.fileService.assertOwnedReadyFileOfPurpose(
+      fileId,
+      ownerId,
+      purpose,
+    );
   }
 
   /** Deletes the file from S3 and from the database. The caller must already have checked who may do it. */
@@ -46,5 +63,10 @@ export class FileFacade {
     fileId: string,
   ): Promise<{ fileName: string; stream: Readable }> {
     return this.fileService.openReadStream(fileId);
+  }
+
+  /** Probes S3 bucket connectivity without listing objects. */
+  async checkStorageHealth(): Promise<StorageHealthStatus> {
+    return this.fileService.checkStorageHealth();
   }
 }

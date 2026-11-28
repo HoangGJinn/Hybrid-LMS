@@ -33,6 +33,7 @@ describe('UserController', () => {
       updateUser: vi.fn(),
       deactivateUser: vi.fn(),
       activateUser: vi.fn(),
+      removeUser: vi.fn(),
     };
     controller = new UserController(mockUserService as unknown as UserService);
   });
@@ -104,6 +105,29 @@ describe('UserController', () => {
 
       expect(mockUserService.activateUser).toHaveBeenCalledWith('usr-1');
       expect(result.isActive).toBe(true);
+    });
+  });
+
+  describe('remove', () => {
+    it('permanently soft-deletes a user with the current actor id', async () => {
+      const removed = {
+        ...managedUser,
+        isActive: false,
+        deletedAt: new Date(),
+      };
+      mockUserService.removeUser!.mockResolvedValue(removed);
+
+      const result = await controller.remove('usr-1', {
+        id: 'admin-1',
+        email: 'admin@school.edu.vn',
+        role: Role.ADMIN,
+      });
+
+      expect(mockUserService.removeUser).toHaveBeenCalledWith(
+        'usr-1',
+        'admin-1',
+      );
+      expect(result.deletedAt).toEqual(removed.deletedAt);
     });
   });
 });

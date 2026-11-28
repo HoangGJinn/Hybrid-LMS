@@ -14,12 +14,14 @@ import { ParticipantService } from '../services/participant.service.js';
 import { AddParticipantDto } from '../dto/add-participant.dto.js';
 import { AddParticipantsDto } from '../dto/add-participants.dto.js';
 import { ImportParticipantsDto } from '../dto/import-participants.dto.js';
+import { RemoveParticipantsDto } from '../dto/remove-participants.dto.js';
 import {
   ParticipantCandidateView,
   ParticipantImportResult,
   ParticipantView,
 } from '../types/participant-view.type.js';
 import { AddStudentsResult } from '../types/add-students-result.type.js';
+import { RemoveStudentsResult } from '../types/remove-students-result.type.js';
 import { Auth } from '../../../common/decorators/auth.decorator.js';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator.js';
 import { AuthenticatedUser } from '../../../common/types/authenticated-user.type.js';
@@ -98,5 +100,15 @@ export class ParticipantController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<void> {
     await this.participantService.remove(classId, user, studentId);
+  }
+
+  /** Remove several participants at once. */
+  @Post('bulk-remove')
+  async removeMany(
+    @Param('classId', ParseUUIDPipe) classId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: RemoveParticipantsDto,
+  ): Promise<RemoveStudentsResult> {
+    return this.participantService.removeMany(classId, user, dto);
   }
 }

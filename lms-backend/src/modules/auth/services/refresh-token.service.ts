@@ -1,8 +1,15 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, Optional, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository } from 'typeorm';
+import {
+  AuditAction,
+  AuditCategory,
+  AuditEntityType,
+  AuditFacade,
+  AuditResult,
+} from '../../../shared/audit/index.js';
 import { RefreshToken } from '../entities/refresh-token.entity.js';
 
 const TOKEN_BYTES = 48;
@@ -22,6 +29,7 @@ export class RefreshTokenService {
     @InjectRepository(RefreshToken)
     private readonly refreshTokenRepository: Repository<RefreshToken>,
     private readonly configService: ConfigService,
+    @Optional() private readonly auditFacade?: AuditFacade,
   ) {}
 
   /** Lifetime of a refresh token (and of its cookie) in milliseconds. */
@@ -73,14 +81,38 @@ export class RefreshTokenService {
     const stored = await this.refreshTokenRepository.findOneBy({
       tokenHash: this.hash(rawToken),
     });
-    if (stored) await this.revokeFamily(stored.familyId);
+    if (stored) {
+      await this.revokeFamily(stored.familyId);
+      await this.auditFacade?.record({
+        category: AuditCategory.SECURITY,
+        action: AuditAction.LOGOUT,
+        result: AuditResult.SUCCESS,
+        entityType: AuditEntityType.AUTH,
+        entityId: stored.userId,
+        summary: 'User logged out',
+        actor: { id: stored.userId },
+        metadata: { familyId: stored.familyId },
+      });
+    }
   }
 
   private async assertUsable(stored: RefreshToken): Promise<void> {
     if (stored.revokedAt) {
       const isParallelRotation =
         Date.now() - stored.revokedAt.getTime() < REUSE_GRACE_MS;
-      if (!isParallelRotation) await this.revokeFamily(stored.familyId);
+      if (!isParallelRotation) {
+        await this.revokeFamily(stored.familyId);
+        await this.auditFacade?.record({
+          category: AuditCategory.SECURITY,
+          action: AuditAction.REFRESH_TOKEN_REUSED,
+          result: AuditResult.FAILURE,
+          entityType: AuditEntityType.AUTH,
+          entityId: stored.userId,
+          summary: 'Detected reuse of revoked refresh token; session family revoked',
+          actor: { id: stored.userId },
+          metadata: { familyId: stored.familyId, tokenId: stored.id },
+        });
+      }
       throw new UnauthorizedException('Refresh token already used');
     }
     if (stored.expiresAt.getTime() <= Date.now())

@@ -1,0 +1,9 @@
+export enum AuditEntityType {
+  USER = 'USER',
+  CLASS = 'CLASS',
+  PARTICIPANT = 'PARTICIPANT',
+  SEMESTER = 'SEMESTER',
+  SUBJECT = 'SUBJECT',
+  REFERENCE_DATA = 'REFERENCE_DATA',
+  AUTH = 'AUTH',
+}

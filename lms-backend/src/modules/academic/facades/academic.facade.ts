@@ -5,6 +5,7 @@ import { AuthenticatedUser } from '../../../common/types/authenticated-user.type
 import { SubjectService } from '../services/subject.service.js';
 import { SemesterService } from '../services/semester.service.js';
 import { ClassView } from '../types/class-view.type.js';
+import { RosterStudentView } from '../types/roster-student-view.type.js';
 import { SubjectView } from '../types/subject-view.type.js';
 import { SemesterView } from '../types/semester-view.type.js';
 import { Role } from '../../../common/enums/role.enum.js';
@@ -87,6 +88,14 @@ export class AcademicFacade {
 
   async countStudentsInClass(classId: string): Promise<number> {
     return this.classService.countStudents(classId);
+  }
+
+  /** Enrolled students of a class, for lecturers and admins (used to build full class grade/result tables). */
+  async getClassRoster(
+    classId: string,
+    user: AuthenticatedUser,
+  ): Promise<RosterStudentView[]> {
+    return this.classService.getRoster(classId, user);
   }
 
   async getSubjectById(id: string): Promise<SubjectView> {

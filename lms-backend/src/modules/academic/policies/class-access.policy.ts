@@ -8,6 +8,7 @@ export interface ClassAccessSubject {
   readonly id: string;
   readonly lecturerId: string;
   readonly isActive: boolean;
+  readonly deletedAt?: Date | null;
 }
 
 /**
@@ -52,6 +53,11 @@ export class ClassAccessPolicy {
 
   /** Participants are frozen once a class has ended, like the rest of the class. */
   assertParticipantsEditable(cls: ClassAccessSubject): void {
+    if (cls.deletedAt) {
+      throw new ConflictException(
+        'This class has been removed, so its participants can no longer be changed',
+      );
+    }
     if (!cls.isActive) {
       throw new ConflictException(
         'This class has ended, so its participants can no longer be changed',

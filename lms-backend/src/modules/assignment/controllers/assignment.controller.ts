@@ -21,6 +21,8 @@ import { CreateAssignmentDto } from '../dto/create-assignment.dto.js';
 import { UpdateAssignmentDto } from '../dto/update-assignment.dto.js';
 import { GradeSubmissionDto } from '../dto/grade-submission.dto.js';
 import { SubmitAssignmentDto } from '../dto/submit-assignment.dto.js';
+import { sendXlsx } from '../../../shared/excel/workbook.util.js';
+import { AssignmentExportService } from '../services/assignment-export.service.js';
 import { AssignmentService } from '../services/assignment.service.js';
 import { SubmissionReviewService } from '../services/submission-review.service.js';
 import { SubmissionService } from '../services/submission.service.js';
@@ -35,6 +37,7 @@ export class AssignmentController {
     private readonly assignmentService: AssignmentService,
     private readonly submissionService: SubmissionService,
     private readonly reviewService: SubmissionReviewService,
+    private readonly exportService: AssignmentExportService,
   ) {}
 
   /** Smoke test: confirms the assignment module is wired up. */
@@ -107,6 +110,26 @@ export class AssignmentController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<SubmissionListItemView[]> {
     return this.reviewService.list(classId, assignmentId, user);
+  }
+
+  /**
+   * Excel sheet with the assignment's details and every student's result (including students who
+   * have not submitted). Written to `response` directly so the JSON envelope does not wrap the file.
+   */
+  @Get(':assignmentId/export')
+  @Auth(Role.LECTURER, Role.ADMIN)
+  async exportResults(
+    @Param('classId', ParseUUIDPipe) classId: string,
+    @Param('assignmentId', ParseUUIDPipe) assignmentId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Res() response: Response,
+  ): Promise<void> {
+    const file = await this.exportService.exportResults(
+      classId,
+      assignmentId,
+      user,
+    );
+    sendXlsx(response, file);
   }
 
   /**

@@ -36,6 +36,7 @@ interface DateTimeFieldProps {
   value: string;
   onChange: (value: string) => void;
   error?: string;
+  disabled?: boolean;
 }
 
 /**
@@ -47,6 +48,7 @@ export const DateTimeField = ({
   value,
   onChange,
   error,
+  disabled = false,
 }: DateTimeFieldProps) => {
   const picker = useRef<HTMLInputElement>(null);
   // `null` = show the formatted `value`; a string = what the user is typing right now.
@@ -84,6 +86,7 @@ export const DateTimeField = ({
         <Input
           aria-label={label}
           placeholder="dd/mm/yyyy hh:mm"
+          disabled={disabled}
           value={text}
           onChange={(e) => {
             setDraft(e.target.value);
@@ -101,8 +104,9 @@ export const DateTimeField = ({
         <button
           type="button"
           aria-label={`Pick ${label.toLowerCase()} from calendar`}
+          disabled={disabled}
           onClick={openPicker}
-          className="absolute right-2 top-1/2 -translate-y-1/2 border-0 bg-transparent p-1 text-muted-foreground hover:text-foreground"
+          className="absolute right-2 top-1/2 -translate-y-1/2 border-0 bg-transparent p-1 text-muted-foreground hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
         >
           <CalendarDays className="h-4 w-4" />
         </button>
@@ -112,6 +116,7 @@ export const DateTimeField = ({
           type="datetime-local"
           tabIndex={-1}
           aria-hidden="true"
+          disabled={disabled}
           value={value}
           onChange={(e) => {
             if (e.target.value === '') return;

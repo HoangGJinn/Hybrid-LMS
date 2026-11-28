@@ -77,7 +77,10 @@ describe('UserFacade', () => {
 
       const result = await facade.getProfileCode('usr-1');
 
-      expect(mockUserService.getProfileCode).toHaveBeenCalledWith('usr-1');
+      expect(mockUserService.getProfileCode).toHaveBeenCalledWith(
+        'usr-1',
+        undefined,
+      );
       expect(result).toBe('SV2005001');
     });
   });

@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { FileModule } from '../../shared/file/file.module.js';
 import { AcademicModule } from '../academic/academic.module.js';
@@ -11,9 +11,13 @@ import { AssignmentSubmission } from './entities/assignment-submission.entity.js
 import { Assignment } from './entities/assignment.entity.js';
 import { AssignmentRepository } from './repositories/assignment.repository.js';
 import { SubmissionRepository } from './repositories/submission.repository.js';
+import { AssignmentCleanupService } from './services/assignment-cleanup.service.js';
+import { AssignmentExportService } from './services/assignment-export.service.js';
 import { AssignmentService } from './services/assignment.service.js';
 import { SubmissionReviewService } from './services/submission-review.service.js';
 import { SubmissionService } from './services/submission.service.js';
+import { ZaloModule } from '../zalo/index.js';
+import { AssignmentFacade } from './facades/assignment.facade.js';
 
 @Module({
   imports: [
@@ -24,8 +28,9 @@ import { SubmissionService } from './services/submission.service.js';
       Assignment,
     ]),
     AcademicModule,
-    ContentModule,
+    forwardRef(() => ContentModule),
     FileModule,
+    ZaloModule,
   ],
   controllers: [AssignmentController, MyAssignmentsController],
   providers: [
@@ -34,7 +39,10 @@ import { SubmissionService } from './services/submission.service.js';
     SubmissionService,
     SubmissionReviewService,
     AssignmentService,
+    AssignmentExportService,
+    AssignmentCleanupService,
+    AssignmentFacade,
   ],
-  exports: [],
+  exports: [AssignmentFacade],
 })
 export class AssignmentModule {}

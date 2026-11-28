@@ -3,12 +3,20 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
+import {
+  AuditAction,
+  AuditCategory,
+  AuditEntityType,
+  AuditFacade,
+} from '../../../shared/audit/index.js';
 import { ClassStudentRepository } from '../repositories/class-student.repository.js';
 import { ClassService } from './class.service.js';
 import { AddParticipantDto } from '../dto/add-participant.dto.js';
 import { AddParticipantsDto } from '../dto/add-participants.dto.js';
 import { ImportParticipantsDto } from '../dto/import-participants.dto.js';
+import { RemoveParticipantsDto } from '../dto/remove-participants.dto.js';
 import { Class } from '../entities/class.entity.js';
 import { ClassAccessPolicy } from '../policies/class-access.policy.js';
 import {
@@ -18,6 +26,7 @@ import {
   ParticipantView,
 } from '../types/participant-view.type.js';
 import { AddStudentsResult } from '../types/add-students-result.type.js';
+import { RemoveStudentsResult } from '../types/remove-students-result.type.js';
 import { UserFacade } from '../../user/facades/user.facade.js';
 import { StudentSummary } from '../../user/types/student-summary.type.js';
 import { AuthenticatedUser } from '../../../common/types/authenticated-user.type.js';
@@ -49,6 +58,7 @@ export class ParticipantService {
     private readonly participantRepo: ClassStudentRepository,
     private readonly userFacade: UserFacade,
     private readonly accessPolicy: ClassAccessPolicy,
+    @Optional() private readonly auditFacade?: AuditFacade,
   ) {}
 
   /** Participants of the class, optionally filtered by name, email or student code. */
@@ -119,6 +129,23 @@ export class ParticipantService {
       student.userId,
     );
     if (!created) throw new NotFoundException('Participant not found');
+    await this.auditFacade?.record({
+      category: AuditCategory.ADMIN,
+      action: AuditAction.PARTICIPANT_ADDED,
+      entityType: AuditEntityType.PARTICIPANT,
+      entityId: student.userId,
+      entityLabel: `${student.studentCode} — ${student.fullName}`,
+      parentType: AuditEntityType.CLASS,
+      parentId: classId,
+      summary: `Added ${student.fullName} (${student.studentCode}) to ${cls.classCode}`,
+      actor: { id: actor.id, email: actor.email, role: actor.role },
+      metadata: {
+        classCode: cls.classCode,
+        studentCode: student.studentCode,
+        fullName: student.fullName,
+        email: student.email,
+      },
+    });
     return ParticipantView.fromEntity(created);
   }
 
@@ -153,6 +180,26 @@ export class ParticipantService {
     const enrolled = await this.participantRepo.findStudentIds(classId);
     const toAdd = ids.filter((id) => !enrolled.has(id));
     await this.participantRepo.addMany(classId, toAdd);
+    if (toAdd.length > 0 && this.auditFacade) {
+      const addedSet = new Set(toAdd);
+      const addedStudents = students.filter((s) => addedSet.has(s.userId));
+      await this.auditFacade.record({
+        category: AuditCategory.ADMIN,
+        action: AuditAction.PARTICIPANTS_BULK_ADDED,
+        entityType: AuditEntityType.PARTICIPANT,
+        entityLabel: cls.classCode,
+        parentType: AuditEntityType.CLASS,
+        parentId: classId,
+        summary: `Added ${toAdd.length} participant(s) to ${cls.classCode}`,
+        actor: { id: actor.id, email: actor.email, role: actor.role },
+        metadata: {
+          classCode: cls.classCode,
+          added: toAdd.length,
+          skipped: ids.length - toAdd.length,
+          studentCodes: addedStudents.map((s) => s.studentCode),
+        },
+      });
+    }
     return { added: toAdd.length, skipped: ids.length - toAdd.length };
   }
 
@@ -164,12 +211,78 @@ export class ParticipantService {
   ): Promise<void> {
     const cls = await this.loadManageableClass(classId, actor);
     this.assertClassIsOpen(cls);
+    const existing = this.auditFacade
+      ? await this.participantRepo.findOne(classId, studentId)
+      : null;
     const removed = await this.participantRepo.remove(classId, studentId);
     if (!removed) {
       throw new NotFoundException(
         'This student is not a participant of the class',
       );
     }
+    if (this.auditFacade) {
+      const studentCode = existing?.student?.studentCode ?? null;
+      const fullName = existing?.student?.user?.fullName ?? null;
+      const email = existing?.student?.user?.email ?? null;
+      const label =
+        studentCode && fullName
+          ? `${studentCode} — ${fullName}`
+          : studentId;
+      const studentDisplay = fullName
+        ? `${fullName} (${studentCode})`
+        : studentId;
+      await this.auditFacade.record({
+        category: AuditCategory.ADMIN,
+        action: AuditAction.PARTICIPANT_REMOVED,
+        entityType: AuditEntityType.PARTICIPANT,
+        entityId: studentId,
+        entityLabel: label,
+        parentType: AuditEntityType.CLASS,
+        parentId: classId,
+        summary: `Removed ${studentDisplay} from ${cls.classCode}`,
+        actor: { id: actor.id, email: actor.email, role: actor.role },
+        metadata: {
+          classCode: cls.classCode,
+          studentCode,
+          fullName,
+          email,
+        },
+      });
+    }
+  }
+
+  /** Bulk Remove Participants (SCRUM-90). Only the enrolments are removed, never the student accounts. */
+  async removeMany(
+    classId: string,
+    actor: AuthenticatedUser,
+    dto: RemoveParticipantsDto,
+  ): Promise<RemoveStudentsResult> {
+    const cls = await this.loadManageableClass(classId, actor);
+    this.assertClassIsOpen(cls);
+    const ids = unique(dto.studentIds);
+    const students = this.auditFacade
+      ? await this.userFacade.findStudentsByIds(ids)
+      : [];
+    const removed = await this.participantRepo.removeMany(classId, ids);
+    if (removed > 0 && this.auditFacade) {
+      await this.auditFacade.record({
+        category: AuditCategory.ADMIN,
+        action: AuditAction.PARTICIPANTS_BULK_REMOVED,
+        entityType: AuditEntityType.PARTICIPANT,
+        entityLabel: cls.classCode,
+        parentType: AuditEntityType.CLASS,
+        parentId: classId,
+        summary: `Removed ${removed} participant(s) from ${cls.classCode}`,
+        actor: { id: actor.id, email: actor.email, role: actor.role },
+        metadata: {
+          classCode: cls.classCode,
+          removed,
+          studentIds: ids,
+          studentCodes: students.map((s) => s.studentCode),
+        },
+      });
+    }
+    return { removed };
   }
 
   /**
@@ -234,7 +347,7 @@ export class ParticipantService {
 
     const count = (status: ParticipantImportRowResult['status']): number =>
       results.filter((result) => result.status === status).length;
-    return {
+    const summary = {
       dryRun,
       total: results.length,
       added: count('added'),
@@ -242,6 +355,29 @@ export class ParticipantService {
       failed: count('error'),
       rows: results,
     };
+    if (!dryRun && toAdd.length > 0) {
+      await this.auditFacade?.record({
+        category: AuditCategory.ADMIN,
+        action: AuditAction.PARTICIPANTS_IMPORTED,
+        entityType: AuditEntityType.PARTICIPANT,
+        entityLabel: cls.classCode,
+        parentType: AuditEntityType.CLASS,
+        parentId: classId,
+        summary: `Imported ${summary.added} participant(s) into ${cls.classCode} (${summary.skipped} skipped, ${summary.failed} failed)`,
+        actor: { id: actor.id, email: actor.email, role: actor.role },
+        metadata: {
+          classCode: cls.classCode,
+          total: summary.total,
+          added: summary.added,
+          skipped: summary.skipped,
+          failed: summary.failed,
+          studentCodes: results
+            .filter((r) => r.status === 'added' && r.studentCode)
+            .map((r) => r.studentCode),
+        },
+      });
+    }
+    return summary;
   }
 
   /** Finds the student a row points at, or explains why the row is unusable. */

@@ -19,10 +19,7 @@ const RoadmapPage = () => {
   const state = toAsyncState(useRoadmaps());
   return (
     <div>
-      <PageHeader
-        title="Learning Roadmap"
-        subtitle="Your personalized path, adapted to your KC mastery"
-      />
+      <PageHeader title="Learning Roadmap" />
       <AsyncView
         state={state}
         isEmpty={(d) => d.length === 0}

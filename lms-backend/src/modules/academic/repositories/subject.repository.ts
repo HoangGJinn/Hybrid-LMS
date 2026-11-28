@@ -15,6 +15,25 @@ export class SubjectRepository {
     return this.repo.save(entity);
   }
 
+  /** The lower-cased codes from `codes` that already exist (compared ignoring case). */
+  async findExistingCodes(codes: string[]): Promise<Set<string>> {
+    if (codes.length === 0) return new Set();
+    const rows = await this.repo
+      .createQueryBuilder('s')
+      .select('s.subjectCode', 'subjectCode')
+      .where('LOWER(s.subjectCode) IN (:...codes)', {
+        codes: codes.map((code) => code.toLowerCase()),
+      })
+      .getRawMany<{ subjectCode: string }>();
+    return new Set(rows.map((row) => row.subjectCode.toLowerCase()));
+  }
+
+  /** Inserts all subjects in one statement, so either every one of them is created or none. */
+  async createMany(data: Partial<Subject>[]): Promise<void> {
+    if (data.length === 0) return;
+    await this.repo.insert(data);
+  }
+
   async findAll(): Promise<Subject[]> {
     return this.repo.find({ order: { subjectCode: 'ASC' } });
   }

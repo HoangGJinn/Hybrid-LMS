@@ -9,6 +9,16 @@ import {
   QueryMyClassesDto,
 } from '../dto/query-my-classes.dto.js';
 
+/** Rows per INSERT, to stay far below the database's limit on bind parameters. */
+const ENROLL_CHUNK = 1000;
+
+/** Which classes an admin export covers. */
+export interface ClassExportFilter {
+  semesterId?: string;
+  /** true = running, false = ended, undefined = both. */
+  isActive?: boolean;
+}
+
 @Injectable()
 export class ClassRepository {
   constructor(
@@ -25,6 +35,7 @@ export class ClassRepository {
 
   async findAll(filter?: {
     isActive?: boolean;
+    isDeleted?: boolean;
     semesterId?: string;
     subjectId?: string;
     search?: string;
@@ -38,6 +49,11 @@ export class ClassRepository {
       .orderBy('c.classCode', 'ASC');
     if (filter?.isActive !== undefined) {
       qb.andWhere('c.isActive = :isActive', { isActive: filter.isActive });
+    }
+    if (filter?.isDeleted === true) {
+      qb.andWhere('c.deletedAt IS NOT NULL');
+    } else if (filter?.isDeleted === false) {
+      qb.andWhere('c.deletedAt IS NULL');
     }
     if (filter?.semesterId) {
       qb.andWhere('c.semesterId = :semesterId', {
@@ -72,6 +88,28 @@ export class ClassRepository {
     return this.classRepo.findOne({ where: { classCode } });
   }
 
+  /**
+   * The lower-cased class codes from `codes` that already exist. Compared ignoring case, so `web26`
+   * is a duplicate of `WEB26` even though the unique index alone would accept both.
+   */
+  async findExistingCodes(codes: string[]): Promise<Set<string>> {
+    if (codes.length === 0) return new Set();
+    const rows = await this.classRepo
+      .createQueryBuilder('c')
+      .select('c.classCode', 'classCode')
+      .where('LOWER(c.classCode) IN (:...codes)', {
+        codes: codes.map((code) => code.toLowerCase()),
+      })
+      .getRawMany<{ classCode: string }>();
+    return new Set(rows.map((row) => row.classCode.toLowerCase()));
+  }
+
+  /** Inserts all classes in one statement, so either every one of them is created or none. */
+  async createMany(data: Partial<Class>[]): Promise<void> {
+    if (data.length === 0) return;
+    await this.classRepo.insert(data);
+  }
+
   async findByLecturerId(lecturerId: string): Promise<Class[]> {
     return this.classRepo.find({
       where: { lecturerId, isActive: true },
@@ -101,7 +139,57 @@ export class ClassRepository {
     });
     return enrollments
       .map((e) => e.class)
-      .filter((c): c is Class => Boolean(c?.isActive));
+      .filter((c): c is Class => Boolean(c?.isActive && !c?.deletedAt));
+  }
+
+  /**
+   * Creates the classes and enrols each one's students in a single transaction, so either every
+   * class with its students is created or nothing is.
+   */
+  async createWithStudents(
+    entries: ReadonlyArray<{
+      data: Partial<Class>;
+      studentIds: readonly string[];
+    }>,
+  ): Promise<void> {
+    if (entries.length === 0) return;
+    await this.classRepo.manager.transaction(async (manager) => {
+      const inserted = await manager.insert(
+        Class,
+        entries.map((entry) => entry.data),
+      );
+      const enrollments = entries.flatMap((entry, index) => {
+        const classId = String(inserted.identifiers[index]?.id ?? '');
+        if (!classId) throw new Error('A created class returned no id');
+        return entry.studentIds.map((studentId) => ({ classId, studentId }));
+      });
+      for (let start = 0; start < enrollments.length; start += ENROLL_CHUNK) {
+        await manager.insert(
+          ClassStudent,
+          enrollments.slice(start, start + ENROLL_CHUNK),
+        );
+      }
+    });
+  }
+
+  /** Every class the lecturer has, ended ones included, with the relations a class list needs. */
+  async findAllByLecturerId(lecturerId: string): Promise<Class[]> {
+    return this.classRepo.find({
+      where: { lecturerId },
+      relations: { subject: true, semester: true, lecturer: { user: true } },
+      order: { classCode: 'ASC' },
+    });
+  }
+
+  /** Every enrolment of the student, in classes that have ended too, with the class and its relations. */
+  async findEnrollmentsByStudentId(studentId: string): Promise<ClassStudent[]> {
+    return this.classStudentRepo.find({
+      where: { studentId },
+      relations: {
+        class: { subject: true, semester: true, lecturer: { user: true } },
+      },
+      order: { class: { classCode: 'ASC' } },
+    });
   }
 
   async findMyClasses(
@@ -119,6 +207,8 @@ export class ClassRepository {
       .leftJoinAndSelect('c.semester', 'semester')
       .leftJoinAndSelect('c.lecturer', 'lecturer')
       .leftJoinAndSelect('lecturer.user', 'lecturerUser');
+
+    qb.andWhere('c.deletedAt IS NULL');
 
     if (role === Role.STUDENT) {
       qb.innerJoin(
@@ -166,6 +256,59 @@ export class ClassRepository {
     qb.skip(skip).take(limit);
 
     return qb.getManyAndCount();
+  }
+
+  /** Classes an admin export covers: never the removed ones; `isActive` narrows to running / ended. */
+  private exportQuery(filter: ClassExportFilter) {
+    const qb = this.classRepo
+      .createQueryBuilder('c')
+      .where('c.deletedAt IS NULL');
+    if (filter.semesterId) {
+      qb.andWhere('c.semesterId = :semesterId', {
+        semesterId: filter.semesterId,
+      });
+    }
+    if (filter.isActive !== undefined) {
+      qb.andWhere('c.isActive = :isActive', { isActive: filter.isActive });
+    }
+    return qb;
+  }
+
+  async countForExport(filter: ClassExportFilter): Promise<number> {
+    return this.exportQuery(filter).getCount();
+  }
+
+  /** The classes of an export with subject, semester and lecturer, by class code. */
+  async findForExport(filter: ClassExportFilter, limit: number): Promise<Class[]> {
+    return this.exportQuery(filter)
+      .leftJoinAndSelect('c.subject', 'subject')
+      .leftJoinAndSelect('c.semester', 'semester')
+      .leftJoinAndSelect('c.lecturer', 'lecturer')
+      .leftJoinAndSelect('lecturer.user', 'lecturerUser')
+      .orderBy('c.classCode', 'ASC')
+      .take(limit)
+      .getMany();
+  }
+
+  /** Every enrolment of the given classes, with the student and their user. */
+  async findEnrollmentsByClassIds(classIds: string[]): Promise<ClassStudent[]> {
+    if (classIds.length === 0) return [];
+    const rows: ClassStudent[] = [];
+    // Chunked so the IN list stays far below the database's bind-parameter limit.
+    for (let start = 0; start < classIds.length; start += ENROLL_CHUNK) {
+      // eslint-disable-next-line no-await-in-loop
+      const chunk = await this.classStudentRepo
+        .createQueryBuilder('cs')
+        .innerJoinAndSelect('cs.student', 'student')
+        .innerJoinAndSelect('student.user', 'studentUser')
+        .where('cs.classId IN (:...ids)', {
+          ids: classIds.slice(start, start + ENROLL_CHUNK),
+        })
+        .orderBy('student.studentCode', 'ASC')
+        .getMany();
+      rows.push(...chunk);
+    }
+    return rows;
   }
 
   async countStudents(classId: string): Promise<number> {

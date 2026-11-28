@@ -29,6 +29,7 @@ export {
 export interface UserListFilters {
   readonly role?: Role;
   readonly isActive?: boolean;
+  readonly isDeleted?: boolean;
   /** false = pre-provisioned account nobody has signed in to yet; true = linked to a Google account. */
   readonly hasLoggedIn?: boolean;
   /** Student or lecturer profile status, e.g. WORKING. */
@@ -155,7 +156,16 @@ export class UserRepository {
   }
 
   /** Student code or lecturer code of the user; null for users without such a profile (e.g. admins). */
-  async findProfileCode(userId: string): Promise<string | null> {
+  async findProfileCode(userId: string, role?: Role): Promise<string | null> {
+    if (role === Role.ADMIN) return null;
+    if (role === Role.STUDENT) {
+      const student = await this.studentRepo.findOneBy({ userId });
+      return student?.studentCode ?? null;
+    }
+    if (role === Role.LECTURER) {
+      const lecturer = await this.lecturerRepo.findOneBy({ userId });
+      return lecturer?.lecturerCode ?? null;
+    }
     const student = await this.studentRepo.findOneBy({ userId });
     if (student) return student.studentCode;
     const lecturer = await this.lecturerRepo.findOneBy({ userId });
@@ -175,54 +185,29 @@ export class UserRepository {
   }
 
   /**
-   * Finds a user by email, student code, lecturer code, or email prefix,
+   * Finds a user by email, student code, lecturer code, or email prefix in a single query,
    * explicitly selecting the password_hash column (which is excluded by default).
    */
   async findForPasswordAuth(identifier: string): Promise<User | null> {
     const trimmed = identifier.trim();
     if (!trimmed) return null;
+    const code = trimmed.toUpperCase();
+    const prefix = `${escapeLike(trimmed)}@%`;
 
-    // 1. Direct email lookup
-    const userByEmail = await this.userRepo
+    return this.userRepo
       .createQueryBuilder('u')
       .addSelect('u.passwordHash')
-      .where('LOWER(u.email) = LOWER(:email)', { email: trimmed })
+      .leftJoin(Student, 's', 's.userId = u.id')
+      .leftJoin(Lecturer, 'l', 'l.userId = u.id')
+      .where(
+        '(LOWER(u.email) = LOWER(:email) OR s.studentCode = :code OR l.lecturerCode = :code OR LOWER(u.email) LIKE LOWER(:prefix))',
+        { email: trimmed, code, prefix },
+      )
+      .orderBy(
+        'CASE WHEN LOWER(u.email) = LOWER(:email) THEN 1 WHEN s.studentCode = :code THEN 2 WHEN l.lecturerCode = :code THEN 3 ELSE 4 END',
+        'ASC',
+      )
       .getOne();
-    if (userByEmail) return userByEmail;
-
-    // 2. Student code lookup (e.g. SV26000001)
-    const student = await this.studentRepo.findOne({
-      where: { studentCode: trimmed.toUpperCase() },
-    });
-    if (student) {
-      return this.userRepo
-        .createQueryBuilder('u')
-        .addSelect('u.passwordHash')
-        .where('u.id = :id', { id: student.userId })
-        .getOne();
-    }
-
-    // 3. Lecturer code lookup (e.g. GV26000001)
-    const lecturer = await this.lecturerRepo.findOne({
-      where: { lecturerCode: trimmed.toUpperCase() },
-    });
-    if (lecturer) {
-      return this.userRepo
-        .createQueryBuilder('u')
-        .addSelect('u.passwordHash')
-        .where('u.id = :id', { id: lecturer.userId })
-        .getOne();
-    }
-
-    // 4. Quick username prefix lookup (e.g. 'student1' matches 'student1@%')
-    const userByPrefix = await this.userRepo
-      .createQueryBuilder('u')
-      .addSelect('u.passwordHash')
-      .where('LOWER(u.email) LIKE LOWER(:prefix)', { prefix: `${trimmed}@%` })
-      .getOne();
-    if (userByPrefix) return userByPrefix;
-
-    return null;
   }
 
   /**
@@ -250,6 +235,11 @@ export class UserRepository {
     if (filters.role) query.andWhere('u.role = :role', { role: filters.role });
     if (filters.isActive !== undefined) {
       query.andWhere('u.isActive = :isActive', { isActive: filters.isActive });
+    }
+    if (filters.isDeleted === true) {
+      query.andWhere('u.deletedAt IS NOT NULL');
+    } else if (filters.isDeleted === false) {
+      query.andWhere('u.deletedAt IS NULL');
     }
     if (filters.hasLoggedIn !== undefined) {
       query.andWhere(
@@ -339,6 +329,16 @@ export class UserRepository {
     return this.userRepo.findOneOrFail({ where: { id } });
   }
 
+  /** Permanent soft delete (tombstone): the row stays in the database, but can never be restored. */
+  async softDelete(id: string, deletedBy: string | null = null): Promise<User> {
+    await this.userRepo.update(id, {
+      isActive: false,
+      deletedAt: new Date(),
+      deletedBy,
+    });
+    return this.userRepo.findOneOrFail({ where: { id } });
+  }
+
   /** Students (with their user) by user id. */
   async findStudentsByIds(userIds: string[]): Promise<Student[]> {
     if (userIds.length === 0) return [];
@@ -361,6 +361,41 @@ export class UserRepository {
   async findStudentsByEmails(emails: string[]): Promise<Student[]> {
     if (emails.length === 0) return [];
     return this.studentRepo.find({
+      where: { user: { email: In(emails) } },
+      relations: { user: true },
+    });
+  }
+
+  /** Lecturers (with their user) by user id. */
+  async findLecturersByIds(userIds: string[]): Promise<Lecturer[]> {
+    if (userIds.length === 0) return [];
+    return this.lecturerRepo.find({
+      where: { userId: In(userIds) },
+      relations: { user: true },
+    });
+  }
+
+  /** Every lecturer (with their user), whatever their status, by lecturer code. */
+  async findAllLecturers(): Promise<Lecturer[]> {
+    return this.lecturerRepo.find({
+      relations: { user: true },
+      order: { lecturerCode: 'ASC' },
+    });
+  }
+
+  /** Lecturers (with their user) by lecturer code. */
+  async findLecturersByCodes(codes: string[]): Promise<Lecturer[]> {
+    if (codes.length === 0) return [];
+    return this.lecturerRepo.find({
+      where: { lecturerCode: In(codes) },
+      relations: { user: true },
+    });
+  }
+
+  /** Lecturers (with their user) by email (stored in lower case). */
+  async findLecturersByEmails(emails: string[]): Promise<Lecturer[]> {
+    if (emails.length === 0) return [];
+    return this.lecturerRepo.find({
       where: { user: { email: In(emails) } },
       relations: { user: true },
     });

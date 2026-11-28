@@ -44,7 +44,12 @@ export interface SectionItem {
   orderIndex: number;
   documentId: string | null;
   assignmentId: string | null;
+  /** Set for EXAM items, null for every other type. */
+  examId: string | null;
   isCompleted: boolean;
+  /** Ngày bắt đầu/kết thúc; chỉ có ở bài tập và bài thi, các loại khác bỏ trống. */
+  openAt?: string | null;
+  closeAt?: string | null;
 }
 
 export interface Section {
@@ -74,4 +79,15 @@ export interface PaginatedCourses {
   page: number;
   limit: number;
   totalPages: number;
+}
+
+export interface SectionItem {
+  // ...giữ nguyên các field cũ
+  /** `false` = ẩn với sinh viên. `undefined` coi như hiện. */
+  isVisible?: boolean;
+}
+
+export interface Section {
+  // ...giữ nguyên các field cũ
+  isVisible?: boolean;
 }

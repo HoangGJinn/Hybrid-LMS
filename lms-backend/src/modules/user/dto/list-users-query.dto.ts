@@ -60,6 +60,12 @@ export class ListUsersQueryDto {
   @IsOptional()
   readonly isActive?: boolean;
 
+  /** `true` = permanently removed accounts only; `false` or omitted = non-removed accounts only. */
+  @Transform(toBoolean)
+  @IsBoolean({ message: ValidationMessage.IS_BOOLEAN })
+  @IsOptional()
+  readonly isDeleted?: boolean;
+
   /** `false` = pending accounts nobody has signed in to yet; `true` = accounts linked to a Google login. */
   @Transform(toBoolean)
   @IsBoolean({ message: ValidationMessage.IS_BOOLEAN })

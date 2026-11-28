@@ -3,6 +3,7 @@ import { UserService } from '../services/user.service.js';
 import { UserView } from '../types/user-view.type.js';
 import { CreateUserDto } from '../dto/create-user.dto.js';
 import { GoogleAccountData } from '../types/google-account-data.type.js';
+import { LecturerSummary } from '../types/lecturer-summary.type.js';
 import { StudentSummary } from '../types/student-summary.type.js';
 import { Role } from '../../../common/enums/role.enum.js';
 
@@ -26,8 +27,8 @@ export class UserFacade {
   }
 
   /** Student/lecturer code of a user, or null when the user has no such profile. */
-  async getProfileCode(userId: string): Promise<string | null> {
-    return this.userService.getProfileCode(userId);
+  async getProfileCode(userId: string, role?: Role): Promise<string | null> {
+    return this.userService.getProfileCode(userId, role);
   }
 
   async findByEmail(email: string): Promise<UserView | null> {
@@ -62,6 +63,23 @@ export class UserFacade {
 
   async findStudentsByEmails(emails: string[]): Promise<StudentSummary[]> {
     return this.userService.findStudentsByEmails(emails);
+  }
+
+  async findLecturersByIds(ids: string[]): Promise<LecturerSummary[]> {
+    return this.userService.findLecturersByIds(ids);
+  }
+
+  /** Every lecturer, including those who cannot be given a class (see `assignmentBlockedReason`). */
+  async findAllLecturers(): Promise<LecturerSummary[]> {
+    return this.userService.findAllLecturers();
+  }
+
+  async findLecturersByCodes(codes: string[]): Promise<LecturerSummary[]> {
+    return this.userService.findLecturersByCodes(codes);
+  }
+
+  async findLecturersByEmails(emails: string[]): Promise<LecturerSummary[]> {
+    return this.userService.findLecturersByEmails(emails);
   }
 
   /** Students that can still join a class: active account and status STUDYING. */

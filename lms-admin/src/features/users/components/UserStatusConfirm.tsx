@@ -6,13 +6,14 @@ import { Button } from '@/shared/components/ui/Button';
 import {
   useActivateUser,
   useDeactivateUser,
+  useRemoveUser,
 } from '../hooks/useUserMutations';
 import type { ManagedRole, ManagedUser } from '../types/users.types';
 import { ROLE_CONFIG } from '../utils/role-config';
 
 export interface StatusTarget {
   user: ManagedUser;
-  action: 'deactivate' | 'activate';
+  action: 'deactivate' | 'activate' | 'remove';
 }
 
 interface UserStatusConfirmProps {
@@ -21,6 +22,12 @@ interface UserStatusConfirmProps {
   role: ManagedRole;
   onClose: () => void;
 }
+
+const DIALOG_TITLE: Record<StatusTarget['action'], string> = {
+  activate: 'Activate account?',
+  deactivate: 'Deactivate account?',
+  remove: 'Remove account permanently?',
+};
 
 const StatusBody = ({
   target,
@@ -34,17 +41,48 @@ const StatusBody = ({
   const { user, action } = target;
   const deactivate = useDeactivateUser();
   const activate = useActivateUser();
-  const mutation = action === 'deactivate' ? deactivate : activate;
+  const remove = useRemoveUser();
+  const mutation =
+    action === 'deactivate'
+      ? deactivate
+      : action === 'activate'
+        ? activate
+        : remove;
   const [error, setError] = useState<string | null>(null);
-  const isDeactivating = action === 'deactivate';
+  const isDanger = action === 'deactivate' || action === 'remove';
+
+  const getSuccessMessage = () => {
+    if (action === 'remove') return `${user.fullName} has been permanently removed.`;
+    if (action === 'deactivate') return `${user.fullName} has been deactivated.`;
+    return `${user.fullName} has been activated.`;
+  };
+
+  const getBodyDescription = () => {
+    if (action === 'remove') {
+      return (
+        'will be permanently removed and can never be restored or used to sign in again. ' +
+        'Existing historical records are kept for audit logs.'
+      );
+    }
+    if (action === 'deactivate') {
+      return `will no longer be able to sign in or use the system. The account and its history are kept, and you can activate it again at any time.${
+        role === 'LECTURER' ? ' Classes already assigned are not changed.' : ''
+      }`;
+    }
+    return `will be able to sign in again as a ${ROLE_CONFIG[role].singular}.`;
+  };
+
+  const getConfirmLabel = () => {
+    if (action === 'remove') return 'Remove permanently';
+    if (action === 'deactivate') return 'Deactivate';
+    return 'Activate';
+  };
 
   const handleConfirm = () => {
     setError(null);
     mutation.mutate(user.id, {
       onSuccess: () => {
-        toast.success(
-          `${user.fullName} has been ${isDeactivating ? 'deactivated' : 'activated'}.`,
-        );
+        toast.success(getSuccessMessage());
         onClose();
       },
       onError: (err) => setError(getErrorMessage(err)),
@@ -57,11 +95,7 @@ const StatusBody = ({
         <span className="font-semibold text-foreground">
           {user.fullName} ({user.email})
         </span>{' '}
-        {isDeactivating
-          ? `will no longer be able to sign in or use the system. The account and its history are kept, and you can activate it again at any time.${
-              role === 'LECTURER' ? ' Classes already assigned are not changed.' : ''
-            }`
-          : `will be able to sign in again as a ${ROLE_CONFIG[role].singular}.`}
+        {getBodyDescription()}
       </p>
       {error && (
         <p
@@ -76,18 +110,18 @@ const StatusBody = ({
           Cancel
         </Button>
         <Button
-          variant={isDeactivating ? 'danger' : 'primary'}
+          variant={isDanger ? 'danger' : 'primary'}
           onClick={handleConfirm}
           isLoading={mutation.isPending}
         >
-          {isDeactivating ? 'Deactivate' : 'Activate'}
+          {getConfirmLabel()}
         </Button>
       </div>
     </div>
   );
 };
 
-/** Confirmation dialog for deactivating (soft delete) or re-activating an account. Users are never deleted. */
+/** Confirmation dialog for deactivating, re-activating, or permanently removing an account. */
 export const UserStatusConfirm = ({
   target,
   role,
@@ -95,9 +129,7 @@ export const UserStatusConfirm = ({
 }: UserStatusConfirmProps) => (
   <Modal
     open={target !== null}
-    title={
-      target?.action === 'activate' ? 'Activate account?' : 'Deactivate account?'
-    }
+    title={target ? DIALOG_TITLE[target.action] : ''}
     onClose={onClose}
   >
     {target && (

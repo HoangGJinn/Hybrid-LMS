@@ -1,6 +1,7 @@
 import {
   DeleteObjectCommand,
   GetObjectCommand,
+  HeadBucketCommand,
   HeadObjectCommand,
   NotFound,
   S3Client,
@@ -34,16 +35,28 @@ export interface StoredObjectInfo {
   readonly contentType: string | undefined;
 }
 
+export interface StorageHealthStatus {
+  readonly reachable: boolean;
+  readonly latencyMs: number;
+  readonly bucket: string;
+  readonly region: string;
+  readonly detail?: string;
+}
+
+const HEALTH_PROBE_TIMEOUT_MS = 4000;
+
 /** The only class that talks to AWS S3; the bucket stays private and is reached through presigned URLs. */
 @Injectable()
 export class FileStorageService {
   private readonly s3Client: S3Client;
   private readonly bucketName: string;
+  private readonly region: string;
   private readonly downloadUrlTtlSeconds: number;
   private readonly uploadUrlTtlSeconds: number;
 
   constructor(configService: ConfigService) {
     this.bucketName = configService.getOrThrow<string>('S3_BUCKET_NAME');
+    this.region = configService.getOrThrow<string>('AWS_REGION');
     this.downloadUrlTtlSeconds = configService.getOrThrow<number>(
       'S3_DOWNLOAD_URL_TTL',
     );
@@ -51,8 +64,46 @@ export class FileStorageService {
       configService.getOrThrow<number>('S3_UPLOAD_URL_TTL');
     // Credentials come from the SDK default chain (IAM role in AWS, AWS_* variables locally).
     this.s3Client = new S3Client({
-      region: configService.getOrThrow<string>('AWS_REGION'),
+      region: this.region,
     });
+  }
+
+  /** Probes bucket connectivity using HeadBucket without listing objects. */
+  async checkBucketHealth(): Promise<StorageHealthStatus> {
+    const startedAt = performance.now();
+    try {
+      await this.s3Client.send(
+        new HeadBucketCommand({ Bucket: this.bucketName }),
+        { abortSignal: AbortSignal.timeout(HEALTH_PROBE_TIMEOUT_MS) },
+      );
+      return {
+        reachable: true,
+        latencyMs: Math.round(performance.now() - startedAt),
+        bucket: this.bucketName,
+        region: this.region,
+      };
+    } catch (error) {
+      const latencyMs = Math.round(performance.now() - startedAt);
+      const statusCode = (error as { $metadata?: { httpStatusCode?: number } })
+        ?.$metadata?.httpStatusCode;
+      if (statusCode === 403) {
+        return {
+          reachable: true,
+          latencyMs,
+          bucket: this.bucketName,
+          region: this.region,
+          detail: 'Reachable (HeadBucket restricted by IAM)',
+        };
+      }
+      return {
+        reachable: false,
+        latencyMs,
+        bucket: this.bucketName,
+        region: this.region,
+        detail:
+          error instanceof Error ? error.message.slice(0, 160) : 'S3 unreachable',
+      };
+    }
   }
 
   /** Signs a short-lived GET URL, so the backend never streams file bytes itself. */

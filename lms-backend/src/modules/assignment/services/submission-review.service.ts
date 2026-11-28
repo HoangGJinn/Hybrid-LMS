@@ -3,9 +3,11 @@ import { ZipArchive } from 'archiver';
 import type { Response } from 'express';
 import type { Readable } from 'node:stream';
 import type { AuthenticatedUser } from '../../../common/types/authenticated-user.type.js';
+import { emptyToNull } from '../../../common/utils/string.util.js';
 import { FileFacade } from '../../../shared/file/facades/file.facade.js';
 import { AcademicFacade } from '../../academic/facades/academic.facade.js';
 import { ContentFacade } from '../../content/facades/content.facade.js';
+import { ZaloFacade,buildFrontendLink, composeZaloMessage, formatVnDateTime } from '../../zalo/index.js';
 import type { GradeSubmissionDto } from '../dto/grade-submission.dto.js';
 import type { AssignmentSubmission } from '../entities/assignment-submission.entity.js';
 import type { Assignment } from '../entities/assignment.entity.js';
@@ -20,6 +22,8 @@ import { computeAssignmentStatus } from '../utils/assignment-status.util.js';
 export interface AssignmentSummary {
   readonly id: string;
   readonly classId: string;
+  readonly classCode: string | null;
+  readonly className: string | null;
   readonly title: string;
   readonly instruction: string;
   readonly openAt: Date;
@@ -49,6 +53,7 @@ export class SubmissionReviewService {
     private readonly academicFacade: AcademicFacade,
     private readonly contentFacade: ContentFacade,
     private readonly fileFacade: FileFacade,
+    private readonly zaloFacade: ZaloFacade,
   ) {}
 
   /** Assignments of every class the student is enrolled in, with the student's own status. */
@@ -68,17 +73,21 @@ export class SubmissionReviewService {
       links.map((link) => [link.assignmentId, link.classId]),
     );
     const now = new Date();
-    return assignments.map((assignment) =>
-      this.toSummary(
+    const classById = new Map(classes.map((classRoom) => [classRoom.id, classRoom]));
+    return assignments.map((assignment) => {
+      const classId = classOf.get(assignment.id) ?? '';
+      const classRoom = classById.get(classId);
+      return this.toSummary(
         assignment,
-        classOf.get(assignment.id) ?? '',
+        classId,
         computeAssignmentStatus(
           assignment,
           mine.find((s) => s.assignmentId === assignment.id) ?? null,
           now,
         ),
-      ),
-    );
+        classRoom ? { code: classRoom.classCode, name: classRoom.name } : null,
+      );
+    });
   }
 
   /** The student's own submissions across all their classes. */
@@ -147,7 +156,10 @@ export class SubmissionReviewService {
     });
   }
 
-  /** Saves the score and feedback of one submission; grading again simply overwrites the previous grade. */
+  /**
+   * Saves the score and feedback of one submission; grading again simply overwrites the previous grade.
+   * Once saved, the student is told on Zalo (fire and forget: it never delays or fails the grading).
+   */
   async grade(
     classId: string,
     assignmentId: string,
@@ -160,15 +172,17 @@ export class SubmissionReviewService {
     if (!submission || submission.assignmentId !== assignmentId) {
       throw new NotFoundException('Submission not found');
     }
+    const comment = emptyToNull(dto.comment);
     await this.submissionRepository.saveGrade(
       submissionId,
       dto.score,
-      dto.comment?.trim() || null,
+      comment,
       new Date(),
     );
     const graded = await this.submissionRepository.findById(submissionId);
     if (!graded) throw new NotFoundException('Submission not found');
     const [view] = await this.toViews([graded]);
+    void this.notifyGraded(classId, assignmentId, graded, dto.score, comment);
     return view;
   }
 
@@ -246,14 +260,69 @@ export class SubmissionReviewService {
     }
   }
 
+  /** Tells the student on Zalo that the submission was graded. Never throws: a Zalo failure must not undo a grade. */
+    /** Tells the student on Zalo that the submission was graded. Never throws: a Zalo failure must not undo a grade. */
+  private async notifyGraded(
+    classId: string,
+    assignmentId: string,
+    graded: AssignmentSubmission,
+    score: number,
+    comment: string | null,
+  ): Promise<void> {
+    try {
+      const assignment =
+        await this.assignmentRepository.findById(assignmentId);
+      if (!assignment) return;
+
+      let classLabel: string | null = null;
+      try {
+        const classView = await this.academicFacade.getClassById(classId);
+        classLabel = `${classView.classCode} - ${classView.name}`;
+      } catch {
+        /* no class name: the line is simply left out */
+      }
+
+      const isLate = graded.submittedAt > assignment.endAt;
+      const message = composeZaloMessage({
+        header: '✅ BÀI TẬP ĐÃ ĐƯỢC CHẤM',
+        fields: [
+          { icon: '📚', label: 'Lớp', value: classLabel },
+          { icon: '📝', label: 'Bài tập', value: assignment.title },
+          { icon: '🎯', label: 'Điểm', value: String(score) },
+          { icon: '💬', label: 'Nhận xét', value: comment },
+          { icon: '⏰', label: 'Hạn nộp', value: formatVnDateTime(assignment.endAt) },
+          {
+            icon: '📤',
+            label: 'Bài nộp',
+            value: `${formatVnDateTime(graded.submittedAt)} (${isLate ? 'nộp trễ' : 'đúng hạn'})`,
+          },
+          { icon: '🕒', label: 'Chấm lúc', value: formatVnDateTime(graded.gradedAt ?? new Date()) },
+        ],
+        footer: this.gradedFooter(
+          buildFrontendLink(`/student/courses/${classId}/assignments/${assignmentId}`),
+        ),
+      });
+      await this.zaloFacade.notifyUser(graded.submittedBy, message);
+    } catch {
+      /* a failed notification is not worth failing the grading */
+    }
+  }
+
+  private gradedFooter(link: string | null): string {
+    return link ? `Chúc bạn học tốt! 💪\n👉 Xem chi tiết: ${link}` : 'Chúc bạn học tốt! 💪';
+  }
+
   private toSummary(
     assignment: Assignment,
     classId: string,
     status: AssignmentStatus,
+    classInfo: { code: string; name: string } | null = null,
   ): AssignmentSummary {
     return {
       id: assignment.id,
       classId,
+      classCode: classInfo?.code ?? null,
+      className: classInfo?.name ?? null,
       title: assignment.title,
       instruction: assignment.instruction,
       openAt: assignment.openAt,

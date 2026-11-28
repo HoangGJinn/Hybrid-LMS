@@ -1,8 +1,12 @@
 import { USE_MOCK } from '@core/config/env';
-import { mockAssignments, mockSubmissions, delay } from '@core/mocks';
-import type { AssignmentSubmission } from '@features/assignments';
-import type { PendingSubmission } from '../types/grading.types';
 import { get, put } from '@core/api/http';
+import { delay, mockAssignments, mockSubmissions } from '@core/mocks';
+import type { AssignmentSubmission } from '@features/assignments';
+import type { LecturerExamAttemptItem } from '@features/exams';
+import type {
+  PendingExamSubmission,
+  PendingSubmission,
+} from '../types/grading.types';
 
 /** Mock submissions only store file names; the queue shows links, so build them on the way out. */
 const withMockFiles = (
@@ -32,6 +36,17 @@ export const gradingService = {
     return delay(list);
   },
 
+  getPendingExamSubmissions: (
+    classIds: string[],
+  ): Promise<PendingExamSubmission[]> => {
+    if (classIds.length === 0) return Promise.resolve([]);
+    if (!USE_MOCK)
+      return get('/api/lecturer/exam-submissions', {
+        classIds: classIds.join(','),
+      });
+    return delay([]);
+  },
+
   /** Grades a submission through its class and assignment; grading again overwrites the previous grade. */
   grade: (
     submission: PendingSubmission,
@@ -53,4 +68,17 @@ export const gradingService = {
     mockSubmissions[index] = graded;
     return delay({ ...graded }, 500);
   },
+
+  /** Grades a FILE exam session through its class and exam; grading again overwrites the previous grade. */
+  gradeExamSession: (
+    classId: string,
+    examId: string,
+    sessionId: string,
+    score: number,
+    comment: string,
+  ): Promise<LecturerExamAttemptItem> =>
+    put(`/api/classes/${classId}/exams/${examId}/sessions/${sessionId}/grade`, {
+      score,
+      comment: comment || null,
+    }),
 };

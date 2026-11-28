@@ -103,6 +103,7 @@ describe('ParticipantService', () => {
       add: vi.fn().mockResolvedValue(undefined),
       addMany: vi.fn().mockResolvedValue(undefined),
       remove: vi.fn(),
+      removeMany: vi.fn(),
     };
     mockUserFacade = {
       findStudentsByIds: vi.fn().mockResolvedValue([]),
@@ -326,6 +327,38 @@ describe('ParticipantService', () => {
     });
   });
 
+  describe('removeMany (bulk remove)', () => {
+    it('deduplicates studentIds and removes enrolments', async () => {
+      mockParticipantRepo.removeMany!.mockResolvedValue(2);
+
+      const result = await service.removeMany('cls-1', owner, {
+        studentIds: ['stu-1', 'stu-2', 'stu-1'],
+      });
+
+      expect(mockParticipantRepo.removeMany).toHaveBeenCalledWith('cls-1', [
+        'stu-1',
+        'stu-2',
+      ]);
+      expect(result).toEqual({ removed: 2 });
+    });
+
+    it('refuses to change a class that has ended', async () => {
+      mockClassService.findById!.mockResolvedValue(endedClass);
+
+      await expect(
+        service.removeMany('cls-1', admin, { studentIds: ['stu-1'] }),
+      ).rejects.toThrow(ConflictException);
+      expect(mockParticipantRepo.removeMany).not.toHaveBeenCalled();
+    });
+
+    it('refuses a lecturer who does not teach the class', async () => {
+      await expect(
+        service.removeMany('cls-1', otherLecturer, { studentIds: ['stu-1'] }),
+      ).rejects.toThrow(ForbiddenException);
+      expect(mockParticipantRepo.removeMany).not.toHaveBeenCalled();
+    });
+  });
+
   describe('addMany (bulk add)', () => {
     const s1 = makeStudent();
     const s2 = makeStudent({
@@ -419,6 +452,7 @@ describe('ParticipantService', () => {
       ['add', (a) => service.add('cls-1', a, { studentId: 'stu-1' })],
       ['addMany', (a) => service.addMany('cls-1', a, { studentIds: ['stu-1'] })],
       ['remove', (a) => service.remove('cls-1', a, 'stu-1')],
+      ['removeMany', (a) => service.removeMany('cls-1', a, { studentIds: ['stu-1'] })],
       [
         'importParticipants',
         (a) =>
@@ -611,6 +645,35 @@ describe('ParticipantService', () => {
           rows: [{ line: 2, studentCode: 'SV26000001' }],
         }),
       ).rejects.toThrow(ForbiddenException);
+    });
+  });
+
+  describe('audit logging', () => {
+    it('records PARTICIPANT_REMOVED with snapshot before deletion', async () => {
+      const mockAudit = { record: vi.fn().mockResolvedValue(undefined) };
+      const auditedService = new ParticipantService(
+        mockClassService as unknown as ClassService,
+        mockParticipantRepo as unknown as ClassStudentRepository,
+        mockUserFacade as unknown as UserFacade,
+        new ClassAccessPolicy({} as unknown as ClassStudentRepository),
+        mockAudit as any,
+      );
+      mockParticipantRepo.findOne!.mockResolvedValue(makeEnrolment(makeStudent()));
+      mockParticipantRepo.remove!.mockResolvedValue(true);
+
+      await auditedService.remove('cls-1', owner, 'stu-1');
+
+      expect(mockAudit.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'PARTICIPANT_REMOVED',
+          entityType: 'PARTICIPANT',
+          entityId: 'stu-1',
+          parentType: 'CLASS',
+          parentId: 'cls-1',
+          actor: expect.objectContaining({ id: 'lec-1' }),
+          metadata: expect.objectContaining({ studentCode: 'SV26000001' }),
+        }),
+      );
     });
   });
 });

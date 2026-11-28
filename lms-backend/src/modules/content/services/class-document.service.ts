@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { DocumentItemRepository } from '../repositories/document-item.repository.js';
+import type { ItemScope } from '../repositories/item-filters.js';
 
 /** Which documents a class shows, and which of them a student has already opened. */
 @Injectable()
@@ -9,18 +10,20 @@ export class ClassDocumentService {
   ) {}
 
   /** Lists the ids of the documents shown in the class, in display order. */
-  async getDocumentIds(classId: string): Promise<string[]> {
-    return this.documentItemRepository.findDocumentIdsByClassId(classId);
+  async getDocumentIds(classId: string, scope: ItemScope = {}): Promise<string[]> {
+    return this.documentItemRepository.findDocumentIdsByClassId(classId, scope);
   }
 
   /** Tells whether the class shows the document; a document of another class must stay unreachable. */
   async isDocumentInClass(
     classId: string,
     documentId: string,
+    scope: ItemScope = {},
   ): Promise<boolean> {
     const itemIds = await this.documentItemRepository.findItemIdsByDocument(
       classId,
       documentId,
+      scope,
     );
     return itemIds.length > 0;
   }
@@ -43,22 +46,33 @@ export class ClassDocumentService {
     classId: string,
     documentId: string,
     studentId: string,
+    scope: ItemScope = {},
   ): Promise<void> {
     const itemIds = await this.documentItemRepository.findItemIdsByDocument(
       classId,
       documentId,
+      scope,
     );
     if (itemIds.length === 0) {
       throw new NotFoundException('Document not found in this class');
     }
     await this.documentItemRepository.markItemsCompleted(studentId, itemIds);
   }
-    /** Removes the document from every section of the class; returns how many section items were removed. */
-  async removeDocument(classId: string, documentId: string): Promise<number> {
-    return this.documentItemRepository.deleteItemsByDocument(classId, documentId);
+
+  /** Soft-deletes the document from every section of the class; returns how many section items were deleted. */
+  async removeDocument(
+    classId: string,
+    documentId: string,
+    deletedBy: string | null = null,
+  ): Promise<number> {
+    return this.documentItemRepository.deleteItemsByDocument(
+      classId,
+      documentId,
+      deletedBy,
+    );
   }
 
-  /** Tells whether any class still shows the document. */
+  /** Tells whether any section item, deleted or not, still points at the document. */
   async isDocumentReferenced(documentId: string): Promise<boolean> {
     return this.documentItemRepository.isDocumentReferenced(documentId);
   }

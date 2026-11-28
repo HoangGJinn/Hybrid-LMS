@@ -1,10 +1,12 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { Role } from '../../../common/enums/role.enum.js';
 import type { AuthenticatedUser } from '../../../common/types/authenticated-user.type.js';
+import { emptyToNull } from '../../../common/utils/string.util.js';
 import { FileFacade } from '../../../shared/file/facades/file.facade.js';
 import { AcademicFacade } from '../../academic/facades/academic.facade.js';
 import { ContentFacade } from '../../content/facades/content.facade.js';
@@ -33,7 +35,8 @@ export class AssignmentService {
 
   /**
    * UC-33: creates an assignment from the brief, the schedule, the submission rules and the confirmed attachments.
-   * The lecturer then places it in a section and saves the editor, which is what shows it to students.
+   * With `sectionId` the assignment is placed in that section in the same request, and discarded again if
+   * the placing fails, so no assignment is ever left outside every section.
    */
   async create(
     classId: string,
@@ -59,10 +62,14 @@ export class AssignmentService {
         submissionType: dto.submissionType,
         // Online answers take no files, so the accepted formats only matter for file submissions.
         acceptedExtensions: isFileSubmission ? dto.acceptedExtensions : [],
-        submissionNote: dto.submissionNote?.trim() || null,
+        submissionNote: emptyToNull(dto.submissionNote),
+        createdBy: user.id,
       },
       dto.fileIds,
     );
+    if (dto.sectionId) {
+      await this.placeInSection(classId, dto.sectionId, assignment, dto.fileIds);
+    }
     return this.buildView(classId, assignment, user);
   }
 
@@ -132,7 +139,7 @@ export class AssignmentService {
         endAt,
         submissionType: dto.submissionType,
         acceptedExtensions: isFileSubmission ? dto.acceptedExtensions : [],
-        submissionNote: dto.submissionNote?.trim() || null,
+        submissionNote: emptyToNull(dto.submissionNote),
       },
       removedFileIds,
       dto.fileIds,
@@ -147,7 +154,7 @@ export class AssignmentService {
     return this.buildView(classId, updated, user);
   }
 
-  /** UC-12: one assignment of a class, with its files and (for a student) their own submission. */
+  /** UC-12: one assignment of a class, with its files and (for a student) their own submission. A hidden one is invisible to students. */
   async findOne(
     classId: string,
     assignmentId: string,
@@ -157,6 +164,7 @@ export class AssignmentService {
     const isInClass = await this.contentFacade.isAssignmentInClass(
       classId,
       assignmentId,
+      { visibleOnly: user.role === Role.STUDENT },
     );
     const assignment = isInClass
       ? await this.assignmentRepository.findById(assignmentId)
@@ -168,9 +176,10 @@ export class AssignmentService {
   }
 
   /**
-   * UC-34: removes the assignment from the class. When nothing else shows it and nobody has submitted,
-   * the assignment and its attached files are deleted for good (S3 included); otherwise the data is kept,
-   * so a student's work is never lost by hiding an assignment.
+   * UC-34: deletes the assignment from the class. It must belong to the class, and nobody may have
+   * submitted: submissions and grades are academic records, so such an assignment can only be hidden.
+   * The delete is soft: the assignment, its files and the row recording who deleted it are kept for
+   * 30 days (the clean-up job removes them after that), so an admin can trace and restore it.
    */
   async remove(
     classId: string,
@@ -178,25 +187,45 @@ export class AssignmentService {
     user: AuthenticatedUser,
   ): Promise<void> {
     await this.academicFacade.assertCanManageClass(classId, user);
-    const assignment = await this.assignmentRepository.findById(assignmentId);
-    if (!assignment) {
-      throw new NotFoundException('Assignment not found');
-    }
-    const removedItems = await this.contentFacade.removeAssignmentFromClass(
+    const isInClass = await this.contentFacade.isAssignmentInClass(
       classId,
       assignmentId,
     );
-    const isStillShown =
-      await this.contentFacade.isAssignmentReferenced(assignmentId);
-    if (removedItems === 0 && isStillShown) {
+    if (!isInClass) {
       throw new NotFoundException('Assignment not found in this class');
     }
-    const hasSubmissions =
-      (await this.submissionService.count(assignmentId)) > 0;
-    if (isStillShown || hasSubmissions) return;
-    const fileIds = await this.assignmentRepository.findFileIds(assignmentId);
-    await this.assignmentRepository.deleteById(assignmentId);
-    await this.fileFacade.deleteFiles(fileIds);
+    if ((await this.submissionService.count(assignmentId)) > 0) {
+      throw new ConflictException(
+        'Students have already submitted to this assignment, so it cannot be deleted. Hide it instead',
+      );
+    }
+    await this.contentFacade.removeAssignmentFromClass(
+      classId,
+      assignmentId,
+      user.id,
+    );
+  }
+
+  /** Puts a new assignment into its section; on any failure the assignment and its files are discarded. */
+  private async placeInSection(
+    classId: string,
+    sectionId: string,
+    assignment: Assignment,
+    fileIds: string[],
+  ): Promise<void> {
+    try {
+      const isPlaced = await this.contentFacade.addAssignmentToSection(
+        classId,
+        sectionId,
+        assignment.id,
+        assignment.title,
+      );
+      if (!isPlaced) throw new NotFoundException('Section not found');
+    } catch (error) {
+      await this.assignmentRepository.deleteById(assignment.id);
+      await this.fileFacade.deleteFiles(fileIds);
+      throw error;
+    }
   }
 
   private async buildView(

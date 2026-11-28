@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { ClassStudent } from '../entities/class-student.entity.js';
 import { escapeLike } from '../../../common/utils/sql.util.js';
 
@@ -76,5 +76,15 @@ export class ClassStudentRepository {
   async remove(classId: string, studentId: string): Promise<boolean> {
     const result = await this.classStudentRepo.delete({ classId, studentId });
     return (result.affected ?? 0) > 0;
+  }
+
+  /** Removes several students from the class in one statement; returns how many rows were removed. */
+  async removeMany(classId: string, studentIds: string[]): Promise<number> {
+    if (studentIds.length === 0) return 0;
+    const result = await this.classStudentRepo.delete({
+      classId,
+      studentId: In(studentIds),
+    });
+    return result.affected ?? 0;
   }
 }

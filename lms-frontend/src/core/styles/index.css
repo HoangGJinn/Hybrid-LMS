@@ -16,7 +16,7 @@
     --sidebar-active: 39 92% 50%;     /* selected menu item #F5A30C */
     --tab-indicator: 340 82% 52%;     /* tab underline #E91E63 */
 
-    --background: 0 0% 91%;
+    --background: 210 20% 98%;
     --foreground: 205 40% 12%;
     --card: 0 0% 100%;
     --card-foreground: 205 40% 12%;
@@ -24,7 +24,7 @@
     --popover-foreground: 205 40% 12%;
     --secondary: 205 25% 94%;
     --secondary-foreground: 205 95% 29%;
-    --muted: 0 0% 95%;
+    --muted: 210 20% 94%;
     --muted-foreground: 205 12% 38%;
     --accent: 205 45% 92%;
     --accent-foreground: 205 95% 29%;
@@ -32,8 +32,8 @@
     --destructive-foreground: 0 0% 100%;
     --success: 152 60% 32%;
     --warning: 38 92% 45%;
-    --border: 0 0% 83%;
-    --input: 0 0% 78%;
+    --border: 214 20% 88%;
+    --input: 214 20% 82%;
     --ring: 212 80% 42%;
     --radius: 0.75rem;
   }

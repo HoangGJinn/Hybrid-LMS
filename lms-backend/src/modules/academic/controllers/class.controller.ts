@@ -1,16 +1,29 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseBoolPipe,
+  ParseUUIDPipe,
   Patch,
   Post,
   Query,
+  Res,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { ClassService } from '../services/class.service.js';
 import { CreateClassDto } from '../dto/create-class.dto.js';
 import { UpdateClassDto } from '../dto/update-class.dto.js';
+import { ImportClassesDto } from '../dto/import-classes.dto.js';
+import { ImportClassDataDto } from '../dto/import-class-data.dto.js';
+import { ClassDataImportService } from '../services/class-data-import.service.js';
+import { ClassDataImportResult } from '../types/class-data-import.type.js';
+import { ClassExportService } from '../services/class-export.service.js';
+import type { ClassListExportRow } from '../utils/class-list-export.builder.js';
+import { ClassImportService } from '../services/class-import.service.js';
+import { sendXlsx } from '../../../shared/excel/workbook.util.js';
+import { ClassImportResult } from '../types/class-import.type.js';
 import { ClassView } from '../types/class-view.type.js';
 import { Auth } from '../../../common/decorators/auth.decorator.js';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator.js';
@@ -27,6 +40,9 @@ import { PaginatedResult } from '../../../common/types/paginated-result.type.js'
 export class ClassController {
   constructor(
     private readonly classService: ClassService,
+    private readonly importService: ClassImportService,
+    private readonly dataImportService: ClassDataImportService,
+    private readonly exportService: ClassExportService,
     private readonly academicFacade: AcademicFacade,
   ) {}
 
@@ -65,17 +81,81 @@ export class ClassController {
     return this.classService.create(dto);
   }
 
+  /**
+   * Bulk create from the rows of an Excel file. With `dryRun` it only reports, per row, whether the
+   * class would be created, skipped as a duplicate (code already in use or repeated in the file) or
+   * rejected; without it the valid rows are created.
+   */
+  @Post('import')
+  async importClasses(
+    @Body() dto: ImportClassesDto,
+  ): Promise<ClassImportResult> {
+    return this.importService.importClasses(dto);
+  }
+
+  /**
+   * Creates the classes of several roster files and adds their students. With `dryRun` it only
+   * reports, per file and row, what would happen; without it everything valid is created in one
+   * transaction.
+   */
+  @Post('import-data')
+  async importClassData(
+    @Body() dto: ImportClassDataDto,
+  ): Promise<ClassDataImportResult> {
+    return this.dataImportService.importData(dto);
+  }
+
+  /** JSON list of every class the lecturer teaches (ended ones included), for admin user details. */
+  @Get('lecturers/:lecturerId')
+  async getLecturerClasses(
+    @Param('lecturerId', ParseUUIDPipe) lecturerId: string,
+  ): Promise<ClassListExportRow[]> {
+    return this.exportService.getLecturerClasses(lecturerId);
+  }
+
+  /** JSON list of every class the student is enrolled in (ended ones included), for admin user details. */
+  @Get('students/:studentId')
+  async getStudentClasses(
+    @Param('studentId', ParseUUIDPipe) studentId: string,
+  ): Promise<ClassListExportRow[]> {
+    return this.exportService.getStudentClasses(studentId);
+  }
+
+  /**
+   * Excel list of every class the lecturer teaches (ended ones included). Written to `response`
+   * directly so the JSON envelope does not wrap the file.
+   */
+  @Get('export/lecturers/:lecturerId')
+  async exportLecturerClasses(
+    @Param('lecturerId', ParseUUIDPipe) lecturerId: string,
+    @Res() response: Response,
+  ): Promise<void> {
+    sendXlsx(response, await this.exportService.exportLecturerClasses(lecturerId));
+  }
+
+  /** Excel list of every class the student is enrolled in (ended ones included). */
+  @Get('export/students/:studentId')
+  async exportStudentClasses(
+    @Param('studentId', ParseUUIDPipe) studentId: string,
+    @Res() response: Response,
+  ): Promise<void> {
+    sendXlsx(response, await this.exportService.exportStudentClasses(studentId));
+  }
+
   @Get()
   async getAll(
     @Query('isActive', new ParseBoolPipe({ optional: true }))
     isActive?: boolean,
     @Query('semesterId') semesterId?: string,
     @Query('search') search?: string,
+    @Query('isDeleted', new ParseBoolPipe({ optional: true }))
+    isDeleted?: boolean,
   ): Promise<ClassView[]> {
     return this.classService.findAll({
       isActive,
       semesterId,
       search,
+      ...(isDeleted !== undefined ? { isDeleted } : {}),
     });
   }
 
@@ -116,5 +196,13 @@ export class ClassController {
   @Patch(':id/deactivate')
   async deactivate(@Param('id') id: string): Promise<ClassView> {
     return this.classService.deactivate(id);
+  }
+
+  @Delete(':id')
+  async remove(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() actor?: AuthenticatedUser,
+  ): Promise<ClassView> {
+    return this.classService.remove(id, actor?.id ?? null);
   }
 }

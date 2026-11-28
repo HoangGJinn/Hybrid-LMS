@@ -7,12 +7,18 @@ describe('StudentSummary', () => {
   const makeStudent = (
     status: StudentStatus,
     isActive: boolean,
+    deletedAt: Date | null = null,
   ): Student =>
     ({
       userId: 'usr-1',
       studentCode: 'SV26000001',
       status,
-      user: { fullName: 'Nguyen Van A', email: 'a@school.edu.vn', isActive },
+      user: {
+        fullName: 'Nguyen Van A',
+        email: 'a@school.edu.vn',
+        isActive,
+        deletedAt,
+      },
     }) as Student;
 
   it('can enrol an active student who is studying', () => {
@@ -38,6 +44,16 @@ describe('StudentSummary', () => {
 
     expect(summary.enrollmentBlockedReason).toBe(
       'The student account is deactivated',
+    );
+  });
+
+  it('blocks a permanently removed account', () => {
+    const summary = StudentSummary.fromEntity(
+      makeStudent(StudentStatus.STUDYING, false, new Date()),
+    );
+
+    expect(summary.enrollmentBlockedReason).toBe(
+      'The student account has been permanently removed',
     );
   });
 

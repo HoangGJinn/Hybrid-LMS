@@ -1,45 +1,30 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { AsyncView } from '@shared/components/AsyncView';
 import { PageHeader } from '@shared/components/PageHeader';
 import { Button } from '@shared/components/ui/button';
-import { useCalendarEvents } from '../hooks/useCalendarEvents';
-import type { CalendarEvent, CalendarEventKind } from '../types/calendar.types';
 import { toAsyncState } from '@shared/utils/async-state';
 import { cn } from '@shared/utils/cn';
-import { formatDateTime } from '@shared/utils/format';
+import { CalendarEventCard } from '../components/CalendarEventCard';
+import { KindFilter } from '../components/KindFilter';
+import { UpcomingDeadlines } from '../components/UpcomingDeadlines';
+import { useCalendarEvents } from '../hooks/useCalendarEvents';
+import type { CalendarKindFilter } from '../types/calendar.types';
 import {
   addMonths,
   buildMonthGrid,
   dateKey,
+  formatTime,
+  groupByDay,
   isSameMonth,
   startOfMonth,
   weekdayLabels,
 } from '../utils/calendarUtils';
+import { getChipClassName, KIND_META } from '../utils/eventMeta';
+import { BLUE_SCROLLBAR } from '../utils/scrollArea';
 
 const MAX_CHIPS_PER_DAY = 2;
-
-const KIND_META: Record<
-  CalendarEventKind,
-  { label: string; chip: string; dot: string }
-> = {
-  ASSIGNMENT: {
-    label: 'Assignment',
-    chip: 'bg-primary/30 text-brand',
-    dot: 'bg-primary',
-  },
-  EXAM: {
-    label: 'Exam',
-    chip: 'bg-destructive/15 text-destructive',
-    dot: 'bg-destructive',
-  },
-  REVIEW: {
-    label: 'Review',
-    chip: 'bg-warning/25 text-foreground',
-    dot: 'bg-warning',
-  },
-};
+const MAX_DOTS_PER_DAY = 3;
 
 const monthFormatter = new Intl.DateTimeFormat('en-US', {
   month: 'long',
@@ -52,9 +37,10 @@ const dayFormatter = new Intl.DateTimeFormat('en-US', {
 });
 
 const CalendarPage = () => {
-  const state = toAsyncState(useCalendarEvents());
   const [month, setMonth] = useState(() => startOfMonth(new Date()));
   const [selectedKey, setSelectedKey] = useState(() => dateKey(new Date()));
+  const [filter, setFilter] = useState<CalendarKindFilter>('ALL');
+  const state = toAsyncState(useCalendarEvents(month));
   const todayKey = dateKey(new Date());
   const cells = useMemo(() => buildMonthGrid(month), [month]);
 
@@ -67,7 +53,7 @@ const CalendarPage = () => {
     <div>
       <PageHeader
         title="Calendar"
-        subtitle="Assignment deadlines, exams and scheduled reviews"
+        subtitle="Assignment deadlines and exams across your classes."
         actions={
           <div className="flex items-center gap-2">
             <Button
@@ -98,28 +84,25 @@ const CalendarPage = () => {
           </div>
         }
       />
+      <KindFilter value={filter} onChange={setFilter} />
       <AsyncView state={state}>
         {(events) => {
-          const byDay = new Map<string, CalendarEvent[]>();
-          events.forEach((event) => {
-            const key = dateKey(new Date(event.at));
-            byDay.set(key, [...(byDay.get(key) ?? []), event]);
-          });
+          const byDay = groupByDay(events, filter);
           const selectedEvents = byDay.get(selectedKey) ?? [];
           return (
-            <div className="grid gap-6 xl:grid-cols-[1fr_320px]">
+            <div className="grid gap-4 xl:h-[calc(100dvh-16.5rem)] xl:min-h-[30rem] xl:grid-cols-[1fr_320px] xl:grid-rows-1">
               <section
                 aria-label="Month view"
-                className="overflow-hidden rounded-xl border bg-card shadow-sm"
+                className="flex flex-col overflow-hidden rounded-xl border bg-card shadow-sm xl:min-h-0"
               >
                 <div className="grid grid-cols-7 border-b bg-muted/50 text-center text-xs font-medium uppercase text-muted-foreground">
                   {weekdayLabels().map((d) => (
-                    <div key={d} className="py-2">
+                    <div key={d} className="py-1.5">
                       {d}
                     </div>
                   ))}
                 </div>
-                <div className="grid grid-cols-7">
+                <div className="grid flex-1 grid-cols-7 xl:grid-rows-6">
                   {cells.map((day) => {
                     const key = dateKey(day);
                     const dayEvents = byDay.get(key) ?? [];
@@ -134,43 +117,46 @@ const CalendarPage = () => {
                         aria-pressed={isSelected}
                         aria-label={`${dayFormatter.format(day)}, ${dayEvents.length} event${dayEvents.length === 1 ? '' : 's'}`}
                         className={cn(
-                          'flex min-h-16 flex-col items-stretch gap-1 border-0 border-b border-r bg-transparent p-1.5 text-left text-foreground transition-colors hover:bg-accent sm:min-h-24',
+                          'flex min-h-16 flex-col items-stretch gap-0.5 overflow-hidden border-0 border-b border-r bg-transparent p-1 text-left text-foreground transition-colors hover:bg-accent sm:min-h-20 xl:min-h-0',
                           !inMonth && 'bg-muted/30 text-muted-foreground',
                           isSelected &&
                             'bg-accent ring-2 ring-inset ring-primary',
                         )}
                       >
-                        <span
-                          className={cn(
-                            'flex h-6 w-6 items-center justify-center rounded-full text-xs font-medium',
-                            isToday && 'bg-primary text-primary-foreground',
+                        <span className="flex items-center justify-between">
+                          <span
+                            className={cn(
+                              'flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-medium',
+                              isToday && 'bg-primary text-primary-foreground',
+                            )}
+                          >
+                            {day.getDate()}
+                          </span>
+                          {dayEvents.length > MAX_CHIPS_PER_DAY && (
+                            <span className="hidden pr-0.5 text-[10px] text-muted-foreground sm:inline">
+                              +{dayEvents.length - MAX_CHIPS_PER_DAY} more
+                            </span>
                           )}
-                        >
-                          {day.getDate()}
                         </span>
-                        <span className="hidden flex-col gap-1 sm:flex">
+                        <span className="hidden flex-col gap-0.5 sm:flex">
                           {dayEvents.slice(0, MAX_CHIPS_PER_DAY).map((e) => (
                             <span
                               key={e.id}
                               className={cn(
-                                'truncate rounded px-1.5 py-0.5 text-[11px] font-medium',
-                                KIND_META[e.kind].chip,
+                                'truncate rounded px-1 text-[10px] font-medium leading-4',
+                                getChipClassName(e),
+                                e.isDone && 'line-through opacity-60',
                               )}
                             >
-                              {e.title}
+                              {formatTime(e.at)} {e.title}
                             </span>
                           ))}
-                          {dayEvents.length > MAX_CHIPS_PER_DAY && (
-                            <span className="px-1 text-[11px] text-muted-foreground">
-                              +{dayEvents.length - MAX_CHIPS_PER_DAY} more
-                            </span>
-                          )}
                         </span>
                         <span
                           className="flex gap-1 sm:hidden"
                           aria-hidden="true"
                         >
-                          {dayEvents.slice(0, 3).map((e) => (
+                          {dayEvents.slice(0, MAX_DOTS_PER_DAY).map((e) => (
                             <span
                               key={e.id}
                               className={cn(
@@ -186,62 +172,36 @@ const CalendarPage = () => {
                 </div>
               </section>
 
-              <aside aria-label="Selected day" className="space-y-4">
-                <section className="rounded-xl border bg-card p-4 shadow-sm">
-                  <h2 className="mt-0 text-base font-semibold">
+              <aside
+                aria-label="Selected day"
+                className="flex flex-col gap-4 xl:min-h-0"
+              >
+                <section className="flex flex-col rounded-xl border bg-card p-4 shadow-sm xl:min-h-0 xl:flex-[2]">
+                  <h2 className="mb-2 mt-0 shrink-0 text-base font-semibold">
                     {dayFormatter.format(new Date(`${selectedKey}T00:00:00`))}
                   </h2>
-                  {selectedEvents.length === 0 ? (
-                    <p className="m-0 text-sm text-muted-foreground">
-                      Nothing scheduled.
-                    </p>
-                  ) : (
-                    <ul className="m-0 list-none space-y-2 p-0">
-                      {selectedEvents.map((e) => (
-                        <li key={e.id}>
-                          <Link
-                            to={e.href}
-                            className="block rounded-lg border p-3 text-foreground no-underline hover:border-primary"
-                          >
-                            <span
-                              className={cn(
-                                'inline-flex rounded-full px-2 py-0.5 text-xs font-medium',
-                                KIND_META[e.kind].chip,
-                              )}
-                            >
-                              {KIND_META[e.kind].label}
-                            </span>
-                            <p className="m-0 mt-1 text-sm font-medium">
-                              {e.title}
-                            </p>
-                            <p className="m-0 text-xs text-muted-foreground">
-                              {formatDateTime(e.at)}
-                              {e.context && ` · ${e.context}`}
-                            </p>
-                          </Link>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </section>
-                <section className="rounded-xl border bg-card p-4 shadow-sm">
-                  <h2 className="mt-0 text-sm font-semibold">Legend</h2>
-                  <ul className="m-0 flex list-none flex-wrap gap-3 p-0 text-xs text-muted-foreground">
-                    {(Object.keys(KIND_META) as CalendarEventKind[]).map(
-                      (k) => (
-                        <li key={k} className="flex items-center gap-1.5">
-                          <span
-                            className={cn(
-                              'h-2.5 w-2.5 rounded-full',
-                              KIND_META[k].dot,
-                            )}
-                          />
-                          {KIND_META[k].label}
-                        </li>
-                      ),
+                  <div
+                    className={cn(
+                      'max-h-80 min-h-0 flex-1 overflow-y-auto pr-1 xl:max-h-none',
+                      BLUE_SCROLLBAR,
                     )}
-                  </ul>
+                  >
+                    {selectedEvents.length === 0 ? (
+                      <p className="m-0 text-sm text-muted-foreground">
+                        Nothing scheduled.
+                      </p>
+                    ) : (
+                      <ul className="m-0 list-none space-y-2 p-0">
+                        {selectedEvents.map((e) => (
+                          <li key={e.id}>
+                            <CalendarEventCard event={e} />
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
                 </section>
+                <UpcomingDeadlines />
               </aside>
             </div>
           );

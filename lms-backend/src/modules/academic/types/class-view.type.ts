@@ -6,6 +6,7 @@ export class ClassView {
   name: string;
   isActive: boolean;
   endedAt: Date | null;
+  deletedAt?: Date | null;
   subjectId: string;
   subjectCode: string;
   subjectName: string;
@@ -25,6 +26,7 @@ export class ClassView {
       name: cls.name,
       isActive: cls.isActive,
       endedAt: cls.endedAt ?? null,
+      deletedAt: cls.deletedAt ?? null,
       subjectId: cls.subjectId,
       subjectCode: cls.subject?.subjectCode ?? '',
       subjectName: cls.subject?.name ?? '',

@@ -14,7 +14,10 @@ import type { CookieOptions, Request, Response } from 'express';
 import { AuthService } from '../services/auth.service.js';
 import { GoogleAuthDto } from '../dto/google-auth.dto.js';
 import { LoginDto } from '../dto/login.dto.js';
-import { REFRESH_COOKIE_NAME } from '../constants/refresh-cookie-name.constant.js';
+import {
+  ADMIN_REFRESH_COOKIE_NAME,
+  REFRESH_COOKIE_NAME,
+} from '../constants/refresh-cookie-name.constant.js';
 import {
   AuthTokenResponse,
   LoginResponse,
@@ -23,9 +26,12 @@ import { SessionUser } from '../types/session-user.type.js';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator.js';
 import { AuthenticatedUser } from '../../../common/types/authenticated-user.type.js';
 import { Auth } from '../../../common/decorators/auth.decorator.js';
+import { Role } from '../../../common/enums/role.enum.js';
 
 /** The refresh cookie is only sent to the auth routes, never to the rest of the API. */
 const REFRESH_COOKIE_PATH = '/api/auth';
+const ADMIN_PORTAL_ROLES: readonly Role[] = [Role.ADMIN];
+const LEARNING_PORTAL_ROLES: readonly Role[] = [Role.STUDENT, Role.LECTURER];
 
 @Controller('auth')
 export class AuthController {
@@ -37,9 +43,13 @@ export class AuthController {
   async loginWithGoogle(
     @Body() dto: GoogleAuthDto,
     @Res({ passthrough: true }) res: Response,
+    @Req() req?: Request,
   ): Promise<LoginResponse> {
-    const session = await this.authService.loginWithGoogle(dto.idToken);
-    this.setRefreshCookie(res, session.refreshToken);
+    const session = await this.authService.loginWithGoogle(
+      dto.idToken,
+      this.getAllowedPortalRoles(req),
+    );
+    this.setRefreshCookie(res, session.refreshToken, req);
     return { accessToken: session.accessToken, user: session.user };
   }
 
@@ -49,9 +59,13 @@ export class AuthController {
   async login(
     @Body() dto: LoginDto,
     @Res({ passthrough: true }) res: Response,
+    @Req() req?: Request,
   ): Promise<LoginResponse> {
-    const session = await this.authService.loginWithCredentials(dto);
-    this.setRefreshCookie(res, session.refreshToken);
+    const session = await this.authService.loginWithCredentials(
+      dto,
+      this.getAllowedPortalRoles(req),
+    );
+    this.setRefreshCookie(res, session.refreshToken, req);
     return { accessToken: session.accessToken, user: session.user };
   }
 
@@ -67,10 +81,10 @@ export class AuthController {
     if (!rawToken) throw new UnauthorizedException('Missing refresh token');
     try {
       const session = await this.authService.refresh(rawToken);
-      this.setRefreshCookie(res, session.refreshToken);
+      this.setRefreshCookie(res, session.refreshToken, req);
       return { accessToken: session.accessToken };
     } catch (error) {
-      this.clearRefreshCookie(res);
+      this.clearRefreshCookie(res, req);
       throw error;
     }
   }
@@ -90,24 +104,42 @@ export class AuthController {
   ): Promise<{ message: string }> {
     this.assertTrustedOrigin(req);
     await this.authService.logout(this.readRefreshCookie(req));
-    this.clearRefreshCookie(res);
+    this.clearRefreshCookie(res, req);
     return { message: 'Logged out successfully' };
   }
 
+  private isAdminOrigin(req?: Request): boolean {
+    const origin = req?.headers?.origin?.replace(/\/$/, '');
+    const adminOrigin = process.env.ADMIN_URL?.replace(/\/$/, '');
+    return Boolean(
+      origin && (origin === adminOrigin || origin === 'http://localhost:3001'),
+    );
+  }
+
+  private getAllowedPortalRoles(req?: Request): readonly Role[] {
+    return this.isAdminOrigin(req) ? ADMIN_PORTAL_ROLES : LEARNING_PORTAL_ROLES;
+  }
+
+  private getRefreshCookieName(req?: Request): string {
+    return this.isAdminOrigin(req)
+      ? ADMIN_REFRESH_COOKIE_NAME
+      : REFRESH_COOKIE_NAME;
+  }
+
   private readRefreshCookie(req: Request): string | undefined {
-    const value: unknown = req.cookies?.[REFRESH_COOKIE_NAME];
+    const value: unknown = req.cookies?.[this.getRefreshCookieName(req)];
     return typeof value === 'string' && value.length > 0 ? value : undefined;
   }
 
-  private setRefreshCookie(res: Response, token: string): void {
-    res.cookie(REFRESH_COOKIE_NAME, token, {
+  private setRefreshCookie(res: Response, token: string, req?: Request): void {
+    res.cookie(this.getRefreshCookieName(req), token, {
       ...this.getCookieOptions(),
       maxAge: this.authService.getRefreshTtlMs(),
     });
   }
 
-  private clearRefreshCookie(res: Response): void {
-    res.clearCookie(REFRESH_COOKIE_NAME, this.getCookieOptions());
+  private clearRefreshCookie(res: Response, req?: Request): void {
+    res.clearCookie(this.getRefreshCookieName(req), this.getCookieOptions());
   }
 
   /** `none` (cross-site frontend) requires `Secure`, so it is forced on. */
