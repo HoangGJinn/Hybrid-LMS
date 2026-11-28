@@ -45,9 +45,6 @@ const KcCard = ({ kc, saving, onSave }: KcCardProps) => {
   const [text, setText] = useState('');
   const [query, setQuery] = useState('');
 
-  // Follow the server after a save/refetch.
-  useEffect(() => setSelected(kc.routes), [kc.routes]);
-
   // Debounce the search box.
   useEffect(() => {
     const t = setTimeout(() => setQuery(text.trim()), 300);
@@ -242,7 +239,7 @@ const XesMappingPage = () => {
         )}
         {list.data?.map((kc) => (
           <KcCard
-            key={kc.kcId}
+            key={`${kc.kcId}:${kc.routes.map((r) => r.xesRoute).join('|')}`}
             kc={kc}
             saving={save.isPending}
             onSave={handleSave}

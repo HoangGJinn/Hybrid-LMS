@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { CheckCircle2, XCircle } from 'lucide-react';
 import { AsyncView } from '@shared/components/AsyncView';
@@ -65,7 +65,10 @@ const QuizRunner = ({ quiz, courseId }: { quiz: Quiz; courseId: string }) => {
   const [current, setCurrent] = useState(firstOpen === -1 ? 0 : firstOpen);
   const [picked, setPicked] = useState<string | null>(null);
   const [typed, setTyped] = useState('');
-  const shownAt = useRef(Date.now());
+  const shownAt = useRef<number | null>(null);
+  useEffect(() => {
+    shownAt.current = Date.now();
+  }, []);
 
   const total = quiz.questions.length;
   const question = quiz.questions[current];
@@ -92,10 +95,10 @@ const QuizRunner = ({ quiz, courseId }: { quiz: Quiz; courseId: string }) => {
     answerQuestion.mutate({
       quizInstanceQuestionId: question.id,
       ...(isFill ? { answerText: typed.trim() } : { selectedOptionId: picked! }),
-      timeSpentSeconds: Math.min(
-        3600,
-        Math.round((Date.now() - shownAt.current) / 1000),
-      ),
+      timeSpentSeconds:
+        shownAt.current === null
+          ? 0
+          : Math.min(3600, Math.round((Date.now() - shownAt.current) / 1000)),
     });
   };
 
