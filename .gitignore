@@ -20,3 +20,4 @@ node_modules/
 # nestJS-modular-monolith-architecture-template/
 
 *.tsbuildinfo
+*.pem

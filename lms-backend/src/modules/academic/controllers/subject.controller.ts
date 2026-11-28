@@ -20,7 +20,6 @@ import { Auth } from '../../../common/decorators/auth.decorator.js';
 import { Role } from '../../../common/enums/role.enum.js';
 
 @Controller('subjects')
-@Auth(Role.ADMIN)
 export class SubjectController {
   constructor(
     private readonly subjectService: SubjectService,
@@ -28,12 +27,14 @@ export class SubjectController {
   ) {}
 
   @Get()
+  @Auth(Role.ADMIN, Role.LECTURER, Role.STUDENT)
   async getAll(): Promise<SubjectView[]> {
     const subjects = await this.subjectService.findAll();
     return subjects.map((s) => SubjectView.fromEntity(s));
   }
 
   @Get(':id')
+  @Auth(Role.ADMIN, Role.LECTURER, Role.STUDENT)
   async getById(@Param('id') id: string): Promise<SubjectView> {
     const subject = await this.subjectService.findById(id);
     return SubjectView.fromEntity(subject);
@@ -44,6 +45,7 @@ export class SubjectController {
    * subject would be created, skipped as a duplicate or rejected.
    */
   @Post('import')
+  @Auth(Role.ADMIN)
   async importSubjects(
     @Body() dto: ImportSubjectsDto,
   ): Promise<CatalogImportResult> {
@@ -51,12 +53,14 @@ export class SubjectController {
   }
 
   @Post()
+  @Auth(Role.ADMIN)
   async create(@Body() dto: CreateSubjectDto): Promise<SubjectView> {
     const subject = await this.subjectService.create(dto);
     return SubjectView.fromEntity(subject);
   }
 
   @Patch(':id')
+  @Auth(Role.ADMIN)
   async update(
     @Param('id') id: string,
     @Body() dto: UpdateSubjectDto,
@@ -66,6 +70,7 @@ export class SubjectController {
   }
 
   @Delete(':id')
+  @Auth(Role.ADMIN)
   @HttpCode(HttpStatus.OK)
   async delete(@Param('id') id: string): Promise<{ message: string }> {
     await this.subjectService.delete(id);

@@ -1,10 +1,19 @@
 export { GenerationJobStatus } from './enums/generation-job-status.enum.js';
 export { QuizInstanceStatus } from './enums/quiz-instance-status.enum.js';
+export { QuizGenerationStrategy } from './enums/quiz-generation-strategy.enum.js';
+export { QuestionSource } from './enums/question-source.enum.js';
+export { QuestionDifficulty } from './enums/question-difficulty.enum.js';
+export { QuestionReviewStatus } from './enums/question-review-status.enum.js';
+export { ImportBatchStatus } from './enums/import-batch-status.enum.js';
+export { KcAssignedBy } from './enums/kc-assigned-by.enum.js';
 
 export { GenerationJob } from './entities/generation-job.entity.js';
 export { LlmPromptLog } from './entities/llm-prompt-log.entity.js';
+export { QuestionImportBatch } from './entities/question-import-batch.entity.js';
+export { Question } from './entities/question.entity.js';
+export { QuestionOption } from './entities/question-option.entity.js';
+export { QuestionKnowledgeComponent } from './entities/question-knowledge-component.entity.js';
 export { QuizInstance } from './entities/quiz-instance.entity.js';
 export { QuizInstanceQuestion } from './entities/quiz-instance-question.entity.js';
-export { QuestionDistraction } from './entities/question-distraction.entity.js';
 export { QuizInstanceAnswer } from './entities/quiz-instance-answer.entity.js';
 export { QuizResultExport } from './entities/quiz-result-export.entity.js';

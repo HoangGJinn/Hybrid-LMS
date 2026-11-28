@@ -29,7 +29,7 @@ import {
   documentRoute,
   lecturerDocumentRoute,
 } from '@features/documents/routes';
-import { quizRoute } from '@features/quizzes/routes';
+import { practiceRoute, quizRoute } from '@features/quizzes/routes';
 import {
   assignmentDetailRoute,
   studentAssignmentsRoute,
@@ -44,6 +44,8 @@ import { masteryRoute } from '@features/mastery/routes';
 import { roadmapRoute } from '@features/roadmap/routes';
 import { analyticsRoute } from '@features/analytics/routes';
 import { aiGeneratorRoute } from '@features/ai-generate/routes';
+import { questionBankRoute } from '@features/question-bank/routes';
+import { xesMappingRoute } from '@features/xes-mapping/routes';
 
 // Each feature owns its routes (features/<name>/routes.ts). This file only assembles them, so features never import each other to build the tree.
 export const router = createBrowserRouter([
@@ -79,6 +81,7 @@ export const router = createBrowserRouter([
                     detailPages: [
                       documentRoute,
                       quizRoute,
+                      practiceRoute,
                       assignmentDetailRoute,
                       examRoomRoute,
                     ],
@@ -105,8 +108,10 @@ export const router = createBrowserRouter([
                   }),          
                   gradingDeskRoute,
                   studentRosterRoute,
+                  questionBankRoute,
                   analyticsRoute,
                   aiGeneratorRoute,
+                  xesMappingRoute,
                 ],
               },
               {

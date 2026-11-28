@@ -1,4 +1,4 @@
-import { CalendarClock } from 'lucide-react';
+import { CalendarClock, TrendingDown, TrendingUp } from 'lucide-react';
 import { AsyncView } from '@shared/components/AsyncView';
 import { EmptyState } from '@shared/components/EmptyState';
 import { PageHeader } from '@shared/components/PageHeader';
@@ -13,6 +13,10 @@ const level = (p: number) =>
     : p >= 0.4
       ? { label: 'Developing', cls: 'bg-amber-500' }
       : { label: 'Needs review', cls: 'bg-destructive' };
+
+/** Change since the previous update, in percentage points; null when there is nothing to compare with. */
+const delta = (now: number, prev: number | null) =>
+  prev === null ? null : Math.round((now - prev) * 100);
 
 const MasteryPage = () => {
   const state = toAsyncState(useMasteryOverview());
@@ -37,6 +41,35 @@ const MasteryPage = () => {
             );
           return (
             <div className="grid gap-6 lg:grid-cols-2">
+              <details className="rounded-lg border bg-card p-4 text-sm lg:col-span-2">
+                <summary className="cursor-pointer font-medium">
+                  How is mastery calculated?
+                </summary>
+                <ol className="mt-2 list-decimal space-y-1 pl-5 text-muted-foreground">
+                  <li>
+                    The ENAS-KT model reads your last answers (up to 99) and
+                    predicts the chance you answer each question of a topic
+                    correctly.
+                  </li>
+                  <li>
+                    A topic&apos;s mastery is the average of those chances over
+                    a sample of up to 30 of its questions.
+                  </li>
+                  <li>
+                    It is saved each time you submit a quiz, so the change
+                    shown is always between two consecutive updates.
+                  </li>
+                  <li>
+                    Subject ability is the average mastery of the topics you
+                    practised in that subject (0–100).
+                  </li>
+                  <li>
+                    The next review comes after 1, 3 or 7 days for topics under
+                    40%, 60% or 80%, and grows with each good review for
+                    stronger topics.
+                  </li>
+                </ol>
+              </details>
               <section className="flex flex-col items-center rounded-lg border bg-card p-4">
                 <h2 className="mt-0 self-start text-lg font-semibold">
                   Mastery overview
@@ -77,8 +110,32 @@ const MasteryPage = () => {
                               style={{ width: `${k.pMastery * 100}%` }}
                             />
                           </div>
-                          <p className="m-0 mt-1 text-xs text-muted-foreground">
-                            {k.attemptsCount} attempts
+                          <p className="m-0 mt-1 flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground">
+                            <span>
+                              {k.attemptsCount} attempts · {k.correctCount} correct
+                            </span>
+                            {(() => {
+                              const d = delta(k.pMastery, k.pPrev);
+                              if (d === null || d === 0) return null;
+                              const Icon = d > 0 ? TrendingUp : TrendingDown;
+                              return (
+                                <span
+                                  className={cn(
+                                    'inline-flex items-center gap-1',
+                                    d > 0 ? 'text-emerald-600' : 'text-destructive',
+                                  )}
+                                >
+                                  <Icon className="h-3 w-3" />
+                                  {d > 0 ? '+' : ''}
+                                  {d} pts since last update
+                                </span>
+                              );
+                            })()}
+                            <span>
+                              {k.source === 'enas'
+                                ? `ENAS · ${k.sampleSize} questions`
+                                : 'Recent accuracy (model offline)'}
+                            </span>
                           </p>
                         </li>
                       );

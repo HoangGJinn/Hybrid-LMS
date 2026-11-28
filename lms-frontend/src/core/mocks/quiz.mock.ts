@@ -1,7 +1,28 @@
 import type { GenerationJob } from '@features/ai-generate';
-import type { QuizInstance } from '@features/quizzes';
 
-export const mockQuizzes: QuizInstance[] = [
+export interface MockQuizQuestion {
+  id: string;
+  content: string;
+  options: string[];
+  correctIndex: number;
+  kcId: string;
+  explanation: string;
+}
+
+export interface MockQuizInstance {
+  id: string;
+  generationJobId: string;
+  studentId: string;
+  title: string;
+  targetDifficulty: 'EASY' | 'MEDIUM' | 'HARD';
+  numQuestions: number;
+  status: 'CREATED' | 'IN_PROGRESS' | 'SUBMITTED' | 'GRADED';
+  score: number | null;
+  createdAt: string;
+  questions: MockQuizQuestion[];
+}
+
+export const mockQuizzes: MockQuizInstance[] = [
   {
     id: 'q1',
     generationJobId: 'job1',

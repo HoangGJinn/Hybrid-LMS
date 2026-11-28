@@ -141,4 +141,13 @@ export const UPLOAD_RULES: Readonly<Record<FilePurpose, UploadRule>> = {
     isScopedToAssignment: false,
     extensionByContentType: WORK_CONTENT_TYPES,
   },
+  [FilePurpose.QUESTION_IMPORT]: {
+    allowedRoles: [Role.LECTURER],
+    keyPrefix: 'question-imports',
+    maxSizeBytes: 5 * 1024 * 1024,
+    extensionByContentType: {
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+    },
+    isScopedToAssignment: false,
+  },
 };

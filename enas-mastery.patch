@@ -1,0 +1,1655 @@
+diff --git a/lms-backend/migrations/014-enas-mastery.sql b/lms-backend/migrations/014-enas-mastery.sql
+new file mode 100644
+index 0000000..462c085
+--- /dev/null
++++ b/lms-backend/migrations/014-enas-mastery.sql
+@@ -0,0 +1,62 @@
++-- Chuyển 4 bảng mastery từ BKT sang ENAS-KT.
++-- Môi trường local dùng synchronize nên không cần chạy; chạy tay trên môi trường khác.
++-- Idempotent: chạy lại nhiều lần vẫn an toàn.
++
++BEGIN;
++
++-- 1) student_kc_mastery: bỏ tham số BKT (ENAS không có), thêm thông tin truy vết dự đoán.
++ALTER TABLE student_kc_mastery
++  DROP COLUMN IF EXISTS p_learn,
++  DROP COLUMN IF EXISTS p_guess,
++  DROP COLUMN IF EXISTS p_slip;
++
++ALTER TABLE student_kc_mastery
++  ADD COLUMN IF NOT EXISTS p_prev        numeric(4,3),
++  ADD COLUMN IF NOT EXISTS sample_size   integer     NOT NULL DEFAULT 0,
++  ADD COLUMN IF NOT EXISTS correct_count integer     NOT NULL DEFAULT 0,
++  ADD COLUMN IF NOT EXISTS source        varchar(10) NOT NULL DEFAULT 'enas',
++  ADD COLUMN IF NOT EXISTS enas_log_seq  integer,
++  ADD COLUMN IF NOT EXISTS lag_mode      varchar(10);
++
++-- Mỗi sinh viên chỉ có một dòng cho mỗi KC (giữ dòng mới nhất nếu lỡ có trùng).
++DELETE FROM student_kc_mastery a
++USING student_kc_mastery b
++WHERE a.student_id = b.student_id AND a.kc_id = b.kc_id
++  AND (a.last_updated, a.id) < (b.last_updated, b.id);
++CREATE UNIQUE INDEX IF NOT EXISTS uq_student_kc_mastery_student_kc
++  ON student_kc_mastery (student_id, kc_id);
++
++-- 2) student_subject_competency: một dòng cho mỗi (sinh viên, môn).
++CREATE UNIQUE INDEX IF NOT EXISTS uq_student_subject_competency_student_subject
++  ON student_subject_competency (student_id, subject_id);
++
++-- 3) student_competency_history: quiz đầu tiên của môn chưa có "trước"; mỗi quiz ghi một lần.
++ALTER TABLE student_competency_history ALTER COLUMN ability_score_before DROP NOT NULL;
++CREATE UNIQUE INDEX IF NOT EXISTS uq_student_competency_history_quiz
++  ON student_competency_history (quiz_instance_id, subject_competency_id);
++
++-- 4) Bảng mới: mastery của từng KC trước/sau mỗi quiz.
++CREATE TABLE IF NOT EXISTS student_kc_mastery_history (
++  id               uuid         NOT NULL DEFAULT uuid_generate_v4() PRIMARY KEY,
++  student_id       uuid         NOT NULL,
++  kc_id            uuid         NOT NULL,
++  quiz_instance_id uuid         NOT NULL,
++  p_before         numeric(4,3),
++  p_after          numeric(4,3) NOT NULL,
++  sample_size      integer      NOT NULL DEFAULT 0,
++  source           varchar(10)  NOT NULL DEFAULT 'enas',
++  enas_log_seq     integer,
++  recorded_at      timestamptz  NOT NULL DEFAULT now(),
++  CONSTRAINT "FK_c76db8628f66adfcadff15b6d30" FOREIGN KEY (student_id)
++    REFERENCES students (user_id) ON DELETE CASCADE,
++  CONSTRAINT "FK_efe036f735a736165af71cb717d" FOREIGN KEY (kc_id)
++    REFERENCES knowledge_components (id) ON DELETE CASCADE,
++  CONSTRAINT "FK_6c09c75e78211e6803b0c30895c" FOREIGN KEY (quiz_instance_id)
++    REFERENCES quiz_instances (id) ON DELETE CASCADE
++);
++CREATE UNIQUE INDEX IF NOT EXISTS uq_student_kc_mastery_history_quiz_kc
++  ON student_kc_mastery_history (quiz_instance_id, kc_id);
++CREATE INDEX IF NOT EXISTS idx_student_kc_mastery_history_student_kc
++  ON student_kc_mastery_history (student_id, kc_id, recorded_at);
++
++COMMIT;
+diff --git a/lms-backend/src/modules/assessment-generation/assessment-generation.module.ts b/lms-backend/src/modules/assessment-generation/assessment-generation.module.ts
+index 8699642..8bf1241 100644
+--- a/lms-backend/src/modules/assessment-generation/assessment-generation.module.ts
++++ b/lms-backend/src/modules/assessment-generation/assessment-generation.module.ts
+@@ -30,6 +30,13 @@ import { QUESTION_SELECTOR } from './types/question-selector.type.js';
+ import { XesKcMapping } from './entities/xes-kc-mapping.entity.js';
+ import { XesMappingController } from './controllers/xes-mapping.controller.js';
+ import { XesMappingService } from './services/xes-mapping.service.js';
++import { MasteryController } from './controllers/mastery.controller.js';
++import { MasteryTrackingService } from './services/mastery-tracking.service.js';
++import { StudentCompetencyHistory } from '../mastery/entities/student-competency-history.entity.js';
++import { StudentKcMasteryHistory } from '../mastery/entities/student-kc-mastery-history.entity.js';
++import { StudentKcMastery } from '../mastery/entities/student-kc-mastery.entity.js';
++import { StudentKcReviewSchedule } from '../mastery/entities/student-kc-review-schedule.entity.js';
++import { StudentSubjectCompetency } from '../mastery/entities/student-subject-competency.entity.js';
+ @Module({
+   imports: [
+     // FileModule exports FileFacade: the import adapter reads the uploaded Excel through it.
+@@ -49,9 +56,14 @@ import { XesMappingService } from './services/xes-mapping.service.js';
+       // Owned by other modules; registered here so the services can inject their repositories.
+       Subject,
+       KnowledgeComponent,
++      StudentKcMastery,
++      StudentKcMasteryHistory,
++      StudentKcReviewSchedule,
++      StudentSubjectCompetency,
++      StudentCompetencyHistory,
+     ]),
+   ],
+-  controllers: [QuestionImportController, QuestionManagementController, QuizController, XesMappingController],
++  controllers: [QuestionImportController, QuestionManagementController, QuizController, XesMappingController, MasteryController],
+   providers: [
+     QuestionImportService,
+     QuestionManagementService,
+@@ -60,6 +72,7 @@ import { XesMappingService } from './services/xes-mapping.service.js';
+     RuleBasedQuestionSelector,
+     EnasGatewayClient,
+     EnasMasteryService,
++    MasteryTrackingService,
+     EnasQuestionSelector,
+     // QUESTION_SELECTOR=enas picks questions with the ENAS-KT model (falls back to the rule-based one on failure).
+     {
+diff --git a/lms-backend/src/modules/assessment-generation/controllers/mastery.controller.ts b/lms-backend/src/modules/assessment-generation/controllers/mastery.controller.ts
+new file mode 100644
+index 0000000..a54c4dc
+--- /dev/null
++++ b/lms-backend/src/modules/assessment-generation/controllers/mastery.controller.ts
+@@ -0,0 +1,35 @@
++import { Controller, Get, HttpCode, HttpStatus, Post } from '@nestjs/common';
++import { Auth } from '../../../common/decorators/auth.decorator.js';
++import { CurrentUser } from '../../../common/decorators/current-user.decorator.js';
++import { Role } from '../../../common/enums/role.enum.js';
++import { AuthenticatedUser } from '../../../common/types/authenticated-user.type.js';
++import { MasteryTrackingService } from '../services/mastery-tracking.service.js';
++
++/** Data of the student's Knowledge Mastery tab. */
++@Controller('mastery')
++export class MasteryController {
++  constructor(private readonly service: MasteryTrackingService) {}
++
++  /** GET /mastery/kc/me: ENAS mastery of every KC the student answered, with the next review. */
++  @Get('kc/me')
++  @Auth(Role.STUDENT)
++  kc(@CurrentUser() user: AuthenticatedUser) {
++    return this.service.listKc(user.id);
++  }
++
++  /** GET /mastery/competency/me: ability per subject. */
++  @Get('competency/me')
++  @Auth(Role.STUDENT)
++  competency(@CurrentUser() user: AuthenticatedUser) {
++    return this.service.listCompetency(user.id);
++  }
++
++  /** POST /mastery/me/recompute: recomputes the tables from the whole answer history. */
++  @Post('me/recompute')
++  @Auth(Role.STUDENT)
++  @HttpCode(HttpStatus.OK)
++  async recompute(@CurrentUser() user: AuthenticatedUser) {
++    await this.service.recompute(user.id);
++    return this.service.listKc(user.id);
++  }
++}
+diff --git a/lms-backend/src/modules/assessment-generation/services/enas-gateway.client.ts b/lms-backend/src/modules/assessment-generation/services/enas-gateway.client.ts
+index d2a4ef1..f5cd75d 100644
+--- a/lms-backend/src/modules/assessment-generation/services/enas-gateway.client.ts
++++ b/lms-backend/src/modules/assessment-generation/services/enas-gateway.client.ts
+@@ -8,6 +8,39 @@ export interface EnasHistoryStep {
+   timestamp: number;
+ }
+ 
++/** Nhãn để màn hình /monitor của gateway biết lần gọi này phục vụ việc gì và của ai. */
++export interface EnasTrace {
++  /** select | mastery_view | quiz_after | quiz_before | recompute ... */
++  purpose: string;
++  student?: string;
++  /** Thông số phía LMS hiển thị cạnh công thức (số câu mẫu mỗi KC, ngưỡng...). */
++  meta?: Record<string, unknown>;
++}
++
++export interface EnasGroup {
++  kcId: string;
++  name?: string;
++  /** XES question ids sampled for the KC. */
++  qids: number[];
++}
++
++export interface EnasGroupedResult {
++  /** P(correct) per XES question id. */
++  p: Map<number, number>;
++  /** Mastery per KC as computed by the gateway (mean of P over the KC's questions); null for an old gateway. */
++  kc: Map<string, { mean: number; n: number }> | null;
++  /** Sequence number of this prediction in the gateway log (/monitor). */
++  logSeq: number | null;
++  lagMode: string | null;
++}
++
++interface PredictResponse {
++  predictions: { qid: number; p: number }[];
++  kc_mastery?: { kc_id: string; mean: number | null; n: number }[];
++  log_seq?: number;
++  lag_mode?: string;
++}
++
+ /**
+  * HTTP client of the Python ENAS-KT gateway (enas_gateway.py).
+  * Env: ENAS_GATEWAY_URL (default http://127.0.0.1:8002), ENAS_GATEWAY_TIMEOUT_MS (default 15000).
+@@ -22,18 +55,62 @@ export class EnasGatewayClient {
+     history: EnasHistoryStep[],
+     candidates: number[],
+     timeoutMs: number = this.timeoutMs,
++    trace?: EnasTrace,
+   ): Promise<Map<number, number>> {
++    const json = await this.post(
++      { history: this.steps(history), candidates, ...this.traceFields(trace) },
++      timeoutMs,
++    );
++    return new Map(json.predictions.map((p) => [p.qid, p.p]));
++  }
++
++  /** Same as predict, and the gateway also computes the mastery of every group (KC) and logs the whole calculation. */
++  async predictGrouped(
++    history: EnasHistoryStep[],
++    groups: EnasGroup[],
++    trace: EnasTrace,
++    timeoutMs: number = this.timeoutMs,
++  ): Promise<EnasGroupedResult> {
++    const json = await this.post(
++      {
++        history: this.steps(history),
++        candidates: [...new Set(groups.flatMap((g) => g.qids))],
++        groups: groups.map((g) => ({ kc_id: g.kcId, name: g.name, qids: g.qids })),
++        ...this.traceFields(trace),
++      },
++      timeoutMs,
++    );
++    const kc = json.kc_mastery
++      ? new Map(
++          json.kc_mastery.flatMap((k) =>
++            k.mean === null ? [] : [[k.kc_id, { mean: k.mean, n: k.n }] as const],
++          ),
++        )
++      : null;
++    return {
++      p: new Map(json.predictions.map((p) => [p.qid, p.p])),
++      kc,
++      logSeq: json.log_seq ?? null,
++      lagMode: json.lag_mode ?? null,
++    };
++  }
++
++  private steps(history: EnasHistoryStep[]) {
++    return history.map((h) => ({ qid: h.qid, correct: h.correct ? 1 : 0, timestamp: h.timestamp }));
++  }
++
++  private traceFields(trace?: EnasTrace) {
++    return trace ? { purpose: trace.purpose, student: trace.student, meta: trace.meta } : {};
++  }
++
++  private async post(body: unknown, timeoutMs: number): Promise<PredictResponse> {
+     const res = await fetch(`${this.baseUrl}/predict`, {
+       method: 'POST',
+       headers: { 'Content-Type': 'application/json' },
+-      body: JSON.stringify({
+-        history: history.map((h) => ({ qid: h.qid, correct: h.correct ? 1 : 0, timestamp: h.timestamp })),
+-        candidates,
+-      }),
++      body: JSON.stringify(body),
+       signal: AbortSignal.timeout(timeoutMs),
+     });
+     if (!res.ok) throw new Error(`ENAS gateway HTTP ${res.status}`);
+-    const json = (await res.json()) as { predictions: { qid: number; p: number }[] };
+-    return new Map(json.predictions.map((p) => [p.qid, p.p]));
++    return (await res.json()) as PredictResponse;
+   }
+-}
+\ No newline at end of file
++}
+diff --git a/lms-backend/src/modules/assessment-generation/services/enas-mastery.service.spec.ts b/lms-backend/src/modules/assessment-generation/services/enas-mastery.service.spec.ts
+index 2a88e52..1502a89 100644
+--- a/lms-backend/src/modules/assessment-generation/services/enas-mastery.service.spec.ts
++++ b/lms-backend/src/modules/assessment-generation/services/enas-mastery.service.spec.ts
+@@ -1,24 +1,32 @@
+ import { afterEach, describe, expect, it, vi } from 'vitest';
+-import type { EnasGatewayClient } from './enas-gateway.client.js';
++import type { EnasGatewayClient, EnasGroupedResult } from './enas-gateway.client.js';
+ import { EnasMasteryService } from './enas-mastery.service.js';
+ 
+ interface Internals {
+-  sampleQuestions: (kcIds: string[]) => Promise<Map<string, number[]>>;
++  sampleQuestions: (kcIds: string[]) => Promise<Map<string, { name: string; qids: number[] }>>;
+   history: () => Promise<unknown[]>;
+ }
+ 
+-const build = (predict: EnasGatewayClient['predict']) => {
++const grouped = (over: Partial<EnasGroupedResult> = {}): EnasGroupedResult => ({
++  p: new Map(),
++  kc: null,
++  logSeq: null,
++  lagMode: null,
++  ...over,
++});
++
++const build = (predictGrouped: EnasGatewayClient['predictGrouped']) => {
+   const service = new EnasMasteryService(
+     undefined as never,
+     undefined as never,
+-    { predict } as EnasGatewayClient,
++    { predictGrouped } as EnasGatewayClient,
+   );
+   const internals = service as unknown as Internals;
+   internals.sampleQuestions = async () =>
+     new Map([
+-      ['kc-a', [1, 2]],
+-      ['kc-b', [3]],
+-      ['kc-c', [99]], // the model has no prediction for it
++      ['kc-a', { name: 'A', qids: [1, 2] }],
++      ['kc-b', { name: 'B', qids: [3] }],
++      ['kc-c', { name: 'C', qids: [99] }], // the model has no prediction for it
+     ]);
+   internals.history = async () => [];
+   return service;
+@@ -35,14 +43,16 @@ describe('EnasMasteryService.kcMastery', () => {
+     expect(predict).not.toHaveBeenCalled();
+   });
+ 
+-  it('averages the predictions per KC with one gateway call', async () => {
++  it('averages the predictions per KC itself when the gateway does not (old gateway)', async () => {
+     process.env.QUESTION_SELECTOR = 'enas';
+     const predict = vi.fn().mockResolvedValue(
+-      new Map([
+-        [1, 0.4],
+-        [2, 0.8],
+-        [3, 0.5],
+-      ]),
++      grouped({
++        p: new Map([
++          [1, 0.4],
++          [2, 0.8],
++          [3, 0.5],
++        ]),
++      }),
+     );
+     const m = await build(predict).kcMastery('s', ['kc-a', 'kc-b', 'kc-c']);
+     expect(predict).toHaveBeenCalledTimes(1);
+@@ -51,6 +61,23 @@ describe('EnasMasteryService.kcMastery', () => {
+     expect(m?.has('kc-c')).toBe(false);
+   });
+ 
++  it("uses the gateway's own per-KC mean and reports the log position", async () => {
++    process.env.QUESTION_SELECTOR = 'enas';
++    const predict = vi.fn().mockResolvedValue(
++      grouped({
++        p: new Map([[1, 0.1]]),
++        kc: new Map([['kc-a', { mean: 0.77, n: 2 }]]),
++        logSeq: 42,
++        lagMode: 'fixed',
++      }),
++    );
++    const r = await build(predict).kcMasteryDetailed('s', ['kc-a', 'kc-b'], { purpose: 'quiz_after' });
++    expect(r?.byKc.get('kc-a')).toEqual({ mean: 0.77, n: 2 });
++    expect(r?.byKc.has('kc-b')).toBe(false);
++    expect(r?.logSeq).toBe(42);
++    expect(predict.mock.calls[0][2]).toMatchObject({ purpose: 'quiz_after', student: 's' });
++  });
++
+   it('returns null on a gateway error and pauses calls for a while', async () => {
+     process.env.QUESTION_SELECTOR = 'enas';
+     const predict = vi.fn().mockRejectedValue(new Error('down'));
+diff --git a/lms-backend/src/modules/assessment-generation/services/enas-mastery.service.ts b/lms-backend/src/modules/assessment-generation/services/enas-mastery.service.ts
+index b9cdcfa..635ad01 100644
+--- a/lms-backend/src/modules/assessment-generation/services/enas-mastery.service.ts
++++ b/lms-backend/src/modules/assessment-generation/services/enas-mastery.service.ts
+@@ -4,22 +4,47 @@ import { Repository } from 'typeorm';
+ import { QuestionKnowledgeComponent } from '../entities/question-knowledge-component.entity.js';
+ import { QuizInstanceAnswer } from '../entities/quiz-instance-answer.entity.js';
+ import { QuestionReviewStatus } from '../enums/question-review-status.enum.js';
+-import { EnasGatewayClient, type EnasHistoryStep } from './enas-gateway.client.js';
++import { REVIEW_RULES } from '../utils/mastery-tracking.js';
++import { EnasGatewayClient, type EnasGroup, type EnasHistoryStep } from './enas-gateway.client.js';
+ 
+ /** The model reads at most 100 steps; one is taken by the candidate itself. */
+-const HISTORY_MAX = 99;
++export const HISTORY_MAX = 99;
+ /** Questions per KC that are scored; picked evenly across the KC so the mean is not skewed. */
+-const SAMPLE_PER_KC = 30;
++export const SAMPLE_PER_KC = 30;
+ /** Mastery is shown on pages the student opens, so a dead gateway must not make them wait long. */
+ const TIMEOUT_MS = 4_000;
+ /** After a failure the gateway is not called again for this long. */
+ const COOLDOWN_MS = 30_000;
+ 
++export interface EnasKcMastery {
++  /** 0..1 */
++  mean: number;
++  /** Number of questions that had a prediction. */
++  n: number;
++}
++
++export interface EnasKcResult {
++  byKc: Map<string, EnasKcMastery>;
++  /** Position of this prediction in the gateway log (/monitor), null when the gateway did not say. */
++  logSeq: number | null;
++  lagMode: string | null;
++}
++
++export interface KcMasteryOptions {
++  /** Leaves out the answers of one quiz, giving the state before that quiz. */
++  excludeQuizId?: string;
++  /** Label shown on the gateway monitor: mastery_view | quiz_after | quiz_before | recompute ... */
++  purpose?: string;
++}
++
+ /**
+  * Mastery of knowledge components as predicted by the ENAS-KT model: the mean P(correct) over a sample of
+  * the questions of the KC, given the student's answer history. Active only with QUESTION_SELECTOR=enas,
+  * the same switch as question selection. Every method returns null when the model cannot be used, so the
+  * callers fall back to the answer-count mastery.
++ *
++ * The mean itself is computed by the gateway (and logged there, see enas_gateway.py /monitor); this service
++ * only picks the sample and the history. When an old gateway does not return it, the mean is computed here.
+  */
+ @Injectable()
+ export class EnasMasteryService {
+@@ -74,26 +99,56 @@ export class EnasMasteryService {
+   async kcMastery(
+     studentId: string,
+     kcIds: string[],
+-    options: { excludeQuizId?: string } = {},
++    options: KcMasteryOptions = {},
+   ): Promise<Map<string, number> | null> {
++    const detailed = await this.kcMasteryDetailed(studentId, kcIds, options);
++    if (!detailed) return null;
++    return new Map([...detailed.byKc].map(([kcId, v]) => [kcId, v.mean]));
++  }
++
++  /** Like kcMastery, with the number of questions behind each value and the gateway log position. */
++  async kcMasteryDetailed(
++    studentId: string,
++    kcIds: string[],
++    options: KcMasteryOptions = {},
++  ): Promise<EnasKcResult | null> {
+     if (!this.enabled || kcIds.length === 0 || Date.now() < this.downUntil) return null;
+     try {
+       const sampleByKc = await this.sampleQuestions(kcIds);
+-      const candidates = [...new Set([...sampleByKc.values()].flat())];
+-      if (candidates.length === 0) return new Map();
++      const groups: EnasGroup[] = [...sampleByKc].map(([kcId, s]) => ({ kcId, name: s.name, qids: s.qids }));
++      if (groups.length === 0) return { byKc: new Map(), logSeq: null, lagMode: null };
+ 
+-      const p = await this.gateway.predict(
++      const res = await this.gateway.predictGrouped(
+         await this.history(studentId, options.excludeQuizId),
+-        candidates,
++        groups,
++        {
++          purpose: options.purpose ?? 'mastery_view',
++          student: studentId,
++          meta: {
++            sample_per_kc: SAMPLE_PER_KC,
++            history_max: HISTORY_MAX,
++            level_thresholds: REVIEW_RULES.thresholds,
++            review_days: REVIEW_RULES.days,
++            exclude_quiz: options.excludeQuizId ?? null,
++          },
++        },
+         TIMEOUT_MS,
+       );
+ 
+-      const out = new Map<string, number>();
+-      for (const [kcId, xesIds] of sampleByKc) {
+-        const known = xesIds.flatMap((x) => (p.has(x) ? [p.get(x)!] : []));
+-        if (known.length > 0) out.set(kcId, known.reduce((s, v) => s + v, 0) / known.length);
++      const byKc = new Map<string, EnasKcMastery>();
++      for (const g of groups) {
++        const fromGateway = res.kc?.get(g.kcId);
++        if (fromGateway) {
++          byKc.set(g.kcId, fromGateway);
++          continue;
++        }
++        if (res.kc) continue; // the gateway answered and had no prediction for this KC
++        const known = g.qids.flatMap((x) => (res.p.has(x) ? [res.p.get(x)!] : []));
++        if (known.length > 0) {
++          byKc.set(g.kcId, { mean: known.reduce((s, v) => s + v, 0) / known.length, n: known.length });
++        }
+       }
+-      return out;
++      return { byKc, logSeq: res.logSeq, lagMode: res.lagMode };
+     } catch (err) {
+       this.downUntil = Date.now() + COOLDOWN_MS;
+       this.logger.warn(`ENAS mastery unavailable: ${err instanceof Error ? err.message : String(err)}`);
+@@ -102,25 +157,34 @@ export class EnasMasteryService {
+   }
+ 
+   /** XES question ids per KC (approved, active questions only), thinned to SAMPLE_PER_KC. */
+-  private async sampleQuestions(kcIds: string[]): Promise<Map<string, number[]>> {
++  private async sampleQuestions(
++    kcIds: string[],
++  ): Promise<Map<string, { name: string; qids: number[] }>> {
+     const rows = await this.links
+       .createQueryBuilder('l')
+       .innerJoin('l.question', 'q')
++      .innerJoin('l.knowledgeComponent', 'kc')
+       .select('l.kcId', 'kcId')
++      .addSelect('kc.name', 'kcName')
+       .addSelect('q.xesQuestionId', 'xesQuestionId')
+       .where('l.kcId IN (:...kcIds)', { kcIds })
+       .andWhere('q.xesQuestionId IS NOT NULL')
+       .andWhere('q.reviewStatus = :status', { status: QuestionReviewStatus.APPROVED })
+       .andWhere('q.isActive = true')
+-      .getRawMany<{ kcId: string; xesQuestionId: number }>();
++      .getRawMany<{ kcId: string; kcName: string; xesQuestionId: number }>();
+ 
+-    const byKc = new Map<string, Set<number>>();
++    const byKc = new Map<string, { name: string; ids: Set<number> }>();
+     for (const r of rows) {
+-      const set = byKc.get(r.kcId) ?? new Set<number>();
+-      set.add(r.xesQuestionId);
+-      byKc.set(r.kcId, set);
++      const entry = byKc.get(r.kcId) ?? { name: r.kcName, ids: new Set<number>() };
++      entry.ids.add(r.xesQuestionId);
++      byKc.set(r.kcId, entry);
+     }
+-    return new Map([...byKc].map(([kcId, set]) => [kcId, thin([...set].sort((a, b) => a - b), SAMPLE_PER_KC)]));
++    return new Map(
++      [...byKc].map(([kcId, e]) => [
++        kcId,
++        { name: e.name, qids: thin([...e.ids].sort((a, b) => a - b), SAMPLE_PER_KC) },
++      ]),
++    );
+   }
+ }
+ 
+diff --git a/lms-backend/src/modules/assessment-generation/services/enas-question-selector.service.ts b/lms-backend/src/modules/assessment-generation/services/enas-question-selector.service.ts
+index ea4298d..8328ca0 100644
+--- a/lms-backend/src/modules/assessment-generation/services/enas-question-selector.service.ts
++++ b/lms-backend/src/modules/assessment-generation/services/enas-question-selector.service.ts
+@@ -83,7 +83,12 @@ export class EnasQuestionSelector implements QuestionSelector {
+     const candidates = [...new Set(rows.flatMap((r) => (r.xesQuestionId === null ? [] : [r.xesQuestionId])))];
+     if (candidates.length === 0) return null; // no question is mapped to XES yet
+ 
+-    const p = await this.gateway.predict(await this.enasMastery.history(studentId), candidates);
++    const p = await this.gateway.predict(
++      await this.enasMastery.history(studentId),
++      candidates,
++      undefined,
++      { purpose: 'select', student: studentId },
++    );
+     if (p.size === 0) return null;
+ 
+     const allIds = [...new Set(rows.map((r) => r.questionId))];
+diff --git a/lms-backend/src/modules/assessment-generation/services/mastery-tracking.service.ts b/lms-backend/src/modules/assessment-generation/services/mastery-tracking.service.ts
+new file mode 100644
+index 0000000..f7faf10
+--- /dev/null
++++ b/lms-backend/src/modules/assessment-generation/services/mastery-tracking.service.ts
+@@ -0,0 +1,373 @@
++import { Injectable, Logger } from '@nestjs/common';
++import { InjectRepository } from '@nestjs/typeorm';
++import { DataSource, EntityManager, In, Repository } from 'typeorm';
++import { KnowledgeComponent } from '../../document/entities/knowledge-component.entity.js';
++import { StudentCompetencyHistory } from '../../mastery/entities/student-competency-history.entity.js';
++import { StudentKcMasteryHistory } from '../../mastery/entities/student-kc-mastery-history.entity.js';
++import { StudentKcMastery } from '../../mastery/entities/student-kc-mastery.entity.js';
++import { StudentKcReviewSchedule } from '../../mastery/entities/student-kc-review-schedule.entity.js';
++import { StudentSubjectCompetency } from '../../mastery/entities/student-subject-competency.entity.js';
++import { QuizInstanceAnswer } from '../entities/quiz-instance-answer.entity.js';
++import type { QuizInstance } from '../entities/quiz-instance.entity.js';
++import type { KcMasteryRowView, SubjectCompetencyRowView } from '../types/mastery-view.type.js';
++import { computeMasteryByKc } from '../utils/mastery.js';
++import {
++  abilityScore,
++  addDays,
++  nextReviewState,
++  roundMastery,
++} from '../utils/mastery-tracking.js';
++import { EnasMasteryService } from './enas-mastery.service.js';
++
++const HISTORY_ROWS = 2000;
++/** A change smaller than this counts as "not worse" for the ease factor (numeric(4,3) rounding noise). */
++const EPS = 0.0005;
++
++interface Measured {
++  p: number;
++  n: number;
++  source: 'enas' | 'history';
++  logSeq: number | null;
++  lagMode: string | null;
++}
++
++/**
++ * Keeps the four mastery tables up to date:
++ *   student_kc_mastery            current ENAS mastery of every KC the student answered
++ *   student_kc_mastery_history    mastery of each KC before/after every quiz (audit trail, links to the gateway log)
++ *   student_kc_review_schedule    next review of each KC (rules: REVIEW_RULES in utils/mastery-tracking.ts)
++ *   student_subject_competency    ability per subject = 100 x mean KC mastery, plus student_competency_history per quiz
++ * Writing never breaks the student's flow: recordQuiz logs its failure and returns.
++ */
++@Injectable()
++export class MasteryTrackingService {
++  private readonly logger = new Logger(MasteryTrackingService.name);
++
++  constructor(
++    @InjectRepository(StudentKcMastery)
++    private readonly masteries: Repository<StudentKcMastery>,
++    @InjectRepository(StudentKcMasteryHistory)
++    private readonly kcHistory: Repository<StudentKcMasteryHistory>,
++    @InjectRepository(StudentSubjectCompetency)
++    private readonly competencies: Repository<StudentSubjectCompetency>,
++    @InjectRepository(KnowledgeComponent)
++    private readonly kcs: Repository<KnowledgeComponent>,
++    @InjectRepository(QuizInstanceAnswer)
++    private readonly answers: Repository<QuizInstanceAnswer>,
++    private readonly enas: EnasMasteryService,
++    private readonly dataSource: DataSource,
++  ) {}
++
++  // ---------------------------------------------------------------------------------------------
++  // Writes
++  // ---------------------------------------------------------------------------------------------
++
++  /** Called once when a quiz is submitted. Never throws. */
++  async recordQuiz(quiz: QuizInstance): Promise<void> {
++    try {
++      await this.doRecordQuiz(quiz);
++    } catch (err) {
++      this.logger.error(
++        `Could not record mastery of quiz ${quiz.id}: ${err instanceof Error ? err.stack : String(err)}`,
++      );
++    }
++  }
++
++  private async doRecordQuiz(quiz: QuizInstance): Promise<void> {
++    const studentId = quiz.studentId;
++    const touched = await this.answers
++      .createQueryBuilder('a')
++      .innerJoin('a.quizInstanceQuestion', 'qq')
++      .select('DISTINCT a.kcId', 'kcId')
++      .where('qq.quizInstanceId = :quizId', { quizId: quiz.id })
++      .andWhere('a.studentId = :studentId', { studentId })
++      .andWhere('a.kcId IS NOT NULL')
++      .getRawMany<{ kcId: string }>();
++    const kcIds = touched.map((t) => t.kcId);
++    if (kcIds.length === 0) return;
++
++    const existing = new Map(
++      (await this.masteries.find({ where: { studentId, kcId: In(kcIds) } })).map((m) => [m.kcId, m]),
++    );
++
++    // KCs the student already answered before this quiz but that were never stored (data from before this
++    // feature): their "before" is what the model said without this quiz's answers.
++    const unseen = kcIds.filter((k) => !existing.has(k));
++    const seeds = new Map<string, Measured>();
++    if (unseen.length > 0) {
++      const prior = await this.answers
++        .createQueryBuilder('a')
++        .innerJoin('a.quizInstanceQuestion', 'qq')
++        .select('DISTINCT a.kcId', 'kcId')
++        .where('a.studentId = :studentId', { studentId })
++        .andWhere('a.kcId IN (:...unseen)', { unseen })
++        .andWhere('qq.quizInstanceId <> :quizId', { quizId: quiz.id })
++        .getRawMany<{ kcId: string }>();
++      const had = prior.map((r) => r.kcId);
++      if (had.length > 0) {
++        const before = await this.enas.kcMasteryDetailed(studentId, had, {
++          excludeQuizId: quiz.id,
++          purpose: 'quiz_before',
++        });
++        for (const [kcId, v] of before?.byKc ?? []) {
++          seeds.set(kcId, { p: v.mean, n: v.n, source: 'enas', logSeq: before!.logSeq, lagMode: before!.lagMode });
++        }
++      }
++    }
++
++    const after = await this.measure(studentId, kcIds, 'quiz_after');
++    const stats = await this.answerStats(studentId, kcIds);
++    const kcRows = await this.kcs.find({ where: { id: In(kcIds) } });
++    const subjectOf = new Map(kcRows.map((k) => [k.id, k.subjectId]));
++    const now = new Date();
++
++    await this.dataSource.transaction(async (manager) => {
++      for (const kcId of kcIds) {
++        const m = after.get(kcId);
++        if (!m) continue; // the KC has no question the model knows and no usable history
++        const prev = existing.get(kcId);
++        const before = prev ? Number(prev.pMastery) : (seeds.get(kcId)?.p ?? null);
++        await this.saveKc(manager, { studentId, kcId, measured: m, stats: stats.get(kcId), now, prev });
++        await manager.save(
++          manager.create(StudentKcMasteryHistory, {
++            studentId,
++            kcId,
++            quizInstanceId: quiz.id,
++            pBefore: before === null ? null : roundMastery(before),
++            pAfter: roundMastery(m.p),
++            sampleSize: m.n,
++            source: m.source,
++            enasLogSeq: m.logSeq,
++          }),
++        );
++      }
++
++      for (const subjectId of new Set(kcIds.flatMap((k) => (subjectOf.has(k) ? [subjectOf.get(k)!] : [])))) {
++        const { row, before, after: ability } = await this.refreshSubject(manager, studentId, subjectId);
++        row.quizzesTaken += 1;
++        await manager.save(row);
++        await manager.save(
++          manager.create(StudentCompetencyHistory, {
++            quizInstanceId: quiz.id,
++            subjectCompetencyId: row.id,
++            abilityScoreBefore: before,
++            abilityScoreAfter: ability,
++          }),
++        );
++      }
++    });
++  }
++
++  /**
++   * Recomputes the mastery of every KC the student ever answered (used to fill the tables for students who
++   * answered before this feature existed). Does not touch the per-quiz histories or the quiz counters.
++   */
++  async recompute(studentId: string): Promise<void> {
++    const rows = await this.answers
++      .createQueryBuilder('a')
++      .select('DISTINCT a.kcId', 'kcId')
++      .where('a.studentId = :studentId', { studentId })
++      .andWhere('a.kcId IS NOT NULL')
++      .getRawMany<{ kcId: string }>();
++    const kcIds = rows.map((r) => r.kcId);
++    if (kcIds.length === 0) return;
++
++    const measured = await this.measure(studentId, kcIds, 'recompute');
++    const stats = await this.answerStats(studentId, kcIds);
++    const existing = new Map(
++      (await this.masteries.find({ where: { studentId, kcId: In(kcIds) } })).map((m) => [m.kcId, m]),
++    );
++    const subjectOf = new Map((await this.kcs.find({ where: { id: In(kcIds) } })).map((k) => [k.id, k.subjectId]));
++    const now = new Date();
++
++    await this.dataSource.transaction(async (manager) => {
++      for (const kcId of kcIds) {
++        const m = measured.get(kcId);
++        if (!m) continue;
++        await this.saveKc(manager, { studentId, kcId, measured: m, stats: stats.get(kcId), now, prev: existing.get(kcId) });
++      }
++      for (const subjectId of new Set(kcIds.flatMap((k) => (subjectOf.has(k) ? [subjectOf.get(k)!] : [])))) {
++        await this.refreshSubject(manager, studentId, subjectId);
++      }
++    });
++  }
++
++  /** Upserts the mastery row and the review schedule of one KC. */
++  private async saveKc(
++    manager: EntityManager,
++    a: {
++      studentId: string;
++      kcId: string;
++      measured: Measured;
++      stats?: { attempts: number; correct: number };
++      now: Date;
++      prev?: StudentKcMastery;
++    },
++  ): Promise<void> {
++    const { studentId, kcId, measured: m, stats, now, prev } = a;
++    const row =
++      prev ?? manager.create(StudentKcMastery, { studentId, kcId, pPrev: null, attemptsCount: 0, correctCount: 0 });
++    const prevP = prev ? Number(prev.pMastery) : null;
++    row.pPrev = prevP === null ? null : roundMastery(prevP);
++    row.pMastery = roundMastery(m.p);
++    row.sampleSize = m.n;
++    row.attemptsCount = stats?.attempts ?? row.attemptsCount;
++    row.correctCount = stats?.correct ?? row.correctCount;
++    row.source = m.source;
++    row.enasLogSeq = m.logSeq;
++    row.lagMode = m.lagMode;
++    row.lastUpdated = now;
++    const saved = await manager.save(row);
++
++    const schedule = await manager.findOne(StudentKcReviewSchedule, { where: { masteryId: saved.id } });
++    const improved = prevP === null || m.p >= prevP - EPS;
++    const next = nextReviewState(
++      m.p,
++      improved,
++      schedule ? { intervalDays: schedule.intervalDays, easeFactor: Number(schedule.easeFactor) } : null,
++    );
++    await manager.save(
++      schedule
++        ? Object.assign(schedule, { ...next, nextReviewAt: addDays(now, next.intervalDays) })
++        : manager.create(StudentKcReviewSchedule, {
++            masteryId: saved.id,
++            ...next,
++            nextReviewAt: addDays(now, next.intervalDays),
++          }),
++    );
++  }
++
++  /** Recomputes the ability of the student in a subject from the stored KC masteries. */
++  private async refreshSubject(
++    manager: EntityManager,
++    studentId: string,
++    subjectId: string,
++  ): Promise<{ row: StudentSubjectCompetency; before: number | null; after: number }> {
++    const rows = await manager
++      .createQueryBuilder(StudentKcMastery, 'm')
++      .innerJoin('m.knowledgeComponent', 'kc')
++      .where('m.studentId = :studentId', { studentId })
++      .andWhere('kc.subjectId = :subjectId', { subjectId })
++      .getMany();
++    const after = abilityScore(rows.map((r) => Number(r.pMastery)));
++
++    const found = await manager.findOne(StudentSubjectCompetency, { where: { studentId, subjectId } });
++    const row = found ?? manager.create(StudentSubjectCompetency, { studentId, subjectId, quizzesTaken: 0 });
++    const before = found ? Number(found.abilityScore) : null;
++    row.abilityScore = after;
++    return { row: await manager.save(row), before, after };
++  }
++
++  // ---------------------------------------------------------------------------------------------
++  // Reads (Knowledge Mastery tab)
++  // ---------------------------------------------------------------------------------------------
++
++  /** The student's KC masteries with the next review. Fills the table on first use for existing students. */
++  async listKc(studentId: string): Promise<KcMasteryRowView[]> {
++    let rows = await this.loadKcRows(studentId);
++    if (rows.length === 0 && (await this.hasAnswers(studentId))) {
++      await this.recompute(studentId);
++      rows = await this.loadKcRows(studentId);
++    }
++    return rows;
++  }
++
++  async listCompetency(studentId: string): Promise<SubjectCompetencyRowView[]> {
++    const rows = await this.competencies.find({ where: { studentId }, relations: { subject: true } });
++    return rows
++      .map((r) => ({
++        id: r.id,
++        subjectId: r.subjectId,
++        subjectName: r.subject.name,
++        abilityScore: Number(r.abilityScore),
++        quizzesTaken: r.quizzesTaken,
++      }))
++      .sort((a, b) => a.subjectName.localeCompare(b.subjectName));
++  }
++
++  private async loadKcRows(studentId: string): Promise<KcMasteryRowView[]> {
++    const rows = await this.masteries.find({ where: { studentId }, relations: { knowledgeComponent: true } });
++    if (rows.length === 0) return [];
++    const schedules = await this.dataSource.getRepository(StudentKcReviewSchedule).find({
++      where: { masteryId: In(rows.map((r) => r.id)) },
++    });
++    const scheduleOf = new Map(schedules.map((s) => [s.masteryId, s]));
++    return rows.map((r) => {
++      const s = scheduleOf.get(r.id);
++      return {
++        id: r.id,
++        kcId: r.kcId,
++        kcName: r.knowledgeComponent.name,
++        subjectId: r.knowledgeComponent.subjectId,
++        pMastery: Number(r.pMastery),
++        pPrev: r.pPrev === null ? null : Number(r.pPrev),
++        sampleSize: r.sampleSize,
++        attemptsCount: r.attemptsCount,
++        correctCount: r.correctCount,
++        source: r.source,
++        enasLogSeq: r.enasLogSeq,
++        lastUpdated: r.lastUpdated,
++        nextReviewAt: s?.nextReviewAt ?? null,
++        intervalDays: s?.intervalDays ?? null,
++      };
++    });
++  }
++
++  /** Stored before/after of the KCs of one quiz, keyed by KC. Empty for quizzes submitted before this feature. */
++  async quizKcSnapshots(quizId: string): Promise<Map<string, StudentKcMasteryHistory>> {
++    const rows = await this.kcHistory.find({ where: { quizInstanceId: quizId } });
++    return new Map(rows.map((r) => [r.kcId, r]));
++  }
++
++  // ---------------------------------------------------------------------------------------------
++
++  /** ENAS mastery of the KCs, with the answer-share fallback for those the model cannot give. */
++  private async measure(
++    studentId: string,
++    kcIds: string[],
++    purpose: string,
++  ): Promise<Map<string, Measured>> {
++    const out = new Map<string, Measured>();
++    const model = await this.enas.kcMasteryDetailed(studentId, kcIds, { purpose });
++    for (const [kcId, v] of model?.byKc ?? []) {
++      out.set(kcId, { p: v.mean, n: v.n, source: 'enas', logSeq: model!.logSeq, lagMode: model!.lagMode });
++    }
++
++    const rest = kcIds.filter((k) => !out.has(k));
++    if (rest.length > 0) {
++      const rows = await this.answers.find({
++        select: { kcId: true, isCorrect: true, answeredAt: true },
++        where: { studentId, kcId: In(rest) },
++        order: { answeredAt: 'DESC' },
++        take: HISTORY_ROWS,
++      });
++      const byKc = computeMasteryByKc(
++        rows.map((r) => ({ kcId: r.kcId, isCorrect: r.isCorrect, answeredAt: r.answeredAt })),
++      );
++      for (const [kcId, v] of byKc) {
++        out.set(kcId, { p: v.mastery, n: v.attempted, source: 'history', logSeq: null, lagMode: null });
++      }
++    }
++    return out;
++  }
++
++  private async answerStats(
++    studentId: string,
++    kcIds: string[],
++  ): Promise<Map<string, { attempts: number; correct: number }>> {
++    const rows = await this.answers
++      .createQueryBuilder('a')
++      .select('a.kcId', 'kcId')
++      .addSelect('COUNT(*)', 'attempts')
++      .addSelect('SUM(CASE WHEN a.isCorrect THEN 1 ELSE 0 END)', 'correct')
++      .where('a.studentId = :studentId', { studentId })
++      .andWhere('a.kcId IN (:...kcIds)', { kcIds })
++      .groupBy('a.kcId')
++      .getRawMany<{ kcId: string; attempts: string; correct: string }>();
++    return new Map(rows.map((r) => [r.kcId, { attempts: Number(r.attempts), correct: Number(r.correct) }]));
++  }
++
++  private async hasAnswers(studentId: string): Promise<boolean> {
++    return (await this.answers.count({ where: { studentId }, take: 1 })) > 0;
++  }
++}
+diff --git a/lms-backend/src/modules/assessment-generation/services/quiz.service.ts b/lms-backend/src/modules/assessment-generation/services/quiz.service.ts
+index b1a3083..d30bf08 100644
+--- a/lms-backend/src/modules/assessment-generation/services/quiz.service.ts
++++ b/lms-backend/src/modules/assessment-generation/services/quiz.service.ts
+@@ -40,6 +40,7 @@ import {
+   type KcMastery,
+ } from '../utils/mastery.js';
+ import { EnasMasteryService } from './enas-mastery.service.js';
++import { MasteryTrackingService } from './mastery-tracking.service.js';
+ import { shuffled } from '../utils/random.js';
+ import { QuestionType } from '../enums/question-type.enum.js';
+ import { isAcceptedAnswer } from '../utils/answer-normalizer.js';
+@@ -69,6 +70,7 @@ export class QuizService {
+     @Inject(QUESTION_SELECTOR)
+     private readonly selector: QuestionSelector,
+     private readonly enas: EnasMasteryService,
++    private readonly tracking: MasteryTrackingService,
+     private readonly dataSource: DataSource,
+   ) {}
+ 
+@@ -304,6 +306,8 @@ export class QuizService {
+       quiz.status = QuizInstanceStatus.SUBMITTED;
+       quiz.submittedAt = new Date();
+       await this.quizzes.save(quiz);
++      // Stores the mastery of the KCs of this quiz (best effort: a failure here never fails the submit).
++      await this.tracking.recordQuiz(quiz);
+     }
+     return this.result(quiz, studentId);
+   }
+@@ -553,6 +557,45 @@ export class QuizService {
+     };
+   }
+ 
++  /** Before/after mastery of the quiz's KCs recomputed from the answer history (legacy quizzes). */
++  private async liveBreakdown(
++    quiz: QuizInstance,
++    studentId: string,
++    kcIds: string[],
++    view: QuizView,
++  ): Promise<Map<string, Pick<KcBreakdownView, 'masteryBefore' | 'masteryAfter' | 'source'>>> {
++    const history = kcIds.length ? await this.history(studentId, kcIds) : [];
++    const thisQuiz = new Set(view.questions.map((q) => q.id));
++    const after = computeMasteryByKc(history.map((h) => h.sample));
++    const before = computeMasteryByKc(
++      history.filter((h) => !thisQuiz.has(h.quizInstanceQuestionId)).map((h) => h.sample),
++    );
++    // The model's view of the same KCs without and with this quiz's answers.
++    const [enasBefore, enasAfter] = await Promise.all([
++      this.enas.kcMastery(studentId, kcIds, { excludeQuizId: quiz.id, purpose: 'quiz_before' }),
++      this.enas.kcMastery(studentId, kcIds, { purpose: 'quiz_after' }),
++    ]);
++
++    return new Map(
++      kcIds.map((kcId) => {
++        const pBefore = enasBefore?.get(kcId);
++        const pAfter = enasAfter?.get(kcId);
++        const useModel = pBefore !== undefined && pAfter !== undefined;
++        const pick = (m: KcMastery | undefined, p: number | undefined): number | null =>
++          m === undefined ? null : round2(useModel ? p! : m.mastery);
++        return [
++          kcId,
++          {
++            // No answers on the KC before this quiz: there is nothing to compare with.
++            masteryBefore: pick(before.get(kcId), pBefore),
++            masteryAfter: pick(after.get(kcId), pAfter),
++            source: useModel ? ('enas' as const) : ('history' as const),
++          },
++        ];
++      }),
++    );
++  }
++
+   private async result(quiz: QuizInstance, studentId: string): Promise<QuizResultView> {
+     const view = await this.buildView(quiz);
+ 
+@@ -568,35 +611,35 @@ export class QuizService {
+     }
+ 
+     const kcIds = [...groups.keys()];
+-    const history = groups.size ? await this.history(studentId, kcIds) : [];
+-    const thisQuiz = new Set(view.questions.map((q) => q.id));
+-    const after = computeMasteryByKc(history.map((h) => h.sample));
+-    const before = computeMasteryByKc(
+-      history.filter((h) => !thisQuiz.has(h.quizInstanceQuestionId)).map((h) => h.sample),
+-    );
+-    // The model's view of the same KCs without and with this quiz's answers.
+-    const [enasBefore, enasAfter] = await Promise.all([
+-      this.enas.kcMastery(studentId, kcIds, { excludeQuizId: quiz.id }),
+-      this.enas.kcMastery(studentId, kcIds),
+-    ]);
++    // Mastery stored when the quiz was submitted: the same chain of values the Knowledge Mastery tab shows.
++    const snapshots = await this.tracking.quizKcSnapshots(quiz.id);
++    const needLive = kcIds.some((id) => !snapshots.has(id));
++
++    // Quizzes submitted before mastery was stored fall back to recomputing before/after on the fly.
++    const live = needLive ? await this.liveBreakdown(quiz, studentId, kcIds, view) : null;
+ 
+     const kcBreakdown: KcBreakdownView[] = [...groups].map(([kcId, g]) => {
+-      const b = before.get(kcId);
+-      const a = after.get(kcId);
+-      const pBefore = enasBefore?.get(kcId);
+-      const pAfter = enasAfter?.get(kcId);
+-      const useModel = pBefore !== undefined && pAfter !== undefined;
+-      const pick = (m: KcMastery | undefined, p: number | undefined): number | null =>
+-        m === undefined ? null : round2(useModel ? p! : m.mastery);
++      const snap = snapshots.get(kcId);
++      if (snap) {
++        return {
++          kcId,
++          name: g.name,
++          correct: g.correct,
++          total: g.total,
++          masteryBefore: snap.pBefore === null ? null : round2(Number(snap.pBefore)),
++          masteryAfter: round2(Number(snap.pAfter)),
++          source: snap.source,
++        };
++      }
++      const l = live!.get(kcId);
+       return {
+         kcId,
+         name: g.name,
+         correct: g.correct,
+         total: g.total,
+-        // No answers on the KC before this quiz: there is nothing to compare with.
+-        masteryBefore: pick(b, pBefore),
+-        masteryAfter: pick(a, pAfter),
+-        source: useModel ? 'enas' : 'history',
++        masteryBefore: l?.masteryBefore ?? null,
++        masteryAfter: l?.masteryAfter ?? null,
++        source: l?.source ?? 'history',
+       };
+     });
+     return { quiz: view, kcBreakdown };
+diff --git a/lms-backend/src/modules/assessment-generation/types/mastery-view.type.ts b/lms-backend/src/modules/assessment-generation/types/mastery-view.type.ts
+new file mode 100644
+index 0000000..3d8289f
+--- /dev/null
++++ b/lms-backend/src/modules/assessment-generation/types/mastery-view.type.ts
+@@ -0,0 +1,30 @@
++/** One row of the "Knowledge components" list of the Knowledge Mastery tab. */
++export interface KcMasteryRowView {
++  id: string;
++  kcId: string;
++  kcName: string;
++  subjectId: string;
++  /** 0..1, mean P(correct) predicted by ENAS-KT (or recent accuracy when source is 'history'). */
++  pMastery: number;
++  /** Value before the last update, null the first time: shows the trend. */
++  pPrev: number | null;
++  /** Number of questions the model scored to get pMastery. */
++  sampleSize: number;
++  attemptsCount: number;
++  correctCount: number;
++  source: 'enas' | 'history';
++  /** Position of the prediction in the gateway log (/monitor), null when unknown. */
++  enasLogSeq: number | null;
++  lastUpdated: Date;
++  nextReviewAt: Date | null;
++  intervalDays: number | null;
++}
++
++export interface SubjectCompetencyRowView {
++  id: string;
++  subjectId: string;
++  subjectName: string;
++  /** 0..100 */
++  abilityScore: number;
++  quizzesTaken: number;
++}
+diff --git a/lms-backend/src/modules/assessment-generation/utils/mastery-tracking.spec.ts b/lms-backend/src/modules/assessment-generation/utils/mastery-tracking.spec.ts
+new file mode 100644
+index 0000000..999d316
+--- /dev/null
++++ b/lms-backend/src/modules/assessment-generation/utils/mastery-tracking.spec.ts
+@@ -0,0 +1,52 @@
++import { describe, expect, it } from 'vitest';
++import { abilityScore, addDays, nextReviewState, roundMastery } from './mastery-tracking.js';
++
++describe('abilityScore', () => {
++  it('is 100 x the mean mastery, 0 without KCs', () => {
++    expect(abilityScore([])).toBe(0);
++    expect(abilityScore([0.5, 0.75, 1])).toBe(75);
++    expect(abilityScore([0.333, 0.334])).toBe(33.35);
++  });
++});
++
++describe('roundMastery', () => {
++  it('keeps 3 decimals', () => {
++    expect(roundMastery(0.51234)).toBe(0.512);
++    expect(roundMastery(1)).toBe(1);
++  });
++});
++
++describe('nextReviewState', () => {
++  it('uses short fixed intervals while mastery is low', () => {
++    expect(nextReviewState(0.3, true, null).intervalDays).toBe(1);
++    expect(nextReviewState(0.5, true, null).intervalDays).toBe(3);
++    expect(nextReviewState(0.7, true, null).intervalDays).toBe(7);
++  });
++
++  it('starts strong KCs at 14 days with the initial ease', () => {
++    expect(nextReviewState(0.9, true, null)).toEqual({ intervalDays: 14, easeFactor: 2.5 });
++  });
++
++  it('grows the interval of strong KCs by the ease factor, capped at 60 days', () => {
++    expect(nextReviewState(0.9, true, { intervalDays: 14, easeFactor: 2.0 })).toEqual({
++      intervalDays: 29,
++      easeFactor: 2.1,
++    });
++    expect(nextReviewState(0.9, true, { intervalDays: 50, easeFactor: 2.5 }).intervalDays).toBe(60);
++  });
++
++  it('lowers the ease factor when mastery dropped, never below 1.3', () => {
++    expect(nextReviewState(0.5, false, { intervalDays: 7, easeFactor: 2.5 }).easeFactor).toBe(2.3);
++    expect(nextReviewState(0.5, false, { intervalDays: 7, easeFactor: 1.4 }).easeFactor).toBe(1.3);
++  });
++
++  it('never lets a strong KC come back sooner than 7 days', () => {
++    expect(nextReviewState(0.85, false, { intervalDays: 1, easeFactor: 1.3 }).intervalDays).toBe(7);
++  });
++});
++
++describe('addDays', () => {
++  it('adds whole days', () => {
++    expect(addDays(new Date('2026-01-01T00:00:00Z'), 3).toISOString()).toBe('2026-01-04T00:00:00.000Z');
++  });
++});
+diff --git a/lms-backend/src/modules/assessment-generation/utils/mastery-tracking.ts b/lms-backend/src/modules/assessment-generation/utils/mastery-tracking.ts
+new file mode 100644
+index 0000000..34bca0f
+--- /dev/null
++++ b/lms-backend/src/modules/assessment-generation/utils/mastery-tracking.ts
+@@ -0,0 +1,61 @@
++import { LEVEL_THRESHOLDS } from './mastery.js';
++
++const round2 = (n: number): number => Math.round(n * 100) / 100;
++const round3 = (n: number): number => Math.round(n * 1000) / 1000;
++const clamp = (n: number, min: number, max: number): number => Math.min(max, Math.max(min, n));
++
++/** Làm tròn mastery về 3 chữ số thập phân, khớp numeric(4,3) của cột p_mastery. */
++export const roundMastery = round3;
++
++/**
++ * Năng lực của sinh viên trong một môn, thang 0..100: 100 × trung bình p_mastery của các KC đã làm.
++ * Không có KC nào thì là 0.
++ */
++export const abilityScore = (masteries: number[]): number =>
++  masteries.length === 0 ? 0 : round2((100 * masteries.reduce((s, v) => s + v, 0)) / masteries.length);
++
++/** Quy tắc lịch ôn (student_kc_review_schedule). Hiển thị trong màn hình monitor cùng công thức. */
++export const REVIEW_RULES = {
++  /** Số ngày tới lần ôn kế tiếp theo mức mastery: dưới 0.4 / dưới 0.6 / dưới 0.8. */
++  days: { weak: 1, unsure: 3, good: 7 },
++  /** Khi mastery >= 0.8: lần đầu ôn sau `masteredFirst` ngày, các lần sau = khoảng cách cũ × ease_factor, kẹp trong [masteredMin, masteredMax]. */
++  masteredFirst: 14,
++  masteredMin: 7,
++  masteredMax: 60,
++  ease: { initial: 2.5, min: 1.3, max: 2.5, up: 0.1, down: 0.2 },
++  thresholds: LEVEL_THRESHOLDS,
++} as const;
++
++export interface ReviewState {
++  intervalDays: number;
++  easeFactor: number;
++}
++
++/**
++ * Trạng thái lịch ôn mới sau khi mastery của KC được cập nhật.
++ * `improved` = mastery không giảm so với lần trước (hoặc là lần đầu): ease_factor +0.1, ngược lại -0.2.
++ */
++export const nextReviewState = (
++  mastery: number,
++  improved: boolean,
++  prev: ReviewState | null,
++): ReviewState => {
++  const { days, ease: e } = REVIEW_RULES;
++  const ease = prev
++    ? clamp(prev.easeFactor + (improved ? e.up : -e.down), e.min, e.max)
++    : e.initial;
++
++  let intervalDays: number;
++  if (mastery < LEVEL_THRESHOLDS.unsure) intervalDays = days.weak;
++  else if (mastery < LEVEL_THRESHOLDS.good) intervalDays = days.unsure;
++  else if (mastery < LEVEL_THRESHOLDS.mastered) intervalDays = days.good;
++  else {
++    intervalDays = prev
++      ? clamp(Math.round(prev.intervalDays * ease), REVIEW_RULES.masteredMin, REVIEW_RULES.masteredMax)
++      : REVIEW_RULES.masteredFirst;
++  }
++  return { intervalDays, easeFactor: round2(ease) };
++};
++
++export const addDays = (from: Date, days: number): Date =>
++  new Date(from.getTime() + days * 24 * 60 * 60 * 1000);
+diff --git a/lms-backend/src/modules/assessment-generation/utils/mastery.ts b/lms-backend/src/modules/assessment-generation/utils/mastery.ts
+index 81d075e..1d9d94c 100644
+--- a/lms-backend/src/modules/assessment-generation/utils/mastery.ts
++++ b/lms-backend/src/modules/assessment-generation/utils/mastery.ts
+@@ -50,12 +50,15 @@ export type MasteryConfidence = 'LOW' | 'MEDIUM' | 'HIGH';
+ /** How a question fits the student: EASY is a warm-up, CHALLENGE is a stretch. */
+ export type QuestionFit = 'EASY' | 'FIT' | 'CHALLENGE';
+ 
++/** Mốc nhãn hiển thị của mastery (0..1). Chỉ là nhãn của LMS: model ENAS không có ngưỡng cắt, nó trả xác suất. */
++export const LEVEL_THRESHOLDS = { unsure: 0.4, good: 0.6, mastered: 0.8 } as const;
++
+ /** Mastery (0..1) as a label. A KC the student never answered is NEW whatever the model says. */
+ export const masteryLevel = (mastery: number | null, attempted: number): MasteryLevel => {
+   if (mastery === null || attempted === 0) return 'NEW';
+-  if (mastery >= 0.8) return 'MASTERED';
+-  if (mastery >= 0.6) return 'GOOD';
+-  if (mastery >= 0.4) return 'UNSURE';
++  if (mastery >= LEVEL_THRESHOLDS.mastered) return 'MASTERED';
++  if (mastery >= LEVEL_THRESHOLDS.good) return 'GOOD';
++  if (mastery >= LEVEL_THRESHOLDS.unsure) return 'UNSURE';
+   return 'WEAK';
+ };
+ 
+diff --git a/lms-backend/src/modules/mastery/entities/student-competency-history.entity.ts b/lms-backend/src/modules/mastery/entities/student-competency-history.entity.ts
+index f788de5..eada022 100644
+--- a/lms-backend/src/modules/mastery/entities/student-competency-history.entity.ts
++++ b/lms-backend/src/modules/mastery/entities/student-competency-history.entity.ts
+@@ -5,11 +5,15 @@ import {
+   CreateDateColumn,
+   ManyToOne,
+   JoinColumn,
++  Index,
+ } from 'typeorm';
+ import { QuizInstance } from '../../assessment-generation/entities/quiz-instance.entity.js';
+ import { StudentSubjectCompetency } from './student-subject-competency.entity.js';
+ 
+ @Entity('student_competency_history')
++@Index('uq_student_competency_history_quiz', ['quizInstanceId', 'subjectCompetencyId'], {
++  unique: true,
++})
+ export class StudentCompetencyHistory {
+   @PrimaryGeneratedColumn('uuid')
+   readonly id: string;
+@@ -28,13 +32,15 @@ export class StudentCompetencyHistory {
+   @JoinColumn({ name: 'subject_competency_id' })
+   subjectCompetency: StudentSubjectCompetency;
+ 
++  /** null ở bài quiz đầu tiên của môn (chưa có năng lực trước đó). */
+   @Column({
+     name: 'ability_score_before',
+     type: 'numeric',
+     precision: 5,
+     scale: 2,
++    nullable: true,
+   })
+-  abilityScoreBefore: number;
++  abilityScoreBefore: number | null;
+ 
+   @Column({
+     name: 'ability_score_after',
+diff --git a/lms-backend/src/modules/mastery/entities/student-kc-mastery-history.entity.ts b/lms-backend/src/modules/mastery/entities/student-kc-mastery-history.entity.ts
+new file mode 100644
+index 0000000..ff560e4
+--- /dev/null
++++ b/lms-backend/src/modules/mastery/entities/student-kc-mastery-history.entity.ts
+@@ -0,0 +1,64 @@
++import {
++  Entity,
++  PrimaryGeneratedColumn,
++  Column,
++  CreateDateColumn,
++  ManyToOne,
++  JoinColumn,
++  Index,
++} from 'typeorm';
++import { Student } from '../../user/entities/student.entity.js';
++import { KnowledgeComponent } from '../../document/entities/knowledge-component.entity.js';
++import { QuizInstance } from '../../assessment-generation/entities/quiz-instance.entity.js';
++
++/**
++ * Ảnh chụp mức hiểu biết của một KC trước và sau mỗi bài quiz. Là chuỗi liên tục: p_before của quiz sau
++ * chính là p_after của quiz trước, nên "tăng/giảm" luôn so sánh cùng một phép tính.
++ */
++@Entity('student_kc_mastery_history')
++@Index('uq_student_kc_mastery_history_quiz_kc', ['quizInstanceId', 'kcId'], { unique: true })
++@Index('idx_student_kc_mastery_history_student_kc', ['studentId', 'kcId', 'recordedAt'])
++export class StudentKcMasteryHistory {
++  @PrimaryGeneratedColumn('uuid')
++  readonly id: string;
++
++  @Column({ name: 'student_id' })
++  studentId: string;
++
++  @ManyToOne(() => Student, { onDelete: 'CASCADE' })
++  @JoinColumn({ name: 'student_id' })
++  student: Student;
++
++  @Column({ name: 'kc_id' })
++  kcId: string;
++
++  @ManyToOne(() => KnowledgeComponent, { onDelete: 'CASCADE' })
++  @JoinColumn({ name: 'kc_id' })
++  knowledgeComponent: KnowledgeComponent;
++
++  @Column({ name: 'quiz_instance_id' })
++  quizInstanceId: string;
++
++  @ManyToOne(() => QuizInstance, { onDelete: 'CASCADE' })
++  @JoinColumn({ name: 'quiz_instance_id' })
++  quizInstance: QuizInstance;
++
++  /** null khi trước quiz này sinh viên chưa có dữ liệu nào về KC. */
++  @Column({ name: 'p_before', type: 'numeric', precision: 4, scale: 3, nullable: true })
++  pBefore: number | null;
++
++  @Column({ name: 'p_after', type: 'numeric', precision: 4, scale: 3 })
++  pAfter: number;
++
++  @Column({ name: 'sample_size', type: 'int', default: 0 })
++  sampleSize: number;
++
++  @Column({ type: 'varchar', length: 10, default: 'enas' })
++  source: 'enas' | 'history';
++
++  @Column({ name: 'enas_log_seq', type: 'int', nullable: true })
++  enasLogSeq: number | null;
++
++  @CreateDateColumn({ name: 'recorded_at', type: 'timestamptz' })
++  readonly recordedAt: Date;
++}
+diff --git a/lms-backend/src/modules/mastery/entities/student-kc-mastery.entity.ts b/lms-backend/src/modules/mastery/entities/student-kc-mastery.entity.ts
+index 271837a..41cff90 100644
+--- a/lms-backend/src/modules/mastery/entities/student-kc-mastery.entity.ts
++++ b/lms-backend/src/modules/mastery/entities/student-kc-mastery.entity.ts
+@@ -4,11 +4,19 @@ import {
+   Column,
+   ManyToOne,
+   JoinColumn,
++  Index,
+ } from 'typeorm';
+ import { Student } from '../../user/entities/student.entity.js';
+ import { KnowledgeComponent } from '../../document/entities/knowledge-component.entity.js';
+ 
++/**
++ * Mức hiểu biết hiện tại của một sinh viên về một KC, tính bằng ENAS-KT.
++ * p_mastery = trung bình P(đúng) mà model dự đoán trên một mẫu câu hỏi của KC, sau lịch sử làm bài của sinh viên
++ * (xem EnasMasteryService / màn hình /monitor của enas_gateway.py). Các tham số BKT cũ (p_learn, p_guess,
++ * p_slip) không còn: ENAS không có các tham số này.
++ */
+ @Entity('student_kc_mastery')
++@Index('uq_student_kc_mastery_student_kc', ['studentId', 'kcId'], { unique: true })
+ export class StudentKcMastery {
+   @PrimaryGeneratedColumn('uuid')
+   readonly id: string;
+@@ -27,21 +35,37 @@ export class StudentKcMastery {
+   @JoinColumn({ name: 'kc_id' })
+   knowledgeComponent: KnowledgeComponent;
+ 
+-  @Column({ name: 'p_learn', type: 'numeric', precision: 4, scale: 3 })
+-  pLearn: number;
+-
+-  @Column({ name: 'p_guess', type: 'numeric', precision: 4, scale: 3 })
+-  pGuess: number;
+-
+-  @Column({ name: 'p_slip', type: 'numeric', precision: 4, scale: 3 })
+-  pSlip: number;
+-
++  /** 0..1. Trung bình P(đúng) do ENAS dự đoán (hoặc tỉ lệ đúng gần đây khi model không dùng được, xem `source`). */
+   @Column({ name: 'p_mastery', type: 'numeric', precision: 4, scale: 3 })
+   pMastery: number;
+ 
++  /** Giá trị p_mastery ở lần cập nhật trước, null ở lần đầu: dùng để hiện xu hướng tăng/giảm. */
++  @Column({ name: 'p_prev', type: 'numeric', precision: 4, scale: 3, nullable: true })
++  pPrev: number | null;
++
++  /** Số câu hỏi (XES) thực sự được model chấm để ra p_mastery; càng ít thì càng kém tin cậy. */
++  @Column({ name: 'sample_size', type: 'int', default: 0 })
++  sampleSize: number;
++
++  /** Tổng số câu sinh viên đã trả lời thuộc KC này. */
+   @Column({ name: 'attempts_count', type: 'int', default: 0 })
+   attemptsCount: number;
+ 
++  @Column({ name: 'correct_count', type: 'int', default: 0 })
++  correctCount: number;
++
++  /** 'enas' = do model dự đoán, 'history' = tỉ lệ đúng trong các câu gần nhất (dự phòng khi gateway tắt). */
++  @Column({ type: 'varchar', length: 10, default: 'enas' })
++  source: 'enas' | 'history';
++
++  /** Số thứ tự lần dự đoán trong log của enas_gateway (/monitor), để truy ngược cách tính. */
++  @Column({ name: 'enas_log_seq', type: 'int', nullable: true })
++  enasLogSeq: number | null;
++
++  /** Chế độ time_lag lúc dự đoán ('fixed' | 'real'). */
++  @Column({ name: 'lag_mode', type: 'varchar', length: 10, nullable: true })
++  lagMode: string | null;
++
+   @Column({ name: 'last_updated', type: 'timestamptz' })
+   lastUpdated: Date;
+ }
+diff --git a/lms-backend/src/modules/mastery/entities/student-subject-competency.entity.ts b/lms-backend/src/modules/mastery/entities/student-subject-competency.entity.ts
+index a3b8ee9..c065eed 100644
+--- a/lms-backend/src/modules/mastery/entities/student-subject-competency.entity.ts
++++ b/lms-backend/src/modules/mastery/entities/student-subject-competency.entity.ts
+@@ -4,11 +4,15 @@ import {
+   Column,
+   ManyToOne,
+   JoinColumn,
++  Index,
+ } from 'typeorm';
+ import { Student } from '../../user/entities/student.entity.js';
+ import { Subject } from '../../academic/entities/subject.entity.js';
+ 
+ @Entity('student_subject_competency')
++@Index('uq_student_subject_competency_student_subject', ['studentId', 'subjectId'], {
++  unique: true,
++})
+ export class StudentSubjectCompetency {
+   @PrimaryGeneratedColumn('uuid')
+   readonly id: string;
+@@ -27,6 +31,7 @@ export class StudentSubjectCompetency {
+   @JoinColumn({ name: 'subject_id' })
+   subject: Subject;
+ 
++  /** 0..100: 100 × trung bình p_mastery (ENAS) của các KC sinh viên đã làm trong môn. */
+   @Column({ name: 'ability_score', type: 'numeric', precision: 5, scale: 2 })
+   abilityScore: number;
+ 
+diff --git a/lms-backend/src/modules/mastery/index.ts b/lms-backend/src/modules/mastery/index.ts
+index bac6809..3f2a41a 100644
+--- a/lms-backend/src/modules/mastery/index.ts
++++ b/lms-backend/src/modules/mastery/index.ts
+@@ -2,3 +2,4 @@ export { StudentKcMastery } from './entities/student-kc-mastery.entity.js';
+ export { StudentKcReviewSchedule } from './entities/student-kc-review-schedule.entity.js';
+ export { StudentSubjectCompetency } from './entities/student-subject-competency.entity.js';
+ export { StudentCompetencyHistory } from './entities/student-competency-history.entity.js';
++export { StudentKcMasteryHistory } from './entities/student-kc-mastery-history.entity.js';
+diff --git a/lms-backend/src/modules/mastery/mastery.module.ts b/lms-backend/src/modules/mastery/mastery.module.ts
+index 401f21d..2392ec1 100644
+--- a/lms-backend/src/modules/mastery/mastery.module.ts
++++ b/lms-backend/src/modules/mastery/mastery.module.ts
+@@ -1,6 +1,7 @@
+ import { Module } from '@nestjs/common';
+ import { TypeOrmModule } from '@nestjs/typeorm';
+ import { StudentCompetencyHistory } from './entities/student-competency-history.entity.js';
++import { StudentKcMasteryHistory } from './entities/student-kc-mastery-history.entity.js';
+ import { StudentKcMastery } from './entities/student-kc-mastery.entity.js';
+ import { StudentKcReviewSchedule } from './entities/student-kc-review-schedule.entity.js';
+ import { StudentSubjectCompetency } from './entities/student-subject-competency.entity.js';
+@@ -10,6 +11,7 @@ import { StudentSubjectCompetency } from './entities/student-subject-competency.
+     TypeOrmModule.forFeature([
+       StudentCompetencyHistory,
+       StudentKcMastery,
++      StudentKcMasteryHistory,
+       StudentKcReviewSchedule,
+       StudentSubjectCompetency,
+     ]),
+diff --git a/lms-frontend/src/core/mocks/mastery.mock.ts b/lms-frontend/src/core/mocks/mastery.mock.ts
+index 5617c23..b40f298 100644
+--- a/lms-frontend/src/core/mocks/mastery.mock.ts
++++ b/lms-frontend/src/core/mocks/mastery.mock.ts
+@@ -7,7 +7,12 @@ export const mockKcMastery: KcMastery[] = [
+     kcId: 'kc1',
+     kcName: 'Requirements',
+     pMastery: 0.72,
++    pPrev: 0.65,
++    sampleSize: 30,
+     attemptsCount: 6,
++    correctCount: 4,
++    source: 'enas',
++    intervalDays: 3,
+     lastUpdated: '2026-10-10T08:10:00Z',
+     nextReviewAt: '2026-10-14T00:00:00Z',
+   },
+@@ -16,7 +21,12 @@ export const mockKcMastery: KcMastery[] = [
+     kcId: 'kc2',
+     kcName: 'Process Models',
+     pMastery: 0.45,
++    pPrev: 0.5,
++    sampleSize: 30,
+     attemptsCount: 4,
++    correctCount: 2,
++    source: 'enas',
++    intervalDays: 3,
+     lastUpdated: '2026-10-09T08:10:00Z',
+     nextReviewAt: '2026-10-12T00:00:00Z',
+   },
+@@ -25,7 +35,12 @@ export const mockKcMastery: KcMastery[] = [
+     kcId: 'kc3',
+     kcName: 'UML Modeling',
+     pMastery: 0.28,
++    pPrev: 0.33,
++    sampleSize: 24,
+     attemptsCount: 2,
++    correctCount: 1,
++    source: 'enas',
++    intervalDays: 1,
+     lastUpdated: '2026-10-08T08:10:00Z',
+     nextReviewAt: '2026-10-11T00:00:00Z',
+   },
+@@ -34,7 +49,12 @@ export const mockKcMastery: KcMastery[] = [
+     kcId: 'kc4',
+     kcName: 'Testing',
+     pMastery: 0.6,
++    pPrev: 0.55,
++    sampleSize: 30,
+     attemptsCount: 3,
++    correctCount: 2,
++    source: 'enas',
++    intervalDays: null,
+     lastUpdated: '2026-10-07T08:10:00Z',
+     nextReviewAt: null,
+   },
+@@ -43,7 +63,12 @@ export const mockKcMastery: KcMastery[] = [
+     kcId: 'kc5',
+     kcName: 'Design Patterns',
+     pMastery: 0.15,
++    pPrev: null,
++    sampleSize: 12,
+     attemptsCount: 1,
++    correctCount: 0,
++    source: 'history',
++    intervalDays: null,
+     lastUpdated: '2026-10-06T08:10:00Z',
+     nextReviewAt: null,
+   },
+diff --git a/lms-frontend/src/features/mastery/types/mastery.types.ts b/lms-frontend/src/features/mastery/types/mastery.types.ts
+index acaaf70..09b1399 100644
+--- a/lms-frontend/src/features/mastery/types/mastery.types.ts
++++ b/lms-frontend/src/features/mastery/types/mastery.types.ts
+@@ -7,10 +7,19 @@ export interface KcMastery {
+   id: string;
+   kcId: string;
+   kcName: string;
++  /** 0..1: mean P(correct) predicted by ENAS-KT over a sample of the KC's questions. */
+   pMastery: number;
++  /** Value before the last update (null the first time): drives the trend arrow. */
++  pPrev: number | null;
++  /** Number of questions the model scored to get pMastery. */
++  sampleSize: number;
+   attemptsCount: number;
++  correctCount: number;
++  /** 'enas' = model prediction, 'history' = recent accuracy (fallback when the model is offline). */
++  source: 'enas' | 'history';
+   lastUpdated: string;
+   nextReviewAt: string | null;
++  intervalDays: number | null;
+ }
+ 
+ export interface SubjectCompetency {
+diff --git a/lms-frontend/src/features/mastery/views/MasteryPage.tsx b/lms-frontend/src/features/mastery/views/MasteryPage.tsx
+index d12b903..8663816 100644
+--- a/lms-frontend/src/features/mastery/views/MasteryPage.tsx
++++ b/lms-frontend/src/features/mastery/views/MasteryPage.tsx
+@@ -1,4 +1,4 @@
+-import { CalendarClock } from 'lucide-react';
++import { CalendarClock, TrendingDown, TrendingUp } from 'lucide-react';
+ import { AsyncView } from '@shared/components/AsyncView';
+ import { EmptyState } from '@shared/components/EmptyState';
+ import { PageHeader } from '@shared/components/PageHeader';
+@@ -14,6 +14,10 @@ const level = (p: number) =>
+       ? { label: 'Developing', cls: 'bg-amber-500' }
+       : { label: 'Needs review', cls: 'bg-destructive' };
+ 
++/** Change since the previous update, in percentage points; null when there is nothing to compare with. */
++const delta = (now: number, prev: number | null) =>
++  prev === null ? null : Math.round((now - prev) * 100);
++
+ const MasteryPage = () => {
+   const state = toAsyncState(useMasteryOverview());
+   return (
+@@ -40,6 +44,35 @@ const MasteryPage = () => {
+             );
+           return (
+             <div className="grid gap-6 lg:grid-cols-2">
++              <details className="rounded-lg border bg-card p-4 text-sm lg:col-span-2">
++                <summary className="cursor-pointer font-medium">
++                  How is mastery calculated?
++                </summary>
++                <ol className="mt-2 list-decimal space-y-1 pl-5 text-muted-foreground">
++                  <li>
++                    The ENAS-KT model reads your last answers (up to 99) and
++                    predicts the chance you answer each question of a topic
++                    correctly.
++                  </li>
++                  <li>
++                    A topic&apos;s mastery is the average of those chances over
++                    a sample of up to 30 of its questions.
++                  </li>
++                  <li>
++                    It is saved each time you submit a quiz, so the change
++                    shown is always between two consecutive updates.
++                  </li>
++                  <li>
++                    Subject ability is the average mastery of the topics you
++                    practised in that subject (0–100).
++                  </li>
++                  <li>
++                    The next review comes after 1, 3 or 7 days for topics under
++                    40%, 60% or 80%, and grows with each good review for
++                    stronger topics.
++                  </li>
++                </ol>
++              </details>
+               <section className="flex flex-col items-center rounded-lg border bg-card p-4">
+                 <h2 className="mt-0 self-start text-lg font-semibold">
+                   Mastery overview
+@@ -80,8 +113,32 @@ const MasteryPage = () => {
+                               style={{ width: `${k.pMastery * 100}%` }}
+                             />
+                           </div>
+-                          <p className="m-0 mt-1 text-xs text-muted-foreground">
+-                            {k.attemptsCount} attempts
++                          <p className="m-0 mt-1 flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground">
++                            <span>
++                              {k.attemptsCount} attempts · {k.correctCount} correct
++                            </span>
++                            {(() => {
++                              const d = delta(k.pMastery, k.pPrev);
++                              if (d === null || d === 0) return null;
++                              const Icon = d > 0 ? TrendingUp : TrendingDown;
++                              return (
++                                <span
++                                  className={cn(
++                                    'inline-flex items-center gap-1',
++                                    d > 0 ? 'text-emerald-600' : 'text-destructive',
++                                  )}
++                                >
++                                  <Icon className="h-3 w-3" />
++                                  {d > 0 ? '+' : ''}
++                                  {d} pts since last update
++                                </span>
++                              );
++                            })()}
++                            <span>
++                              {k.source === 'enas'
++                                ? `ENAS · ${k.sampleSize} questions`
++                                : 'Recent accuracy (model offline)'}
++                            </span>
+                           </p>
+                         </li>
+                       );

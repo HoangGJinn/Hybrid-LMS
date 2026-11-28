@@ -6,7 +6,8 @@ export type UploadPurpose =
   | 'ASSIGNMENT'
   | 'SUBMISSION'
   | 'EXAM'
-  | 'EXAM_SUBMISSION';
+  | 'EXAM_SUBMISSION'
+  | 'QUESTION_IMPORT';
 
 export interface S3UploadOptions {
   purpose: UploadPurpose;

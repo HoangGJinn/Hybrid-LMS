@@ -1,26 +1,95 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { FileModule } from '../../shared/file/file.module.js';
+import { Subject } from '../academic/entities/subject.entity.js';
+import { KnowledgeComponent } from '../document/entities/knowledge-component.entity.js';
+import { QuestionImportController } from './controllers/question-import.controller.js';
+import { QuestionManagementController } from './controllers/question-management.controller.js';
+import { QuizController } from './controllers/quiz.controller.js';
 import { GenerationJob } from './entities/generation-job.entity.js';
 import { LlmPromptLog } from './entities/llm-prompt-log.entity.js';
-import { QuestionDistraction } from './entities/question-distraction.entity.js';
+import { QuestionImportBatch } from './entities/question-import-batch.entity.js';
+import { QuestionKnowledgeComponent } from './entities/question-knowledge-component.entity.js';
+import { QuestionOption } from './entities/question-option.entity.js';
+import { Question } from './entities/question.entity.js';
 import { QuizInstanceAnswer } from './entities/quiz-instance-answer.entity.js';
 import { QuizInstanceQuestion } from './entities/quiz-instance-question.entity.js';
 import { QuizInstance } from './entities/quiz-instance.entity.js';
 import { QuizResultExport } from './entities/quiz-result-export.entity.js';
-
+import { QuestionImportFileAdapter } from './services/question-import-file.adapter.js';
+import { QuestionImportLocalFileAdapter } from './services/question-import-local-file.adapter.js';
+import { QuestionImportService } from './services/question-import.service.js';
+import { QuestionManagementService } from './services/question-management.service.js';
+import { QuizService } from './services/quiz.service.js';
+import { RuleBasedQuestionSelector } from './services/rule-based-question-selector.service.js';
+import { EnasGatewayClient } from './services/enas-gateway.client.js';
+import { EnasQuestionSelector } from './services/enas-question-selector.service.js';
+import { EnasMasteryService } from './services/enas-mastery.service.js';
+import { QUESTION_IMPORT_FILE_PORT } from './types/question-import-file.port.js';
+import { QUESTION_SELECTOR } from './types/question-selector.type.js';
+import { XesKcMapping } from './entities/xes-kc-mapping.entity.js';
+import { XesMappingController } from './controllers/xes-mapping.controller.js';
+import { XesMappingService } from './services/xes-mapping.service.js';
+import { MasteryController } from './controllers/mastery.controller.js';
+import { MasteryTrackingService } from './services/mastery-tracking.service.js';
+import { StudentCompetencyHistory } from '../mastery/entities/student-competency-history.entity.js';
+import { StudentKcMasteryHistory } from '../mastery/entities/student-kc-mastery-history.entity.js';
+import { StudentKcMastery } from '../mastery/entities/student-kc-mastery.entity.js';
+import { StudentKcReviewSchedule } from '../mastery/entities/student-kc-review-schedule.entity.js';
+import { StudentSubjectCompetency } from '../mastery/entities/student-subject-competency.entity.js';
 @Module({
   imports: [
+    // FileModule exports FileFacade: the import adapter reads the uploaded Excel through it.
+    FileModule,
     TypeOrmModule.forFeature([
       GenerationJob,
       LlmPromptLog,
-      QuestionDistraction,
-      QuizInstanceAnswer,
-      QuizInstanceQuestion,
+      QuestionImportBatch,
+      Question,
+      QuestionOption,
+      QuestionKnowledgeComponent,
+      XesKcMapping,
       QuizInstance,
+      QuizInstanceQuestion,
+      QuizInstanceAnswer,
       QuizResultExport,
+      // Owned by other modules; registered here so the services can inject their repositories.
+      Subject,
+      KnowledgeComponent,
+      StudentKcMastery,
+      StudentKcMasteryHistory,
+      StudentKcReviewSchedule,
+      StudentSubjectCompetency,
+      StudentCompetencyHistory,
     ]),
   ],
-  providers: [],
+  controllers: [QuestionImportController, QuestionManagementController, QuizController, XesMappingController, MasteryController],
+  providers: [
+    QuestionImportService,
+    QuestionManagementService,
+    QuizService,
+    XesMappingService,
+    RuleBasedQuestionSelector,
+    EnasGatewayClient,
+    EnasMasteryService,
+    MasteryTrackingService,
+    EnasQuestionSelector,
+    // QUESTION_SELECTOR=enas picks questions with the ENAS-KT model (falls back to the rule-based one on failure).
+    {
+      provide: QUESTION_SELECTOR,
+      inject: [RuleBasedQuestionSelector, EnasQuestionSelector],
+      useFactory: (rule: RuleBasedQuestionSelector, enas: EnasQuestionSelector) =>
+        process.env.QUESTION_SELECTOR === 'enas' ? enas : rule,
+    },
+    // QUESTION_IMPORT_USE_LOCAL_FILES=true reads ./dev-uploads instead of S3 (never in production).
+    {
+      provide: QUESTION_IMPORT_FILE_PORT,
+      useClass:
+        process.env.QUESTION_IMPORT_USE_LOCAL_FILES === 'true'
+          ? QuestionImportLocalFileAdapter
+          : QuestionImportFileAdapter,
+    },
+  ],
   exports: [],
 })
 export class AssessmentGenerationModule {}
